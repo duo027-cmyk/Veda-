@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // User Profile Rules
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.keys().hasAll(['uid', 'email']) &&
+               data.uid == request.auth.uid &&
+               data.email is string && data.email.size() <= 256;
+      }
+
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) &&
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                        'displayName', 'photoURL', 'settings', 'chatHistory', 'reminders', 'memory', 'intent', 'longTermMemories', 'updatedAt'
+                      ]);
+    }
+
+    // Shared Knowledge Rules
+    match /shared_knowledge/{fragmentId} {
+      function isValidFragment(data) {
+        return data.keys().hasAll(['content', 'contributorId', 'timestamp']) &&
+               data.content is string && data.content.size() <= 2000 &&
+               data.contributorId == request.auth.uid;
+      }
+
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isSignedIn() && isValidFragment(request.resource.data);
+    }
+
+    // System Memories Rules
+    match /memories/{memoryId} {
+      function isValidMemory(data) {
+        return data.keys().hasAll(['id', 'type', 'content', 'resonance', 'timestamp']) &&
+               data.content is string && data.content.size() <= 5000 &&
+               data.resonance is number && data.resonance >= 0 && data.resonance <= 1;
+      }
+
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      // Only the system or an admin can write memories.
+      // For this app, we'll allow anyone to 'create' a memory for now to simulate the "VEDA synthesis" 
+      // but in a production environment, this would be highly restricted to a system-bot UID.
+      allow create: if isSignedIn() && isValidMemory(request.resource.data);
+    }
+  }
+}

@@ -1,0 +1,265 @@
+import { pipeline, env } from '@xenova/transformers';
+import Dexie, { Table } from 'dexie';
+import { db, auth } from '../firebase';
+import { 
+  collection, 
+  addDoc, 
+  query, 
+  getDocs, 
+  limit, 
+  orderBy, 
+  serverTimestamp,
+  doc,
+  setDoc
+} from 'firebase/firestore';
+
+// Configure transformers.js to use local cache
+env.allowLocalModels = false; // We download from HF but cache locally
+
+import { create, insert, search, remove, type Orama } from '@orama/orama';
+
+export interface KnowledgeFragment {
+  id?: number;
+  content: string;
+  embedding: number[];
+  metadata: Record<string, any>;
+  timestamp: number;
+  isShared?: boolean;
+  causalLinks?: string[];
+}
+
+export class KnowledgeDatabase extends Dexie {
+  fragments!: Table<KnowledgeFragment>;
+
+  constructor() {
+    super('VEDA_KNOWLEDGE_BASE');
+    this.version(1).stores({
+      fragments: '++id, content, timestamp'
+    });
+  }
+}
+
+class KNBService {
+  private db: KnowledgeDatabase;
+  private embedder: any = null;
+  private modelName = 'Xenova/all-MiniLM-L6-v2';
+  private oramaIndex: Orama<any> | null = null;
+
+  constructor() {
+    this.db = new KnowledgeDatabase();
+    this.initOrama();
+  }
+
+  private async initOrama() {
+    try {
+      this.oramaIndex = await create({
+        schema: {
+          id: 'string',
+          content: 'string',
+          type: 'string',
+          source: 'string',
+          timestamp: 'number'
+        }
+      });
+
+      const all = await this.db.fragments.toArray();
+      for (const f of all) {
+        try {
+          await insert(this.oramaIndex, {
+            id: f.id?.toString(),
+            content: f.content,
+            type: f.metadata?.type || 'UNCATEGORIZED',
+            source: f.metadata?.source || 'LOCAL',
+            timestamp: f.timestamp
+          });
+        } catch (insertErr) {
+          console.warn("[KNB] Orama insert skip during bootstrap:", insertErr);
+        }
+      }
+      console.log("[KNB] Orama Index Prime Synthesis Complete.");
+    } catch (e) {
+      console.error("[KNB] Orama Initialization Fault:", e);
+    }
+  }
+
+  async init() {
+    if (!this.embedder) {
+      console.log("[KNB] Initializing Local Embedding Engine...");
+      this.embedder = await pipeline('feature-extraction', this.modelName);
+    }
+  }
+
+  private async generateEmbedding(text: string): Promise<number[]> {
+    await this.init();
+    const output = await this.embedder(text, { pooling: 'mean', normalize: true });
+    return Array.from(output.data);
+  }
+
+  async addFragment(content: string, metadata: Record<string, any> = {}) {
+    const embedding = await this.generateEmbedding(content);
+    const id = await this.db.fragments.add({
+      content,
+      embedding,
+      metadata,
+      timestamp: Date.now()
+    });
+    
+    if (this.oramaIndex) {
+      await insert(this.oramaIndex, {
+        id: id.toString(),
+        content,
+        type: metadata.type || 'UNCATEGORIZED',
+        source: metadata.source || 'LOCAL',
+        timestamp: Date.now()
+      });
+    }
+    console.log("[KNB] Fragment synchronized to local manifold.");
+    return id;
+  }
+
+  async removeFragment(id: number) {
+    await this.db.fragments.delete(id);
+    if (this.oramaIndex) {
+      try {
+        await remove(this.oramaIndex, id.toString());
+      } catch (e) {
+        console.warn("[KNB] Orama removal failed (item might not exist):", e);
+      }
+    }
+    console.log(`[KNB] Fragment ${id} purged from local manifold.`);
+  }
+
+  async search(queryText: string, searchLimit: number = 3): Promise<KnowledgeFragment[]> {
+    if (this.oramaIndex) {
+      const oResults = await search(this.oramaIndex, { term: queryText, limit: searchLimit * 2 });
+      const ids = oResults.hits.map(h => parseInt(h.document.id as string));
+      if (ids.length > 0) {
+        return await this.db.fragments.where('id').anyOf(ids).toArray();
+      }
+    }
+
+    const queryEmbedding = await this.generateEmbedding(queryText);
+    const allFragments = await this.db.fragments.toArray();
+    
+    // Simple cosine similarity search fallback
+    const results = allFragments
+      .map(fragment => ({
+        fragment,
+        similarity: this.cosineSimilarity(queryEmbedding, fragment.embedding)
+      }))
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, searchLimit)
+      .map(r => r.fragment);
+
+    return results;
+  }
+
+  /**
+   * Active Inference: Detect friction between new intent and high-relevance axioms.
+   */
+  async detectContradictions(newContent: string): Promise<{ exists: boolean; reason?: string }> {
+    const relevant = await this.search(newContent, 5);
+    // Simple heuristic: If we have high similarity but potentially conflicting sentiment or key terms
+    // In final VEDA this uses a Cross-Encoder.
+    const hasFriction = relevant.some(f => 
+      f.content.toLowerCase().includes('never') && newContent.toLowerCase().includes('always') ||
+      f.content.toLowerCase().includes('forbidden') && newContent.toLowerCase().includes('allow')
+    );
+
+    if (hasFriction) {
+      return { 
+        exists: true, 
+        reason: "Detected logical friction with sovereign axioms in the local manifold." 
+      };
+    }
+    return { exists: false };
+  }
+
+  private cosineSimilarity(vecA: number[], vecB: number[]): number {
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < vecA.length; i++) {
+      dotProduct += vecA[i] * vecB[i];
+      normA += vecA[i] * vecA[i];
+      normB += vecB[i] * vecB[i];
+    }
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+
+  async clear() {
+    await this.db.fragments.clear();
+  }
+
+  async publishToCloud(localId: number): Promise<boolean> {
+    if (!auth.currentUser) return false;
+    
+    const fragment = await this.db.fragments.get(localId);
+    if (!fragment) return false;
+
+    try {
+      const globalId = `fragment_${Date.now()}_${auth.currentUser.uid}`;
+      await setDoc(doc(db, 'shared_knowledge', globalId), {
+        content: fragment.content,
+        embedding: fragment.embedding,
+        type: fragment.metadata?.type || 'UNCATEGORIZED',
+        contributorId: auth.currentUser.uid,
+        timestamp: serverTimestamp(),
+        relevance: 1.0
+      });
+
+      await this.db.fragments.update(localId, { isShared: true });
+      console.log(`[KNB] Fragment ${localId} published to Collective Manifold.`);
+      return true;
+    } catch (err) {
+      console.error("[KNB] Cloud sync failed:", err);
+      return false;
+    }
+  }
+
+  async syncCollectiveManifold(): Promise<number> {
+    if (!auth.currentUser) return 0;
+
+    try {
+      const q = query(
+        collection(db, 'shared_knowledge'), 
+        orderBy('timestamp', 'desc'), 
+        limit(20)
+      );
+      const snapshot = await getDocs(q);
+      let newCount = 0;
+
+      for (const d of snapshot.docs) {
+        const data = d.data();
+        if (data.contributorId === auth.currentUser.uid) continue;
+
+        const exists = await this.db.fragments.where('content').equals(data.content).first();
+        if (!exists) {
+          await this.db.fragments.add({
+            content: data.content,
+            embedding: data.embedding,
+            metadata: { type: data.type, source: 'COLLECTIVE', contributor: 'ANONYMOUS_ARCHITECT' },
+            timestamp: Date.now(),
+            isShared: false
+          });
+          newCount++;
+        }
+      }
+      return newCount;
+    } catch (err) {
+      console.error("[KNB] Global sync failed:", err);
+      return 0;
+    }
+  }
+
+  async getCollectiveStrength(): Promise<number> {
+     try {
+       const snapshot = await getDocs(collection(db, 'shared_knowledge'));
+       return snapshot.size;
+     } catch {
+       return 0;
+     }
+  }
+}
+
+export const knbService = new KNBService();

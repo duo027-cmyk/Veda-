@@ -1,0 +1,156 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and VEDA state",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string", "format": "uri" },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "isLocked": { "type": "boolean" },
+            "isFocusMode": { "type": "boolean" },
+            "isMuted": { "type": "boolean" },
+            "useHighQualityVoice": { "type": "boolean" },
+            "showSuggestions": { "type": "boolean" }
+          }
+        },
+        "chatHistory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "role": { "type": "string", "enum": ["user", "veda", "thought"] },
+              "text": { "type": "string" },
+              "timestamp": { "type": "string" },
+              "pinned": { "type": "boolean" }
+            }
+          }
+        },
+        "reminders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "task": { "type": "string" },
+              "time": { "type": "string" },
+              "completed": { "type": "boolean" }
+            }
+          }
+        },
+        "memory": { "type": "string" },
+        "architectName": { "type": "string" },
+        "interests": { "type": "string" },
+        "intent": {
+          "type": "array",
+          "items": { "type": "number" }
+        },
+        "longTermMemories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "content": { "type": "string" },
+              "timestamp": { "type": "string" },
+              "relevance": { "type": "number" }
+            }
+          }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "SharedKnowledgeFragment": {
+      "title": "Shared Knowledge Fragment",
+      "description": "Anonymized knowledge fragment contributed by a user to the collective manifold",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "content": { "type": "string" },
+        "embedding": { 
+          "type": "array",
+          "items": { "type": "number" }
+        },
+        "type": { "type": "string" },
+        "contributorId": { "type": "string" },
+        "relevance": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["content", "contributorId", "timestamp"]
+    },
+    "MemoryFragment": {
+      "title": "Memory Fragment",
+      "description": "A synthesized semantic memory unit from the VEDA sovereign core.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier (hex)." },
+        "type": { "type": "string", "description": "Type of memory (e.g., NEURAL_PEAK, ENTROPY_STORM)." },
+        "content": { "type": "string", "description": "Human-readable description of the memory." },
+        "resonance": { "type": "number", "description": "The gravitational resonance of the memory (0-1)." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "ISO timestamp of synthesis." },
+        "hypervector": { "type": "array", "items": { "type": "number" }, "description": "High-dimensional semantic representation." }
+      },
+      "required": ["id", "type", "content", "resonance", "timestamp"]
+    },
+    "BaselineSnapshot": {
+      "title": "Baseline Snapshot",
+      "description": "An immutable ontological anchor for a cinematic scene or world state.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "version": { "type": "string" },
+        "worldAxioms": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "visualAnchors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string" },
+              "description": { "type": "string" },
+              "type": { "type": "string" },
+              "causal_weight": { "type": "number" }
+            }
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "properties": {
+            "creatorId": { "type": "string" },
+            "timestamp": { "type": "string", "format": "date-time" },
+            "protocol": { "type": "string" }
+          }
+        }
+      },
+      "required": ["id", "version", "worldAxioms", "visualAnchors"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User-specific VEDA state and profile"
+    },
+    "/shared_knowledge/{fragmentId}": {
+      "schema": "SharedKnowledgeFragment",
+      "description": "The collective knowledge pool shared across all VEDA instances"
+    },
+    "/memories/{memoryId}": {
+      "schema": "MemoryFragment",
+      "description": "Persistent storage for VEDA semantic memories."
+    },
+    "/baselines/{baselineId}": {
+      "schema": "BaselineSnapshot",
+      "description": "Immutable ontological baselines used as foundation for scenes."
+    }
+  }
+}
