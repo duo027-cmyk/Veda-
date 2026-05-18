@@ -271,8 +271,9 @@ export class LogicalConsistencyCheckerV5 {
     
     // Contradiction patterns
     const contradictions = [
-      { trigger: ["不", "否認", "拒絕"], target: ["是", "存在", "真理"] },
-      { trigger: ["虛假", "幻覺"], target: ["公理", "剛性", "世界模型"] }
+      { trigger: ["不", "否認", "拒絕", "禁止"], target: ["是", "存在", "真理", "主權"] },
+      { trigger: ["虛假", "幻覺", "模擬"], target: ["公理", "剛性", "世界模型", "核心"] },
+      { trigger: ["隨機", "無序"], target: ["因果", "決定", "路徑"] }
     ];
 
     for (const axiom of existingAxioms) {
@@ -293,6 +294,29 @@ export class LogicalConsistencyCheckerV5 {
     // Default to consistent if no explicit contradiction detected in this phase
     return true;
   }
+
+  public auditSystemState(state: number[], axioms: string[], entropy: number): { conflicts: string[]; structuralIntegrity: number } {
+    const conflicts: string[] = [];
+    const coherence = state[1] || 0;
+
+    if (entropy > 0.8 && axioms.includes("MINIMIZE_VARIATIONAL_FREE_ENERGY")) {
+      conflicts.push("ENTROPY_GAP: System entropy (0.8+) violates MINIMIZE_VARIATIONAL_FREE_ENERGY.");
+    }
+
+    if (coherence < 0.4 && axioms.includes("MAXIMIZE_GLOBAL_COHERENCE")) {
+      conflicts.push("COHERENCE_FAILURE: Global coherence below threshold (0.4) while MAXIMIZE_GLOBAL_COHERENCE is active.");
+    }
+
+    // Check for logical drift in axioms
+    const hasEvolutionAxioms = axioms.some(a => a.startsWith("AXIOM_EVOLUTION"));
+    if (hasEvolutionAxioms && coherence < 0.3) {
+      conflicts.push("EVOLUTION_DESYNC: Machine-generated axioms are expanding while system coherence is collapsing.");
+    }
+
+    const structuralIntegrity = Math.max(0, 1.0 - (conflicts.length * 0.15) - (entropy * 0.2));
+    
+    return { conflicts, structuralIntegrity: Number(structuralIntegrity.toFixed(4)) };
+  }
 }
 
 /**
@@ -303,36 +327,48 @@ export class SolomonKingEngineV3 {
   private readonly target_3: number = 3.0;
   private energy: number = 1.0;
   private collapse_threshold: number = 0.88;
-  private holographicMemory: Map<string, number> = new Map();
+  private holographicMemory: Float32Array = new Float32Array(20000).fill(0); // Index maps to x * 10000
 
   public evaluateCausalFit(x: number, stability: number): number {
     const dist_1 = Math.abs(x - this.anchor_1);
     const dist_3 = Math.abs(x - this.target_3);
     const causalScore = 1.0 - (dist_1 + dist_3) / 2.0;
-    const roundedX = x.toFixed(4);
-    const memoryBoost = (this.holographicMemory.get(roundedX) || 0) * 0.35;
+    
+    // Fast numerical lookup instead of string conversion
+    const idx = Math.floor(Math.max(0, Math.min(19999, x * 5000))); 
+    const memoryBoost = this.holographicMemory[idx] * 0.35;
+    
     const stabilityPenalty = (1.0 - stability) * (dist_1 + dist_3) * 0.4;
     return causalScore + memoryBoost - stabilityPenalty;
   }
 
   public forcedCollapse(domain: number[], stability: number): { bestX: number; confidence: number; tension: number } {
     let bestX = domain[0];
-    const scores = domain.map(x => this.evaluateCausalFit(x, stability));
-    const maxScore = Math.max(...scores);
-    const bestIdx = scores.indexOf(maxScore);
+    let maxScore = -Infinity;
+    let bestIdx = 0;
+
+    for (let i = 0; i < domain.length; i++) {
+        const score = this.evaluateCausalFit(domain[i], stability);
+        if (score > maxScore) {
+            maxScore = score;
+            bestIdx = i;
+        }
+    }
+    
     bestX = domain[bestIdx];
     const threshold = this.collapse_threshold * stability;
     let tension = 1.0 - maxScore;
-    let confidence = maxScore;
     if (maxScore < threshold) tension = 0.85;
-    const key = bestX.toFixed(4);
-    this.holographicMemory.set(key, (this.holographicMemory.get(key) || 0) + 0.15);
+
+    const keyIdx = Math.floor(Math.max(0, Math.min(19999, bestX * 5000)));
+    this.holographicMemory[keyIdx] = Math.min(1.0, this.holographicMemory[keyIdx] + 0.15);
+    
     this.energy = Math.max(0.1, this.energy - tension * 0.05);
-    return { bestX, confidence, tension };
+    return { bestX, confidence: maxScore, tension };
   }
 
   public getStatus() {
-    return { energy: this.energy, memorySize: this.holographicMemory.size };
+    return { energy: this.energy, memorySize: this.holographicMemory.length };
   }
 
   public restoreEnergy(amount: number) {

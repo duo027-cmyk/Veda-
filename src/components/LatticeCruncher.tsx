@@ -64,7 +64,7 @@ export const LatticeCruncher: React.FC<{ brain: BrainData | null }> = ({ brain }
     if (job.type === "STRATEGIC_OUTLINE") {
       const { prompt } = job.payload;
       const result = await ai.models.generateContent({ 
-        model: "gemini-1.5-flash",
+        model: "gemini-3.1-pro-preview",
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: {
           responseMimeType: "application/json",
@@ -96,7 +96,7 @@ export const LatticeCruncher: React.FC<{ brain: BrainData | null }> = ({ brain }
     if (job.type === "REPORT_SECTION_SYNTHESIS") {
       const { prompt } = job.payload;
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         config: { temperature: 1.0 }
       });
@@ -113,7 +113,7 @@ export const LatticeCruncher: React.FC<{ brain: BrainData | null }> = ({ brain }
 ${rawContent.substring(0, 3000)}`;
 
       const auditResponse = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ role: 'user', parts: [{ text: auditPrompt }] }]
       });
       const auditText = auditResponse.text;
@@ -138,7 +138,7 @@ ${rawContent.substring(0, 3000)}`;
       字數：約 200 字。`;
 
       const result = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ role: 'user', parts: [{ text: researchPrompt }] }]
       });
       return result.text;
@@ -147,7 +147,7 @@ ${rawContent.substring(0, 3000)}`;
     if (job.type === "STRATEGIC_PREDICTION") {
       const prompt = `VEDA_CAUSAL_PROTOCOL: 戰略預測運算負載：${JSON.stringify(job.payload)}`;
       const result = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3.1-pro-preview",
         contents: [{ role: 'user', parts: [{ text: prompt }] }]
       });
       return result.text;

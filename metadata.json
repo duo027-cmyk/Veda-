@@ -1,5 +1,8 @@
 {
-  "name": "VEDA Sovereign v24.4-AWAKENED",
-  "description": "VEDA Sovereign v24.4-AWAKENED - Sovereign Network Protocol with Core Axioms and System Controller Evolution.",
-  "requestFramePermissions": []
+  "name": "AGI Sovereign Core v24.4-AWAKENED",
+  "description": "AGI Sovereign Core v24.4-AWAKENED - Sovereign Network Protocol with Core Axioms and System Controller Evolution.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

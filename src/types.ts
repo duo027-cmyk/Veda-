@@ -6,7 +6,7 @@ export enum EvolutionStatus {
   ULTIMATE_SANCTION = "ULTIMATE_SANCTION"
 }
 
-export type ViewMode = 'DIALOGUE' | 'SYNAPSE' | 'DREAM' | 'CORE' | 'KNOWLEDGE' | 'SOVEREIGN' | 'SYNTHESIS' | 'VISUAL' | 'EFFICACY' | 'CINEMA';
+export type ViewMode = 'DIALOGUE' | 'SYNAPSE' | 'DREAM' | 'CORE' | 'KNOWLEDGE' | 'SOVEREIGN' | 'SYNTHESIS' | 'VISUAL' | 'EFFICACY' | 'CINEMA' | 'TASKS';
 
 export interface NetworkLayer {
   id: string;

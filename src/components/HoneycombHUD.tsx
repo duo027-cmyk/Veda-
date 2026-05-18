@@ -86,29 +86,6 @@ export const HoneycombHUD: React.FC<HoneycombHUDProps> = ({
             </motion.div>
           )}
         </div>
-
-        {/* Right Side: Environmental Stats */}
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="text-right space-y-6"
-        >
-          <div className="space-y-1">
-            <div className="jobs-label tracking-[0.5em] text-black/20">SYSTEM_POWER</div>
-            <div className="text-3xl font-light ff-font-serif italic text-black/60">
-              {Math.floor((energy || 0.5) * 100)}<span className="text-xs ml-1">%</span>
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <div className="jobs-label tracking-[0.5em] text-black/20">MEMORIES_STORED</div>
-            <div className="text-2xl font-light ff-font-serif italic text-black/60">
-              {memoryCount || 0}
-            </div>
-            <div className="w-32 h-[0.5px] bg-black/10 ml-auto" />
-          </div>
-        </motion.div>
-
       </div>
     </div>
   );

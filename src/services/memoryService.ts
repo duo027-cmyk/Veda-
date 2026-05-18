@@ -14,7 +14,14 @@ export class MemoryManager {
   private onUpdate?: (memories: MemoryEntry[]) => void;
 
   constructor(apiKey: string, initialMemories?: MemoryEntry[], onUpdate?: (memories: MemoryEntry[]) => void) {
-    this.ai = new GoogleGenAI({ apiKey });
+    this.ai = new GoogleGenAI({ 
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
     this.memories = initialMemories || [];
     this.onUpdate = onUpdate;
   }
@@ -159,7 +166,7 @@ export class MemoryManager {
       const combinedText = cluster.map(m => m.text).join(" | ");
       try {
         const response = await this.ai.models.generateContent({
-          model: "gemini-1.5-flash",
+          model: "gemini-3-flash-preview",
           contents: `請將以下語義相近的記憶片段精煉為一個高密度的「重要記憶」（摘要）：\n${combinedText}`,
           config: {
             systemInstruction: "你是一個記憶精煉系統。請將多個記憶片段轉化為一段簡潔、精確且包含所有核心資訊的文字。"

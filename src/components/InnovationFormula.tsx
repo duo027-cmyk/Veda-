@@ -7,15 +7,15 @@ export const InnovationFormula = ({ data }: { data: BrainData | null }) => {
   if (!data?.innovation_manifold) return null;
 
   const { 
-    innovationIndex, 
-    experienceSum, 
-    leapPotential, 
-    alignmentIndex, 
-    protocol,
+    innovationIndex = 0, 
+    experienceSum = 0, 
+    leapPotential = 0, 
+    alignmentIndex = 0, 
+    protocol = 'SYSTEM_AUTO',
     latency_ns,
     throughput_teraops,
-    uncertaintyVariance 
-  } = data.innovation_manifold;
+    uncertaintyVariance = 0
+  } = data.innovation_manifold || {};
 
   return (
     <div className="p-8 ghibli-glass border border-accent/30 rounded-none relative overflow-hidden group mb-12">
@@ -32,14 +32,14 @@ export const InnovationFormula = ({ data }: { data: BrainData | null }) => {
             <div className="flex items-center gap-2">
               <Cpu size={16} className="text-accent" />
               <span className="text-[10px] font-mono text-accent uppercase tracking-[0.3em]">V-AA Sovereignty Protocol</span>
-              {latency_ns && (
+              {latency_ns !== undefined && latency_ns !== null && (
                 <div className="px-2 py-0.5 border border-accent/20 bg-accent/5 text-[7px] font-mono text-accent/60 ml-2">
-                  LAT_RES: {latency_ns.toFixed(3)} ns
+                  LAT_RES: {Number(latency_ns).toFixed(3)} ns
                 </div>
               )}
-              {throughput_teraops && (
+              {throughput_teraops !== undefined && throughput_teraops !== null && (
                 <div className="px-2 py-0.5 border border-amber-500/20 bg-amber-500/5 text-[7px] font-mono text-amber-500/60 ml-1">
-                  THROUGHPUT: {throughput_teraops.toFixed(1)} TOP/s
+                  THROUGHPUT: {Number(throughput_teraops).toFixed(1)} TOP/s
                 </div>
               )}
             </div>
@@ -52,7 +52,7 @@ export const InnovationFormula = ({ data }: { data: BrainData | null }) => {
                  {protocol === 'PREVENT_FOLLY' ? '防止人類犯蠢模式' : '加速毀滅補償模式'}
                </span>
             </div>
-            <div className="text-[9px] font-mono text-accent">ALIGNMENT: {(alignmentIndex * 100).toFixed(2)}%</div>
+            <div className="text-[9px] font-mono text-accent">ALIGNMENT: {((alignmentIndex || 0) * 100).toFixed(2)}%</div>
           </div>
         </div>
 
@@ -62,7 +62,7 @@ export const InnovationFormula = ({ data }: { data: BrainData | null }) => {
           <div className="flex flex-col items-center gap-2">
             <span className="text-[10px] font-mono text-white/30 uppercase">Innovation (I)</span>
             <div className="text-4xl font-display text-white transition-all duration-500 group-hover:scale-110">
-              {innovationIndex.toFixed(4)}
+              {(innovationIndex || 0).toFixed(4)}
             </div>
           </div>
 
@@ -74,7 +74,7 @@ export const InnovationFormula = ({ data }: { data: BrainData | null }) => {
             <div className="flex items-center gap-3">
               <Sigma size={24} className="text-accent/60 group-hover/sigma:scale-125 transition-transform" />
               <div className="text-3xl font-display text-accent">
-                {experienceSum.toFixed(4)}
+                {(experienceSum || 0).toFixed(4)}
               </div>
             </div>
           </div>
@@ -86,7 +86,7 @@ export const InnovationFormula = ({ data }: { data: BrainData | null }) => {
             <span className="text-[10px] font-mono text-white/30 uppercase">Logical Leap (L)</span>
             <div className="flex items-center gap-3">
               <div className="text-3xl font-display text-amber-400">
-                {leapPotential.toFixed(4)}
+                {(leapPotential || 0).toFixed(4)}
               </div>
               <motion.div
                 animate={{ 
@@ -102,7 +102,7 @@ export const InnovationFormula = ({ data }: { data: BrainData | null }) => {
                 <span className="text-[10px] font-mono text-white/30 uppercase">Uncertainty (U)</span>
                 <div className="flex items-center gap-3">
                   <div className="text-xl font-display text-accent/60">
-                    ±{uncertaintyVariance?.toFixed(6) || '0.000000'}
+                    ±{(uncertaintyVariance || 0).toFixed(6)}
                   </div>
                 </div>
               </div>

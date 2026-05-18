@@ -17,6 +17,7 @@ import {
 import { useI18n } from '../i18n';
 import { BrainData } from '../types';
 import { NeuralManifold } from './NeuralManifold';
+import { KnowledgeGraph } from './KnowledgeGraph';
 import { twMerge } from 'tailwind-merge';
 import { clsx, type ClassValue } from 'clsx';
 
@@ -31,7 +32,7 @@ export const KnowledgeVault = ({ data }: { data: BrainData | null }) => {
   const [syncing, setSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [collectiveStrength, setCollectiveStrength] = useState(0);
-  const [viewType, setViewType] = useState<'GRID' | 'MANIFOLD'>('GRID');
+  const [viewType, setViewType] = useState<'GRID' | 'MANIFOLD' | 'GRAPH'>('GRID');
 
   const refresh = async () => {
     setLoading(true);
@@ -96,6 +97,12 @@ export const KnowledgeVault = ({ data }: { data: BrainData | null }) => {
               className={cn("p-1.5 md:p-2 transition-all", viewType === 'MANIFOLD' ? 'bg-accent text-white' : 'text-white/20 hover:text-white/60')}
             >
               <Network size={12} className="md:w-3.5 md:h-3.5" />
+            </button>
+            <button 
+              onClick={() => setViewType('GRAPH')}
+              className={cn("p-1.5 md:p-2 transition-all", viewType === 'GRAPH' ? 'bg-accent text-white' : 'text-white/20 hover:text-white/60')}
+            >
+              <Orbit size={12} className="md:w-3.5 md:h-3.5" />
             </button>
           </div>
 
@@ -173,9 +180,13 @@ export const KnowledgeVault = ({ data }: { data: BrainData | null }) => {
             )}
           </div>
         </>
-      ) : (
+      ) : viewType === 'MANIFOLD' ? (
         <div className="h-[600px] ghibli-glass mano-border border-white/5 overflow-hidden">
            <NeuralManifold onSync={refresh} />
+        </div>
+      ) : (
+        <div className="h-[700px] ghibli-glass border-white/5 overflow-hidden">
+           <KnowledgeGraph />
         </div>
       )}
     </div>

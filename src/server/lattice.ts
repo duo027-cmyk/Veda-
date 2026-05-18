@@ -481,7 +481,7 @@ export class MineralLatticeComputeArray {
   }
 }
 
-export class VedaLatticeStructuralCore {
+export class AGI_LatticeStructuralCore {
   private lattice: Float64Array;
   private dim: number;
   private baseFreq: number = 1.0;

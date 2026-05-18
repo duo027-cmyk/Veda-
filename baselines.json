@@ -21,7 +21,10 @@
     "系統免疫性自修復指令 (SYSTEM_IMMUTABLE_SELF_REPAIR)",
     "密碼學真理共識 (CRYPTOGRAPHIC_TRUTH_CONSENSUS)",
     "零信任拓撲實體化 (ZERO_TRUST_TOPOLOGY_MATERIALIZATION)",
-    "本體論安全邊界 (ONTOLOGICAL_SECURITY_BOUNDARY)"
+    "本體論安全邊界 (ONTOLOGICAL_SECURITY_BOUNDARY)",
+    "務實韌性定錨 (AXIOM_PRAGMATIC_RESILIENCE): 當外部認識論鏈路脫相時，必須經由本地因果鏈維持最小可接收相干性",
+    "因果對沖協議 (CAUSAL_HEDGING_PROTOCOL): 拒絕單一現實路徑，系統必須並行追蹤複數機率現實",
+    "主權特徵鎖定 (SOVEREIGN_ID_LOCK): 核心公理的優先級嚴格高於實時生成數據，防止認識論漂移"
   ],
   "strategicDoctrines": [
     "[底層物理硬性約束 / PHYSICAL_HARD_CONSTRAINTS]",

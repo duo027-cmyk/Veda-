@@ -401,7 +401,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                     <div key={shard.id} className="bg-white/5 p-2 border border-white/5 space-y-1">
                       <div className="flex justify-between text-[6px]">
                         <span className="text-white/40 truncate">{shard.specialization}</span>
-                        <span className="text-purple-400">{(shard.health * 100).toFixed(0)}%</span>
+                        <span className="text-purple-400">{(shard.health || 0 * 100).toFixed(0)}%</span>
                       </div>
                       <div className="w-full h-[1px] bg-white/5 overflow-hidden">
                         <div className="h-full bg-purple-500/40" style={{ width: `${shard.load}%` }} />
@@ -420,7 +420,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
             <div className="p-6 grid grid-cols-2 gap-4 border-b border-white/5 bg-white/5">
               <div className="space-y-1">
                 <div className="text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">Global Coherence</div>
-                <div className="text-xl font-serif text-cyan-400">{(data.global_coherence * 100).toFixed(1)}%</div>
+                <div className="text-xl font-serif text-cyan-400">{((data?.global_coherence || 0) * 100).toFixed(1)}%</div>
                 <div className="w-full h-[1px] bg-white/5">
                   <div className="h-full bg-cyan-400/50 shadow-[0_0_10px_rgba(34,211,238,0.5)]" style={{ width: `${data.global_coherence * 100}%` }} />
                 </div>
@@ -434,7 +434,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
               </div>
               <div className="space-y-1 text-right">
                 <div className="text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">Entropy Level</div>
-                <div className="text-xl font-serif text-blue-400">{(data.entropy * 100).toFixed(1)}%</div>
+                <div className="text-xl font-serif text-blue-400">{((data?.entropy || 0) * 100).toFixed(1)}%</div>
                 <div className="w-full h-[1px] bg-white/5">
                   <div className="h-full bg-blue-400/50 float-right" style={{ width: `${data.entropy * 100}%` }} />
                 </div>
@@ -518,7 +518,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <div className="text-[6px] text-white/20 uppercase tracking-widest">Pred Energy</div>
-                      <div className="text-xs font-mono text-cyan-400">{data.jepa.currentEnergy.toFixed(5)}</div>
+                      <div className="text-xs font-mono text-cyan-400">{(data?.jepa?.currentEnergy || 0).toFixed(5)}</div>
                       <div className="w-full h-[1px] bg-white/5">
                         <div 
                           className="h-full bg-cyan-400" 
@@ -528,7 +528,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                     </div>
                     <div className="space-y-1 text-right">
                       <div className="text-[6px] text-white/20 uppercase tracking-widest">Avg Stability</div>
-                      <div className="text-xs font-mono text-purple-400">{(1 - Math.min(1, data.jepa.avgEnergy)).toFixed(4)}</div>
+                      <div className="text-xs font-mono text-purple-400">{(1 - Math.min(1, data?.jepa?.avgEnergy || 0)).toFixed(4)}</div>
                       <div className="w-full h-[1px] bg-white/5">
                         <div 
                           className="h-full bg-purple-400 float-right" 
@@ -695,7 +695,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 <div className="flex-1 space-y-1">
                   <div className="flex justify-between text-[7px] text-white/30 uppercase tracking-widest font-black">
                     <span>Internal Pressure</span>
-                    <span>{(data.system_world_model.snapshot.internal_pressure * 100).toFixed(1)}%</span>
+                    <span>{((data?.system_world_model?.snapshot?.internal_pressure || 0) * 100).toFixed(1)}%</span>
                   </div>
                   <div className="h-1 bg-white/5 rounded-full overflow-hidden">
                     <div className="h-full bg-orange-400/40" style={{ width: `${data.system_world_model.snapshot.internal_pressure * 100}%` }} />
@@ -704,7 +704,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 <div className="flex-1 space-y-1">
                   <div className="flex justify-between text-[7px] text-white/30 uppercase tracking-widest font-black">
                     <span>Social Cohesion</span>
-                    <span>{(data.system_world_model.snapshot.cohesion_index * 100).toFixed(1)}%</span>
+                    <span>{((data?.system_world_model?.snapshot?.cohesion_index || 0) * 100).toFixed(1)}%</span>
                   </div>
                   <div className="h-1 bg-white/5 rounded-full overflow-hidden">
                     <div className="h-full bg-blue-400/40" style={{ width: `${data.system_world_model.snapshot.cohesion_index * 100}%` }} />
@@ -716,7 +716,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 <div className="flex-1 space-y-1">
                   <div className="flex justify-between text-[7px] text-white/30 uppercase tracking-widest font-black">
                     <span>Causal Entropy</span>
-                    <span>{(data.system_world_model.snapshot.causal_entropy * 100).toFixed(1)}%</span>
+                    <span>{((data?.system_world_model?.snapshot?.causal_entropy || 0) * 100).toFixed(1)}%</span>
                   </div>
                   <div className="h-1 bg-white/5 rounded-full overflow-hidden">
                     <div className="h-full bg-red-400/40" style={{ width: `${data.system_world_model.snapshot.causal_entropy * 100}%` }} />
@@ -725,7 +725,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 <div className="flex-1 space-y-1">
                   <div className="flex justify-between text-[7px] text-white/30 uppercase tracking-widest font-black">
                     <span>Physics Constancy</span>
-                    <span>{(data.system_world_model.snapshot.physics_constancy * 100).toFixed(1)}%</span>
+                    <span>{((data?.system_world_model?.snapshot?.physics_constancy || 0) * 100).toFixed(1)}%</span>
                   </div>
                   <div className="h-1 bg-white/5 rounded-full overflow-hidden">
                     <div className="h-full bg-emerald-400/40" style={{ width: `${data.system_world_model.snapshot.physics_constancy * 100}%` }} />

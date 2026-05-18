@@ -1,15 +1,23 @@
 // src/server/types.ts
 import { BurstMode } from './intelligence';
 
+export interface CausalLink {
+  targetId: string;
+  strength: number;
+  type: 'SEMANTIC' | 'TEMPORAL' | 'LOGICAL';
+}
+
 export interface MemoryFragment {
   id: string;
   type: string;
   content: string;
   resonance: number;
+  coherence: number;
   timestamp: string; // ISO string by default, or harmonized
   hypervector?: Float32Array;
-  causalLinks?: string[]; // IDs of parent memories
+  causalLinks?: CausalLink[]; // Enhanced causal link tracking
   status?: "INTEGRATED" | "PENDING_EVIDENCE" | "STRATEGIC_FADE";
+  feedbackScore?: number;
 }
 
 export interface MemoryNode {
@@ -17,10 +25,13 @@ export interface MemoryNode {
   content: string;
   hypervector?: Float32Array;
   resonance: number;
+  coherence: number;
   timestamp: number;
   metadata?: Record<string, any>;
   accessCount?: number;
   stability?: number;
+  causalLinks?: CausalLink[]; // Enhanced causal link tracking
+  feedbackScore?: number;
 }
 
 export interface WorldState {
@@ -52,11 +63,20 @@ export interface WorldModel {
   version: string;
 }
 
+export interface SystemCoreState {
+  energy: number;     // Index 0: System metabolic activity
+  stability: number;  // Index 1: Causal coherence baseline
+  entropy: number;    // Index 2: Informational disorder
+  intent: number;     // Index 3: Teleological alignment
+  focus_x: number;    // Index 4: Cognitive focus dimension A
+  focus_y: number;    // Index 5: Cognitive focus dimension B
+}
+
 export interface TemporalAnchor {
   id: string;
   label: string;
   timestamp: number;
-  state: number[];
+  state: number[]; // Maintained as array for mathematical continuity
   memoryCount: number;
   memoryLattice: [string, MemoryNode][]; // Snapshot of current memories
   worldSnapshot: WorldState;
@@ -67,6 +87,7 @@ export interface StrategicReport {
   id: string;
   title: string;
   status: string;
+  directive?: string;
   progress: number;
   outline: Array<{
     id: string;
@@ -81,6 +102,7 @@ export interface StrategicReport {
 }
 
 export interface IVedaBrain {
+  isReady(): Promise<void>;
   activateSovereignBurst(target?: string, intensity?: number, manualApproval?: boolean, mode?: BurstMode): Promise<any>;
   approveSovereignBurst(): any;
   deactivateSovereignBurst(reason?: string): Promise<any>;
@@ -98,4 +120,37 @@ export interface IVedaBrain {
   evaluateBurstPotential(intensity: number, targets: string[]): any;
   createTemporalAnchor(label: string): Promise<TemporalAnchor>;
   timeTravel(anchorId: string): Promise<boolean>;
+  batchSynthesizeReport(reportId: string): Promise<any>;
+  getTelemetryBuffer(): string;
+  tick(): void;
+  syncTelemetryCache(): Promise<void>;
+  processEvolution(intent: number[], sensor: any, text: string): Promise<any>;
+  toggleLogicFreeze(): boolean;
+  synthesizeMemory(): MemoryFragment | null;
+  externalPrecisionInjection(params: any): Promise<any>;
+  updateSensorData(params: any): Promise<any>;
+  handleChatMessage(text: string, role: string): Promise<any>;
+  resetChatHistory(): Promise<void>;
+  updateApiKey(key: string): void;
+  submitLatticeTask(type: string, payload: any): string;
+  solidifyLatticeJob(params: any): Promise<any>;
+  initiateStrategicReport(params: any): Promise<any>;
+  synthesizeReportSection(params: any): Promise<any>;
+  performAudit(): Promise<any>;
+  triggerCognitiveSymmetry(): Promise<any>;
+  setDatabase(db: any): void;
+  updateAxioms(data: { axioms: string[] }): Promise<any>;
+  getResearchExport(): any;
+  getGlobalCoherence(): number;
+  getSovereignPulse(): number;
+  getStrategicDirective(): any;
+  getSystemID(): string;
+  getCausalRecall(query: string): any[];
+  getAllMemories(): any[];
+  getGraphData(): { nodes: any[], links: any[] };
+  verifyAuditKeys(keys: string[]): any;
+  setSystemTier(tier: string): Promise<any>;
+  runDreamCycle(wss: any): Promise<void>;
+  submitFeedback(memoryId: string, score: number): Promise<void>;
+  autoEvolve(): Promise<{ log: string; adjustment: number[] }>;
 }

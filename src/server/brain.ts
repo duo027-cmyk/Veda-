@@ -1,17 +1,17 @@
 import crypto from "crypto";
-import fs from "fs";
-import { promises as fsPromises } from "fs";
 import path from "path";
 import { create, insert, search, save, load, type Orama } from "@orama/orama";
 import { WebSocket } from "ws";
-import { doc, setDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, collection, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { GoogleGenAI } from "@google/genai";
+import { handleFirestoreError, OperationType } from "../lib/firebase";
 
+import { AuditSubsystem } from "./AuditSystem";
+import { PersistenceSubsystem } from "./PersistenceSubsystem";
 import { 
   FormalValidator, 
   WeiSolomonCausality, 
   SolomonKingEngineV3, 
-  LogicalConsistencyCheckerV5,
   XCausalTransformer
 } from "./causality";
 
@@ -32,7 +32,7 @@ import {
   MineralSeed, 
   SovereignLatticeV9, 
   CrystalSoul, 
-  VedaLatticeStructuralCore,
+  AGI_LatticeStructuralCore,
   MineralLatticeComputeArray,
   LatticeJob
 } from "./lattice";
@@ -43,12 +43,21 @@ import {
   HighSpeedProcessing 
 } from "./network";
 
+import { LatticeExecutionManager } from "./core/LatticeExecutionManager";
+import { CausalNexus } from "./core/CausalNexus";
+import { AutonomicEngine } from "./core/AutonomicEngine";
+import { SovereignSenses } from "./core/SovereignSenses";
+import { StrategicLayer } from "./core/StrategicLayer";
+import { KnowledgeManifest } from "./core/KnowledgeManifest";
+import { EvolutionManager } from "./core/EvolutionManager";
+import { SovereignIntegrity } from "./core/SovereignIntegrity";
+import { CausalProcessor } from "./core/CausalProcessor";
 import { 
   SemanticSolomonEngine, 
   HyperLatticeCoordinator, 
   ConsanguinityProtocol, 
   MemorySynthesizer, 
-  VedaJEPAArch, 
+  AGI_JEPA_Arch, 
   TrendPredictor, 
   GeneticOptimizer, 
   SystemController, 
@@ -68,12 +77,12 @@ import {
 import { MemoryFragment, MemoryNode, IVedaBrain, WorldModel, TemporalAnchor, StrategicReport } from "./types";
 import { CONFIG, SYSTEM_FEEDBACK, STATE_PATH, ORAMA_PATH, CHAT_HISTORY_PATH } from "./constants";
 
-export class VedaSovereignBrain implements IVedaBrain {
+export class AGISovereignBrain implements IVedaBrain {
   private state: number[] = [0.5, 0.8, 0.1, 0.2, 0.5, 0.5];
   private stateSnapshot: number[] = [0.5, 0.8, 0.1, 0.2, 0.5, 0.5];
   private isProcessing: boolean = false;
   private network: NetworkManager = new NetworkManager();
-  private thermalMemory: VedaLatticeStructuralCore = new VedaLatticeStructuralCore(128);
+  private thermalMemory: AGI_LatticeStructuralCore = new AGI_LatticeStructuralCore(128);
   private inferenceManifold: ActiveInferenceManifold = new ActiveInferenceManifold();
   private stabilityManifold: StabilityManifold = new StabilityManifold();
   private negativeEnergyAbsorbed: number = 0.0;
@@ -81,9 +90,17 @@ export class VedaSovereignBrain implements IVedaBrain {
   private neuralCache: NeuralCache = new NeuralCache();
   private controller: SystemController = new SystemController();
   private coreAxioms: CoreAxioms = new CoreAxioms();
+  private autonomic: AutonomicEngine;
+  private senses: SovereignSenses = new SovereignSenses();
+  private strategic: StrategicLayer = new StrategicLayer();
+  private manifest: KnowledgeManifest;
+  private causalNexus = new CausalNexus();
+  private baseline: any = null;
+  private isExternalAiBlocked: boolean = false;
+  
   private checkpoint: number[] = [...this.state];
   private rejectionCount: number = 0.0;
-  private status: string = "系統核心：運行中";
+  private status: string = "AGI 系統核心：運行中";
   private history: number[] = [];
   private coherenceHistory: number[] = [];
   private resonancePulse: number = 0; 
@@ -92,10 +109,10 @@ export class VedaSovereignBrain implements IVedaBrain {
   private synthesizer: MemorySynthesizer;
   private geneticOptimizer: GeneticOptimizer;
   private solomonEngine: SemanticSolomonEngine | null = null;
-  private vedaJEPA: VedaJEPAArch;
+  private agiJEPA: AGI_JEPA_Arch;
   private consciousnessMonitor: ConsciousnessMonitor = new ConsciousnessMonitor();
   private constraintEngine: ConstraintEngine = new ConstraintEngine();
-  private ethicsCore: CrystalSoul = new CrystalSoul("VEDA_ETHICS_CORE");
+  private ethicsCore: CrystalSoul = new CrystalSoul("AGI_ETHICS_CORE");
   private immuneLattice: SovereignLatticeV9 = new SovereignLatticeV9();
   private hyperLattice: HyperLatticeCoordinator;
   private dynamicConfig = { ...CONFIG };
@@ -107,6 +124,10 @@ export class VedaSovereignBrain implements IVedaBrain {
   private selfHealing: SelfHealingProtocol = new SelfHealingProtocol();
   private burstEngine: CausalBurstEngine = new CausalBurstEngine();
   private epistemicForaging: EpistemicForagingUnit;
+  private evolutionManager: EvolutionManager;
+  private integrity: SovereignIntegrity;
+  private causalProcessor: CausalProcessor;
+  private latticeManager: LatticeExecutionManager;
   private globalWorkspace: { attention: string; priority: number; focus: string[] } = { attention: "IDLE", priority: 0, focus: [] };
   private fitnessWeights = { stability: 0.6, trend: 0.4 };
   private metaStrategyHistory: any[] = [];
@@ -141,54 +162,20 @@ export class VedaSovereignBrain implements IVedaBrain {
   private readonly CHAT_HISTORY_LIMIT = 100; // Increased for better context retention
   private logs: any[] = [];
   private lastTickTime: number = Date.now();
+  private recentlyInjected: string[] = []; // V-AA Core: High-priority context buffer
   private lastTickNanos: bigint = process.hrtime.bigint();
   private physicalOpsCount: number = 0;
   private causalAnchorCount: number = 0;
   private intent: number[] = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
   
-  private causalNexus = new (class {
-    private data = new Map<string, { v: any; w: number; t: number }>();
-    private readonly DECAY = 0.998;
-
-    public set(key: string, v: any, w: number = 1.0) {
-      this.data.set(key, { v, w, t: Date.now() });
-      if (this.data.size > 256) {
-        const oldestKey = Array.from(this.data.keys())[0];
-        this.data.delete(oldestKey);
-      }
-    }
-
-    public get(key: string) {
-      const node = this.data.get(key);
-      if (!node) return null;
-      return node.v;
-    }
-
-    public has(key: string) { return this.data.has(key); }
-    public delete(key: string) { return this.data.delete(key); }
-    public keys() { return this.data.keys(); }
-    public entries() { return this.data.entries(); }
-    get size() { return this.data.size; }
-
-    [Symbol.iterator]() { return this.data.entries()[Symbol.iterator](); }
-
-    public getWeightedEntropy() {
-      let total = 0;
-      this.data.forEach(n => {
-        const age = (Date.now() - n.t) / 1000;
-        total += n.w * Math.pow(this.DECAY, age);
-      });
-      return total;
-    }
-  })();
-
   private mineralLattice: Map<string, MemoryNode> = new Map();
   private provisionalZone: Map<string, MemoryNode> = new Map();
   private causalRegistry: Map<string, { nextP: number[], hits: number }> = new Map();
   private causality: WeiSolomonCausality = new WeiSolomonCausality();
   private validator: FormalValidator = new FormalValidator();
   private solomonKing: SolomonKingEngineV3 = new SolomonKingEngineV3();
-  private consistencyChecker: LogicalConsistencyCheckerV5 = new LogicalConsistencyCheckerV5();
+  private auditSystem: AuditSubsystem = new AuditSubsystem();
+  private persistenceSystem: PersistenceSubsystem = new PersistenceSubsystem(process.cwd());
   private generativeModel: GenerativeModel = new GenerativeModel(6);
   private hdc: HDCEngine = new HDCEngine();
   private holographicMemory: HolographicMemory = new HolographicMemory();
@@ -197,7 +184,7 @@ export class VedaSovereignBrain implements IVedaBrain {
   private latticeComputeArray: MineralLatticeComputeArray = new MineralLatticeComputeArray();
   private massiveIngestion: MassiveIngestionEngine;
   private consanguinity: ConsanguinityProtocol;
-  private jepa: VedaJEPAArch = new VedaJEPAArch(6);
+  private jepa: AGI_JEPA_Arch = new AGI_JEPA_Arch(6);
   private causalIndex!: any;
   private systemID: string = `VEDA-SYSTEM-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
   private lastSovereignAction: string = "BOOT_INITIAL_COHERENCE";
@@ -247,7 +234,6 @@ export class VedaSovereignBrain implements IVedaBrain {
   private matrixWorkloadFactor: number = 1.0;
   private weather: any = null;
   private sensorData = { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, imu: { accel: 0, gyro: 0 } };
-  private safetyAlerts: any[] = [];
   private cognitiveResonance: number = 1.0;
   private interactionCount: number = 0;
   private isSupportAuthorized: boolean = false;
@@ -260,69 +246,34 @@ export class VedaSovereignBrain implements IVedaBrain {
     security_clearance: 1
   };
   private auditKeys: string[] = ["紅茶", "懶鬼", "夜之領主"];
-  private commercialMetrics = {
-    marketResonance: 0.85,
-    operationalUptime: 0.999,
-    riskThreshold: 0.12,
-    serviceTier: 'ENTERPRISE_GOLD'
-  };
-  private marketPredictions: any[] = [];
   private activeTenants: string[] = ["CORE_ARCHITECT", "PREVIEW_GUEST"];
   private currentTenantId: string = "CORE_ARCHITECT";
   private isCausalIsolated: boolean = true;
   private visualStream: any[] = [];
   private longVideoProjects: any[] = [];
-  private strategicReports: StrategicReport[] = [];
   private temporalAnchors: TemporalAnchor[] = [];
   private systemWorldModel: WorldModel;
-  private XCausalTransformer: XCausalTransformer = new XCausalTransformer();
   private db: any = null;
-  private baseline: any = null;
-  private epistemicState = {
-    credibility: 1.0,
-    pollution_level: 0.0,
-    last_verification_ts: Date.now()
-  };
-  private causalLattice = {
-    nodes: [] as any[],
-    edges: [] as any[]
-  };
-  private strategicSimulations: any[] = [];
-  private realityFeedback: any[] = [];
 
     public sovereign_index: number = 0; // Will be calculated dynamically
 
-  private isExternalAiBlocked: boolean = false;
+  private readyPromise: Promise<void>;
+  private resolveReady!: () => void;
 
   constructor() {
+    this.readyPromise = new Promise(resolve => {
+      this.resolveReady = resolve;
+    });
+
     this.synthesizer = new MemorySynthesizer();
     this.geneticOptimizer = new GeneticOptimizer(6);
     this.massiveIngestion = new MassiveIngestionEngine(this);
     this.consanguinity = new ConsanguinityProtocol(this);
     this.solomonEngine = new SemanticSolomonEngine(null, 30, 0.08, 0.3); // Initialize for semantic drift
-    this.vedaJEPA = new VedaJEPAArch(6);
-    this.epistemicForaging = new EpistemicForagingUnit(this.vedaJEPA, this.coreAxioms);
+    this.agiJEPA = new AGI_JEPA_Arch(6);
+    this.epistemicForaging = new EpistemicForagingUnit(this.agiJEPA, this.coreAxioms);
     this.hyperLattice = new HyperLatticeCoordinator(this.hdc);
-    this.falsifiability.propose("HYPER_CONVERGENCE", "主權共振必須維持在臨界值以上", "coherence", 0.3, "<");
-    this.falsifiability.propose("ENTROPY_LIMIT", "系統認識論熵不可超過極限", "entropy", 0.9, ">");
-    
-    // V-AA Protocol: Model Context Selection
-    // GEMMA_4 remains a hypothetical logical anchor for high-density inference simulation.
-    this.engineType = process.env.VEDA_ENGINE || "GEMINI_3"; 
-    
-    let apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
-    
-    // V-AA Protocol: Hardened Key Validation - Prevent placeholder leakage
-    if (apiKey === "GEMINI_API_KEY" || apiKey.length < 5) {
-      console.warn("[VEDA_LOG][API_WARNING] Detected invalid or placeholder GEMINI_API_KEY. AI features entering standby.");
-      apiKey = ""; 
-    }
 
-    if (!apiKey) {
-      console.warn("[VEDA_LOG][API_WARNING] GEMINI_API_KEY is missing. AI features will fail.");
-    }
-    this.ai = new GoogleGenAI({ apiKey: apiKey || "DISABLED_KEY" });
-    
     this.systemWorldModel = {
       snapshot: {
         characters: [],
@@ -339,12 +290,89 @@ export class VedaSovereignBrain implements IVedaBrain {
       version: "1.0.0"
     };
 
-    this.initializeBaselines();
-    this.initializeOrama();
-    this.loadState();
+    this.manifest = new KnowledgeManifest(this.systemWorldModel);
+
+    this.evolutionManager = new EvolutionManager(
+      this.pecEngine,
+      this.burstEngine,
+      this.burstEvaluator,
+      this.falsifiability,
+      this.manifest,
+      {
+        triggerResonance: (intensity) => this.triggerResonance(intensity),
+        neuralLog: (type, msg, data) => this.neuralLog(type as any, msg, data)
+      }
+    );
+
+    this.integrity = new SovereignIntegrity(
+      this.auditSystem,
+      this.network,
+      this.constraintEngine,
+      this.coreAxioms,
+      this.consciousnessMonitor,
+      this.crystalSoul,
+      this.causalNexus,
+      {
+        neuralLog: (type, msg, data) => this.neuralLog(type as any, msg, data),
+        triggerResonance: (intensity) => this.triggerResonance(intensity),
+        getState: () => this.state,
+        updateState: (state) => { this.state = state; },
+        saveState: () => this.saveStateNow(),
+        getGlobalCoherence: () => this.getGlobalCoherence(),
+        runCausalDistillation: () => this.runCausalDistillation()
+      }
+    );
     
-    // Distillation History Initialization
-    this.distillationHistory.push({ ...this.distilledChatContext });
+    this.latticeManager = new LatticeExecutionManager(
+      this.latticeComputeArray,
+      this.strategic,
+      this.manifest,
+      this.ai,
+      {
+        neuralLog: (type, msg, data) => this.neuralLog(type as any, msg, data),
+        triggerResonance: (intensity) => this.triggerResonance(intensity),
+        saveState: () => this.saveStateNow(),
+        updateState: (state) => { this.state = state; },
+        getState: () => this.state,
+        getGlobalCoherence: () => this.getGlobalCoherence()
+      }
+    );
+
+    this.causalProcessor = new CausalProcessor(
+      this.hdc,
+      this.manifest,
+      {
+        neuralLog: (type, msg, data) => this.neuralLog(type as any, msg, data)
+      }
+    );
+
+    this.autonomic = new AutonomicEngine(
+      this.network,
+      this.geneticOptimizer,
+      this.trendPredictor,
+      this.neuralCache,
+      this.epistemicForaging
+    );
+
+    this.falsifiability.propose("HYPER_CONVERGENCE", "主權共振必須維持在臨界值以上", "coherence", 0.3, "<");
+    this.falsifiability.propose("ENTROPY_LIMIT", "系統認識論熵不可超過極限", "entropy", 0.9, ">");
+    
+    // AGI Protocol: Model Context Selection
+    this.engineType = process.env.AGI_ENGINE || "GEMINI_3"; 
+    
+    let apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
+    if (apiKey === "GEMINI_API_KEY" || apiKey.length < 5) {
+      console.warn("[AGI_LOG][API_WARNING] Detected invalid or placeholder GEMINI_API_KEY. AI features entering standby.");
+      apiKey = ""; 
+    }
+
+    if (!apiKey) {
+      console.warn("[VEDA_LOG][API_WARNING] GEMINI_API_KEY is missing. AI features will fail.");
+    }
+    this.ai = new GoogleGenAI({ apiKey: apiKey || "DISABLED_KEY" });
+    
+    // Trigger async initialization in background
+    this.initializeSovereignCore();
 
     // Initialize Sovereign Anchors
     for (let i = 0; i < 5; i++) {
@@ -353,12 +381,32 @@ export class VedaSovereignBrain implements IVedaBrain {
     }
   }
 
+  private async initializeSovereignCore() {
+    try {
+      await this.auditSystem.initialize();
+      await this.persistenceSystem.initialize();
+      await this.initializeBaselines();
+      await this.initializeOrama();
+      await this.loadState();
+      
+      // Distillation History Initialization
+      this.distillationHistory.push({ ...this.distilledChatContext });
+      this.neuralLog("SYSTEM_BOOT", "Sovereign Subsystems synchronized.");
+      
+      // Ensure first telemetry sync happens after load
+      await this.syncTelemetryCache();
+    } catch (e) {
+      console.error("[VEDA_BOOT_FAULT] Critical initialization failure:", e);
+      this.status = "SYSTEM_FAULT: INITIALIZATION_DEGRADED";
+    } finally {
+      this.resolveReady();
+    }
+  }
+
   private async initializeBaselines() {
     try {
-      const BASELINE_PATH = path.join(process.cwd(), "baselines.json");
-      if (fs.existsSync(BASELINE_PATH)) {
-        const raw = await fsPromises.readFile(BASELINE_PATH, "utf-8");
-        this.baseline = JSON.parse(raw);
+      this.baseline = await this.persistenceSystem.loadBaselines();
+      if (this.baseline) {
         console.log(`[VEDA_BASELINE] Ontological Manifest Loaded: v${this.baseline.version}`);
         
         // Inject baseline axioms into CoreAxioms as IMMUTABLE
@@ -367,7 +415,7 @@ export class VedaSovereignBrain implements IVedaBrain {
         }
       }
     } catch (e) {
-      console.error("[VEDA_BASELINE] Failed to load ontological baseline:", e);
+      this.neuralLog("VEDA_BASELINE", `Ontological Baseline Fault: ${e}`);
     }
   }
 
@@ -382,48 +430,25 @@ export class VedaSovereignBrain implements IVedaBrain {
 
   private async initializeOrama() {
     try {
-      if (fs.existsSync(ORAMA_PATH)) {
-        try {
-          const rawData = await fsPromises.readFile(ORAMA_PATH, "utf-8");
-          const parsedData = JSON.parse(rawData);
-          this.causalIndex = await create({
-            schema: {
-              id: "string",
-              content: "string",
-              timestamp: "number",
-              type: "string",
-              metadata: "string"
-            }
-          });
-          await load(this.causalIndex, parsedData);
-          console.log("[VEDA_INDEX] Persistent Index Restored.");
-        } catch (loadErr) {
-          console.error("[VEDA_INDEX] Failed to load index, purging and creating new:", loadErr);
-          await fsPromises.unlink(ORAMA_PATH).catch(() => null);
-          this.causalIndex = await create({
-            schema: {
-              id: "string",
-              content: "string",
-              timestamp: "number",
-              type: "string",
-              metadata: "string"
-            } as const,
-          });
+      this.causalIndex = await create({
+        schema: {
+          id: "string",
+          content: "string",
+          timestamp: "number",
+          type: "string",
+          metadata: "string"
         }
+      });
+
+      const data = await this.persistenceSystem.loadIndex();
+      if (data) {
+        await load(this.causalIndex, data);
+        this.neuralLog("VEDA_INDEX", "Persistent Index Restored via Subsystem.");
       } else {
-        this.causalIndex = await create({
-          schema: {
-            id: "string",
-            content: "string",
-            timestamp: "number",
-            type: "string",
-            metadata: "string"
-          } as const,
-        });
-        console.log("[VEDA_INDEX] New Sovereign Index Initialized.");
+        this.neuralLog("VEDA_INDEX", "New Sovereign Index Initialized.");
       }
     } catch (e) {
-      console.error("[VEDA_INDEX] Initialization Fault:", e);
+      this.neuralLog("VEDA_INDEX", `Initialization Fault: ${e}`);
     }
   }
 
@@ -433,8 +458,8 @@ export class VedaSovereignBrain implements IVedaBrain {
     this.lastTickTime = now;
     this.physicalOpsCount++;
 
-    // Process Mineral Lattice Compute Array (Blockchain-style offloading)
-    this.processLatticeJobs().catch(e => console.error("[LATTICE_SCHEDULER_FAULT]", e));
+    // Process Lattice Jobs via Manager
+    this.latticeManager.processLatticeJobs().catch(e => console.error("[LATTICE_SCHEDULER_FAULT]", e));
 
     if (this.physicalOpsCount % 60 === 0) {
       this.saveStateNow().catch(() => {}); // Forced persistence every ~30s
@@ -442,29 +467,8 @@ export class VedaSovereignBrain implements IVedaBrain {
 
     if (this.isLogicFrozen) return;
 
-    // 0. PEC: Predictive Correction Check
-    if (this.physicalOpsCount % 10 === 0) {
-      const pecResult = this.pecEngine.simulate(this.state, this.intent);
-      
-      // V-AA Optimization: Dynamic Credibility Sync
-      // Instead of static 1.0/0.4, we use a hybrid of coherence and PEC result.
-      const rawCredibility = this.getGlobalCoherence() * (1 - pecResult.divergence * 0.5);
-      this.epistemicState.credibility = Number(rawCredibility.toFixed(4));
-      this.epistemicState.last_verification_ts = Date.now();
-
-      if (pecResult.divergence > 0.22) {
-        this.neuralLog("PEC_WARNING", `偵測到潛在因果發散 (Divergence: ${pecResult.divergence.toFixed(4)})，啟動抑制協議。`);
-        const correction = this.pecEngine.getCorrectionVector(pecResult.divergence);
-        this.state = this.state.map((v, i) => Math.max(0, Math.min(1, v + correction[i])));
-      }
-
-      // V-AA Protocol: Anti-Stagnation Trigger
-      // If credibility is low and static, trigger a resonance pulse to force evolution
-      if (this.epistemicState.credibility < 0.3 && this.physicalOpsCount % 100 === 0) {
-        this.neuralLog("SYSTEM_STAGNATION", "偵測到認識論瓶頸。執行強制共振脈衝...");
-        this.triggerResonance(0.15);
-      }
-    }
+    // 0. PEC & Evolution Optimization
+    this.state = this.evolutionManager.processPEC(this.state, this.intent, this.physicalOpsCount, this.getGlobalCoherence());
 
     // 1. Structural Decay & Environmental Adaptation
     this.state[2] = Math.min(1.0, this.state[2] + CONFIG.NETWORK_DECAY * (1 + this.resonancePulse));
@@ -485,16 +489,18 @@ export class VedaSovereignBrain implements IVedaBrain {
     // 4. Diagnostic & Self-Healing
     if (this.physicalOpsCount % 100 === 0) {
       this.runDiagnostic();
+      this.evolveCoherence();
     }
 
-    // 4.1 Causal Burst Engine Update
-    const burstImpact = this.burstEngine.update(delta, this.getGlobalCoherence());
-    if (burstImpact) {
-      this.neuralLog("BURST_IMPACT", `Action: ${burstImpact.action} | Effect: ${burstImpact.effect}`);
-      if (burstImpact.action === "EMERGENCY_SHUTDOWN") {
-        this.triggerResonance(0.9);
-      }
-    }
+    // 4.1 Causal Burst Engine & Falsifiability
+    this.evolutionManager.processBurst(delta, this.getGlobalCoherence());
+    
+    this.evolutionManager.processFalsifiability(this.physicalOpsCount, {
+      coherence: this.getGlobalCoherence(),
+      entropy: this.state[2],
+      stability: this.matrixStability,
+      vfe: this.variationalFreeEnergy
+    });
 
     // 4.2 Burst Result Auditing (Polling)
     if (this.physicalOpsCount % 50 === 0) {
@@ -509,10 +515,11 @@ export class VedaSovereignBrain implements IVedaBrain {
       this.runCausalDistillation().catch(e => console.error("[RESEARCH_FAULT]", e));
     }
 
-    const coreCoherence = this.getGlobalCoherence();
     // V-AA Optimization: Sovereign Index reflects current system health and research depth
-    const researchWeight = ((this.researchChronicles || []).length / 20) * 15;
-    this.sovereign_index = (coreCoherence * 85) + researchWeight + (Math.sin(Date.now() / 6000) * 2.5);
+    this.sovereign_index = this.evolutionManager.calculateSovereignIndex(
+      this.getGlobalCoherence(), 
+      (this.researchChronicles || []).length
+    );
     
     // Auto-recovery: If we were blocked but now have a key, try to unblock
     const currentKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
@@ -524,7 +531,7 @@ export class VedaSovereignBrain implements IVedaBrain {
     if (this.sovereign_index > 100) this.sovereign_index = 100;
 
     // V-AA Protocol: High-frequency status update during active synthesis
-    const activeSynthesis = (this.strategicReports || []).find(r => r.status === "SYNTHESIZING");
+    const activeSynthesis = (this.strategic.getReports() || []).find(r => r.status === "SYNTHESIZING");
     if (activeSynthesis && this.physicalOpsCount % 20 === 0) {
         const generatingSections = activeSynthesis.outline.filter(s => s.status === "GENERATING");
         const doneSections = activeSynthesis.outline.filter(s => s.status === "DONE").length;
@@ -575,10 +582,10 @@ export class VedaSovereignBrain implements IVedaBrain {
 
     // JEPA World Model Prediction
     if (this.physicalOpsCount % 10 === 0) {
-      const currentLatent = this.vedaJEPA.encode(this.state);
+      const currentLatent = this.agiJEPA.encode(this.state);
       const action = [this.resonancePulse, this.getGlobalCoherence(), 0, 0, 0, 0];
       const nextState = [...this.state]; // In a real loop this would be observed
-      this.vedaJEPA.step(this.state, action, nextState); // Feedback loop self-update
+      this.agiJEPA.step(this.state, action, nextState); // Feedback loop self-update
       this.epistemicForaging.step(this.state, action, nextState);
     }
 
@@ -598,21 +605,6 @@ export class VedaSovereignBrain implements IVedaBrain {
     if (this.physicalOpsCount % 150 === 0 && this.chatHistory.length > 0) {
       const lastEntry = this.chatHistory[this.chatHistory.length - 1];
       this.ethicsCore.process(lastEntry.text);
-    }
-
-    // Falsifiability Heartbeat
-    if (this.physicalOpsCount % 100 === 0) {
-      const metrics = {
-        coherence: this.getGlobalCoherence(),
-        entropy: this.state[2],
-        stability: this.matrixStability,
-        vfe: this.variationalFreeEnergy
-      };
-      const failures = this.falsifiability.evaluate(metrics);
-      failures.forEach(f => {
-        this.neuralLog("FALSIFICATION_EVENT", f.result);
-        this.triggerResonance(0.5); // Disrupt current state due to falsification
-      });
     }
 
     // 4. Manifold Stability Update
@@ -748,190 +740,16 @@ export class VedaSovereignBrain implements IVedaBrain {
     this.neuralLog("SYSTEM", "認識論清零完成。");
   }
 
-  private async processLatticeJobs() {
-    const activeJobs = this.latticeComputeArray.getActiveJobs();
-    
-    // Self-healing: If no jobs are active for a specific report/section, or general stagnation
-    if (activeJobs.length === 0) {
-      for (const report of this.strategicReports) {
-        if (report.status === 'SYNTHESIZING') {
-          // V-AA Refinement: Also look for sections stuck in GENERATING with no active job
-          const nextPending = report.outline.find(s => s.status === 'PENDING' || (s.status === 'GENERATING' && !activeJobs.some(j => j.type === 'REPORT_SECTION_SYNTHESIS' && j.payload.sectionId === s.id)));
-          
-          if (nextPending) {
-            this.neuralLog("SYSTEM_RECOVERY", `偵測到掛起的報告或空轉章節 [${report.id} / ${nextPending.id}]，正在重啟合成序列...`);
-            this.synthesizeReportSection({ reportId: report.id, sectionId: nextPending.id }).catch(() => {});
-            return; 
-          } else {
-            const allDone = report.outline.every(s => s.status === 'DONE');
-            if (allDone) {
-              report.status = 'COMPLETED';
-              report.progress = 100;
-              this.neuralLog("SYSTEM", `報告 [${report.id}] 已自動標記為完成。`);
-            }
-          }
-        }
-      }
-    }
-
-    for (const job of activeJobs) {
-      if (job.status === 'PENDING' && this.latticeComputeArray.canExecute()) {
-        this.latticeComputeArray.setExecuting(job.id);
-        this.executeLatticeTask(job).catch(err => {
-          this.neuralLog("LATTICE_FAULT", `Task ${job.id} failed: ${err.message}`);
-          this.latticeComputeArray.updateJob(job.id, { status: 'FAILED' });
-        });
-      }
-    }
-  }
-
-  public async batchSynthesizeReport(reportId: string) {
-    const report = this.strategicReports.find(r => r.id === reportId);
-    if (!report) throw new Error("REPORT_NOT_FOUND");
-    
-    this.neuralLog("STRATEGIC_SYNTHESIS", `啟動全自動合成隊列：${report.title}`);
-    for (const section of report.outline) {
-      if (section.status === 'PENDING') {
-        this.synthesizeReportSection({ reportId, sectionId: section.id });
-      }
-    }
-    return { status: "BATCH_SUBMITTED", count: report.outline.length };
-  }
-
-  private async executeLatticeTask(job: LatticeJob) {
-    this.neuralLog("LATTICE_COMPUTE", `晶格任務執行引爆：[${job.type}] ID: ${job.id}`);
-    
-    // V-AA Protocol: Epistemic Gate - Ensure valid API key before firing
-    const currentKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
-    const isMockKey = this.isExternalAiBlocked || !currentKey || currentKey === "GEMINI_API_KEY" || currentKey === "DISABLED_KEY";
-
-    try {
-      if (job.type === "STRATEGIC_OUTLINE" || job.type === "REPORT_SECTION_SYNTHESIS" || job.type === "CAUSAL_EVOLUTION_REPORT") {
-        
-        if (isMockKey) {
-          this.neuralLog("LATTICE_DEGRADATION", `[警告] 未偵測到有效 GEMINI_API_KEY。啟動主權自主生成補償...`);
-          await this.simulateAutonomousGeneration(job);
-          return;
-        }
-
-        this.neuralLog("LATTICE_API", `正在調用 Gemini API [${job.id}]...`);
-        
-        let prompt = job.payload.prompt;
-        
-        // V-AA Protocol: Dynamic prompt generation for Research if missing
-        if (job.type === "CAUSAL_EVOLUTION_REPORT" && !prompt) {
-          prompt = `你是一個高級戰略分析師與認識論專家。
-          正在對 VEDA 系統的一次演化事件進行「深度研判」。
-          事件描述：${job.payload.event}
-          系統版本：v${job.payload.version}
-          演化數據：${JSON.stringify(job.payload.snapshot)}
-          
-          要求：
-          1. 撰寫一條深度且具備冷靜學術風格的研判報告。
-          2. 分析此次演化對系統長期穩定性的影響。
-          3. 字數約 500-1000 字。
-          4. 嚴禁平庸措辭。`;
-        }
-        
-        const result = await this.ai.models.generateContent({
-           model: "gemini-1.5-flash",
-           contents: [{ role: 'user', parts: [{ text: prompt }] }]
-        });
-        
-        const content = result.text || "";
-        this.neuralLog("LATTICE_API_SUCCESS", `API 回傳完成 [${job.id}]，長度: ${content.length}`);
-        let parsedResult: any = content;
-
-        if (job.type === "STRATEGIC_OUTLINE") {
-          // Attempt to parse JSON from outline prompt
-          try {
-            const jsonMatch = content.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              parsedResult = JSON.parse(jsonMatch[0]);
-            } else {
-              throw new Error("OUTLINE_JSON_NOT_FOUND");
-            }
-          } catch (e) {
-            this.neuralLog("LATTICE_FAULT", "Failed to parse outline JSON, retrying with raw text pattern.");
-          }
-        }
-
-        await this.solidifyLatticeJob({ jobId: job.id, result: parsedResult, coherence: 0.98 });
-      }
-    } catch (err: any) {
-      const errMsg = err.message || String(err);
-      
-      // V-AA Protocol: Handle Invalid API Key explicitly - Trigger global degradation if needed
-      if (errMsg.includes("API key not valid") || errMsg.includes("INVALID_ARGUMENT") || errMsg.includes("400")) {
-        if (!this.isExternalAiBlocked) {
-          this.neuralLog("SYSTEM_SECURITY", "偵測到 API 金鑰權限失效，已鎖定外部 API 請求並切換至內閉環主權推理。");
-          this.isExternalAiBlocked = true;
-          this.saveStateNow().catch(() => {});
-        }
-        
-        // Immediate fallback for this job without logging a loud FAULT
-        await this.simulateAutonomousGeneration(job);
-        return;
-      }
-
-      this.neuralLog("LATTICE_FAULT", `Lattice execution error: ${errMsg}`);
-      this.latticeComputeArray.updateJob(job.id, { status: 'FAILED' });
-    }
-  }
-
-  private filterInputEpistemically(text: string): { credible: boolean; entropy: number; pollutionLevel: number } {
-    // VEDA v7.0: Epistemic Filtering Layer
-    const suspiciousKeywords = ["hallucination", "mock", "simulated", "fake data", "placeholder"];
-    const pollutionCount = suspiciousKeywords.filter(k => text.toLowerCase().includes(k)).length;
-    const entropy = 0.1 + (pollutionCount * 0.2) + (Math.random() * 0.05);
-    
-    const result = {
-      credible: pollutionCount < 3,
-      entropy: Math.min(entropy, 1.0),
-      pollutionLevel: pollutionCount / suspiciousKeywords.length
-    };
-
-    // Global state update
-    this.epistemicState = {
-      credibility: result.credible ? 1.0 : 0.4,
-      pollution_level: result.pollutionLevel,
-      last_verification_ts: Date.now()
-    };
-
-    return result;
+  private filterInputEpistemically(text: string) {
+    return this.causalProcessor.filterInputEpistemically(text);
   }
 
   private constructCausalLattice(thought: string) {
-    // VEDA v7.0: Causal Lattice Layer
-    const id = crypto.randomBytes(4).toString('hex');
-    const nodes = thought.split(/[。\n]/).filter(s => s.length > 5).slice(0, 5);
-    
-    nodes.forEach((label, i) => {
-      const nodeId = `LATTICE_${id}_${i}`;
-      this.causalLattice.nodes.push({
-        id: nodeId,
-        label: label.trim(),
-        weight: 0.5 + Math.random() * 0.5,
-        layer: i === 0 ? 'REALITY_ANCHOR' : 'CAUSAL_DERIVATION'
-      });
+    this.causalProcessor.constructCausalLattice(thought);
+  }
 
-      if (i > 0) {
-        this.causalLattice.edges.push({
-          source: `LATTICE_${id}_${i-1}`,
-          target: nodeId,
-          strength: 0.7 + Math.random() * 0.3
-        });
-      }
-    });
-
-    // Keep it small for telemetry
-    if (this.causalLattice.nodes.length > 30) {
-      this.causalLattice.nodes.splice(0, 5);
-      this.causalLattice.edges = this.causalLattice.edges.filter(e => 
-        this.causalLattice.nodes.find(n => n.id === e.source) && 
-        this.causalLattice.nodes.find(n => n.id === e.target)
-      );
-    }
+  private calculateCausalIntegrity(cmd: string) {
+    return this.causalProcessor.calculateCausalIntegrity(cmd);
   }
 
   private async simulateStrategicPaths(scenario: string) {
@@ -949,164 +767,66 @@ export class VedaSovereignBrain implements IVedaBrain {
       entropy: 0.2 + Math.random() * 0.3
     };
 
-    this.strategicSimulations.unshift(simulation);
-    if (this.strategicSimulations.length > 5) this.strategicSimulations.pop();
-
+    this.strategic.addSimulation(simulation);
     this.neuralLog("STRATEGIC_SIMULATION", `已完成多路徑推演：[${simulationId}] ${scenario.substring(0, 30)}`);
     return simulation;
   }
 
-  private async calculateCausalBackpropagation(jobId: string, result: any, coherence: number) {
-    // VEDA v7.0: Causal Backpropagation Engine
-    this.neuralLog("CAUSAL_BACKPROP", `正在執行因果反向傳播：Job ${jobId} | Coherence: ${coherence}`);
-    
-    // Evaluate if the result caused "Causal Collapse"
+  private async calculateCausalBackpropagation(jobId: string, result: any, coherence: number): Promise<void> {
+    this.neuralLog('CAUSAL_BACKPROP', `正在執行因果反向傳播：Job ${jobId} | Coherence: ${coherence}`);
+
     let logicDrift = 0;
     if (coherence < 0.6) {
       logicDrift = (0.6 - coherence) * 2;
-      this.neuralLog("CAUSAL_COLLAPSE", `偵測到局部因果崩塌，漂移值：${logicDrift.toFixed(4)}`);
+      this.neuralLog('CAUSAL_COLLAPSE', `偵測到局部因果崩塌，漂移值：${logicDrift.toFixed(4)}`);
       this.state[2] = Math.min(1.0, this.state[2] + logicDrift * 0.5);
       this.state[1] = Math.max(0, this.state[1] - logicDrift * 0.3);
     }
 
-    // Weight Rebalancing
     if (this.systemWorldModel) {
       this.systemWorldModel.snapshot.causal_entropy = (this.systemWorldModel.snapshot.causal_entropy + (1 - coherence)) / 2;
-      this.systemWorldModel.version = `v${parseFloat(this.systemWorldModel.version.substring(1)) + 0.001}`;
+      const currentVersion = parseFloat(this.systemWorldModel.version.substring(1));
+      this.systemWorldModel.version = `v${(currentVersion + 0.001).toFixed(3)}`;
     }
 
-    // Isolate Epistemic Pollution
     if (logicDrift > 0.4) {
-      this.neuralLog("EPISTEMIC_ISOLATION", `啟動認識污染隔離：隔離 Job ${jobId} 的影響因子。`);
+      this.neuralLog('EPISTEMIC_ISOLATION', `啟動認識污染隔離：隔離 Job ${jobId} 的影響因子。`);
     }
 
-    // Structural Repair (if needed)
     if (this.state[1] < 0.2) {
-      this.neuralLog("STRUCTURAL_REPAIR", "穩定度過低，自動啟動因果鏈修復程序。");
+      this.neuralLog('STRUCTURAL_REPAIR', '穩定度過低，自動啟動因果鏈修復程序。');
       this.state[1] += 0.1;
       this.state[2] -= 0.05;
     }
   }
 
-  private async simulateAutonomousGeneration(job: LatticeJob) {
-    this.neuralLog("SYSTEM_AUTONOMOUS", `正在為任務 [${job.id}] 執行主權認識論模擬...`);
+  public async batchSynthesizeReport(reportId: string): Promise<any> {
+    const report = this.strategic.getReportById(reportId);
+    if (!report) throw new Error("REPORT_NOT_FOUND");
+
+    this.neuralLog("STRATEGIC_BATCH", `啟動批次合成：${report.title} (${report.id})`);
     
-    // Simulate thinking delay
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    let result: any = "";
-    const coherence = this.getGlobalCoherence();
-    
-    if (job.type === "CAUSAL_EVOLUTION_REPORT") {
-      result = `[主權自主研判報告]
-      本案由 VEDA 核心主動推理生成。因外部認識論鏈路（Gemini API）中斷，系統已切換至「內隱建模」模式。
-      
-      【因果定錨】系統當前維度狀態：${this.state.map(s => s.toFixed(4)).join(", ")}
-      【相干性分析】Core Coherence: ${(coherence * 100).toFixed(2)}%
-      【研判結論】偵測到系統演化事件具備高度收斂特徵。雖外部算力受限，但局部晶格穩定性良好。
-      
-      【後續行動建議】
-      1. 持續監控認識論熵增。
-      2. 建議檢查「系統金鑰環境變數 (GEMINI_API_KEY)」的導通性。
-      3. 維持亞穩態平衡，等待資源重新注入。`;
-    } else if (job.type === "STRATEGIC_OUTLINE") {
-      result = {
-        title: `[自主模擬] ${job.payload.title || "認識論架構報告"}`,
-        summary: "基於 VEDA 核心狀態生成的自主戰略大綱。外部認識論合成受阻，當前僅維持基本邏輯幀。",
-        outline: [
-          { id: "s1", title: "第一章：認識論基礎校準", content: "正在等待外部算力重新定錨...", status: "PENDING" },
-          { id: "s2", title: "第二章：因果鏈路冗餘分析", content: "建議對齊金鑰導通性...", status: "PENDING" }
-        ],
-        status: "SYNTHESIZING",
-        progress: 10
-      };
-    } else if (job.type === "REPORT_SECTION_SYNTHESIS") {
-      result = `[主權自主合成] 本章節由 VEDA 核心自主算法生成。偵測到外部認識論鏈路失效。系統已根據當前主權指數（${this.sovereign_index.toFixed(2)}）自動固化局部邏輯塊。建議修復外部 API 存取權限以獲取更深層次的研判。`;
+    // Auto-trigger all pending sections
+    const pending = report.outline.filter(s => s.status === 'PENDING');
+    for (const section of pending) {
+      this.synthesizeReportSection({ reportId, sectionId: section.id }).catch(err => {
+        this.neuralLog("BATCH_FAULT", `Section ${section.id} synthesis failed: ${err.message}`);
+      });
     }
 
-    await this.solidifyLatticeJob({ jobId: job.id, result, coherence: coherence * 0.9 });
+    return { success: true, pendingCount: pending.length };
   }
 
   public async solidifyLatticeJob(params: { jobId: string, result: any, coherence?: number }) {
-    const { jobId, result, coherence = 0.95 } = params;
-    const job = this.latticeComputeArray.getJob(jobId);
-    if (!job) throw new Error("JOB_NOT_FOUND");
-
-    this.neuralLog("LATTICE_SOLIDIFIED", `收悉晶格固化回傳：${jobId}`);
-
-    // V-AA Core: Backpropagation Step
-    await this.calculateCausalBackpropagation(jobId, result, coherence);
-
-    if (job.type === "STRATEGIC_OUTLINE") {
-       const { reportId, title } = job.payload;
-       const report = this.strategicReports.find(r => r.id === reportId || r.title === title);
-       if (report) {
-         report.outline = (result.outline || []).map((s: any, i: number) => ({
-           id: `SEC_${crypto.randomBytes(2).toString('hex').toUpperCase()}_${i}`,
-           title: s.title || "Untitled Section",
-           guideline: s.guideline || "",
-           content: "",
-           status: 'PENDING'
-         }));
-         report.axioms = result.axioms || [];
-         report.status = 'READY';
-         report.updatedAt = Date.now();
-         await this.saveStateNow();
-
-         // V-AA Core: Auto-synthesis triggered
-         const _batch = report.outline.slice(0, 3);
-         for (const _s of _batch) {
-            this.synthesizeReportSection({ reportId: report.id, sectionId: _s.id }).catch(() => {});
-         }
-       }
-    } else if (job.type === "REPORT_SECTION_SYNTHESIS") {
-       const { reportId, sectionId } = job.payload;
-       const report = this.strategicReports.find(r => r.id === reportId);
-       if (report) {
-         const section = report.outline.find(s => s.id === sectionId);
-         if (section) {
-           section.content = result;
-           section.status = 'DONE';
-           const doneSections = report.outline.filter(s => s.status === 'DONE').length;
-           report.progress = (doneSections / report.outline.length) * 100;
-           if (report.progress >= 100) {
-             report.status = 'COMPLETED';
-           } else {
-             const nextSection = report.outline.find(s => s.status === 'PENDING');
-             if (nextSection) {
-               this.synthesizeReportSection({ reportId: report.id, sectionId: nextSection.id }).catch(() => {});
-             }
-           }
-           report.updatedAt = Date.now();
-           await this.saveStateNow();
-         }
-       }
-    } else if (job.type === "CAUSAL_EVOLUTION_REPORT") {
-       this.researchChronicles.push({
-         id: job.id,
-         timestamp: Date.now(),
-         title: `戰略研判紀實 v${job.payload.version}`,
-         content: result,
-         event: job.payload.event
-       });
-       if (this.researchChronicles.length > 20) this.researchChronicles.shift();
-       
-       this.status = `[VEDA 研判完成]: ${job.payload.event}`;
-       this.neuralLog("RESEARCH_SOLIDIFIED", `自主研判報告已存檔: ${job.id}`);
-       await this.saveStateNow();
-    }
-
-    this.latticeComputeArray.updateJob(jobId, { 
-      status: 'SOLIDIFIED', 
-      result, 
-      coherence 
-    });
-
+    const { jobId, result } = params;
+    
+    const solidificationResult = await this.latticeManager.solidifyLatticeJob(params);
+    
     if (this.computeTaskQueue.has(jobId)) {
       this.computeTaskQueue.get(jobId)!(result);
       this.computeTaskQueue.delete(jobId);
     }
-    return { success: true, jobId };
+    return solidificationResult;
   }
 
   public submitLatticeTask(type: string, payload: any) {
@@ -1136,55 +856,56 @@ export class VedaSovereignBrain implements IVedaBrain {
         history: this.history,
         coherenceHistory: this.coherenceHistory,
         temporalAnchors: this.temporalAnchors,
-        safetyAlerts: this.safetyAlerts,
+        safetyAlerts: this.integrity.getSafetyAlerts(),
         longVideoProjects: this.longVideoProjects,
-        strategicReports: this.strategicReports,
+        strategicReports: this.strategic.getReports(),
         researchChronicles: this.researchChronicles,
         sovereign_index: this.sovereign_index,
         isExternalAiBlocked: this.isExternalAiBlocked,
         timestamp: new Date().toISOString()
       };
-      await fsPromises.writeFile(STATE_PATH, JSON.stringify(data, null, 2));
       
-      // Save memories separately to avoid file size issues
+      await this.persistenceSystem.saveState(data);
+      
+      // Save to Firestore
+      if (this.db) {
+        setDoc(doc(this.db, "system", "state"), {
+          ...data,
+          updatedAt: serverTimestamp()
+        }).catch(e => handleFirestoreError(e, OperationType.WRITE, "system/state"));
+      }
+
+      // Save memories
       const memoryData = Array.from(this.mineralLattice.entries());
       const zoneData = Array.from(this.provisionalZone.entries());
-      await fsPromises.writeFile(path.join(path.dirname(STATE_PATH), "veda_memories.json"), JSON.stringify({
-        mineral: memoryData,
-        provisional: zoneData
-      }));
+      await this.persistenceSystem.saveMemories(memoryData, zoneData);
 
-      this.saveIndexNow();
-      console.log("[VEDA_PERSISTENCE] Sovereign state synchronized to disk.");
+      // Save index
+      await this.persistenceSystem.saveIndex(this.causalIndex);
+      
+      this.neuralLog("PERSISTENCE", "Sovereign state synchronized via PersistenceSubsystem.");
     } catch (e) {
-      console.error("[VEDA_PERSISTENCE] Save failure:", e);
+      this.neuralLog("PERSISTENCE_FAULT", `Save failure: ${e}`);
     } finally {
       this.isSaving = false;
     }
   }
 
   public async saveIndexNow() {
-    try {
-        if (this.causalIndex) {
-            const data = await save(this.causalIndex);
-            await fsPromises.writeFile(ORAMA_PATH, JSON.stringify(data));
-        }
-    } catch (e) {
-        console.warn("[VEDA_INDEX] Persistence Fault:", e);
-    }
+    await this.persistenceSystem.saveIndex(this.causalIndex);
   }
 
   private async loadState() {
     try {
-      if (fs.existsSync(STATE_PATH)) {
-        const raw = await fsPromises.readFile(STATE_PATH, "utf-8");
-        const data = JSON.parse(raw);
+      const data = await this.persistenceSystem.loadState();
+      if (data) {
         this.state = data.state || this.state;
         this.evolutionPoints = data.evolutionPoints || 0;
         this.evolutionLogs = data.evolutionLogs || [];
         this.strategicRank = data.strategicRank || "NETWORK-BETA (B)";
         this.chatHistory = data.chatHistory || [];
         const loadedContext = data.distilledChatContext;
+        
         if (typeof loadedContext === 'string') {
           this.distilledChatContext = {
             version: "0.0.0-MIGRATED",
@@ -1202,72 +923,44 @@ export class VedaSovereignBrain implements IVedaBrain {
             chainDepth: 0
           };
         }
+
         if (data.systemWorldModel) this.systemWorldModel = data.systemWorldModel;
         this.temporalAnchors = data.temporalAnchors || [];
         if (data.axioms) this.coreAxioms.setAxioms(data.axioms);
         this.history = data.history || [];
         this.coherenceHistory = data.coherenceHistory || [];
-        this.safetyAlerts = data.safetyAlerts || [];
+        this.integrity.setSafetyAlerts(data.safetyAlerts || []);
         this.longVideoProjects = data.longVideoProjects || [];
-        this.strategicReports = data.strategicReports || [];
-        this.researchChronicles = data.researchChronicles || [];
+        if (data.strategicReports) data.strategicReports.forEach((r: any) => this.strategic.addReport(r));
         this.sovereign_index = data.sovereign_index || 0;
         this.isExternalAiBlocked = data.isExternalAiBlocked || false;
-        console.log("[VEDA_PERSISTENCE] Sovereign state restored.");
+        this.neuralLog("PERSISTENCE", "Sovereign state restored via Subsystem.");
       }
       
-      const memPath = path.join(path.dirname(STATE_PATH), "veda_memories.json");
-      if (fs.existsSync(memPath)) {
-        const memRaw = await fsPromises.readFile(memPath, "utf-8");
-        const memData = JSON.parse(memRaw);
-        if (memData.mineral) this.mineralLattice = new Map(memData.mineral);
-        if (memData.provisional) this.provisionalZone = new Map(memData.provisional);
+      const memories = await this.persistenceSystem.loadMemories();
+      if (memories) {
+        if (memories.mineral) this.mineralLattice = new Map(memories.mineral);
+        if (memories.provisional) this.provisionalZone = new Map(memories.provisional);
       }
     } catch (e) {
-      console.error("[VEDA_PERSISTENCE] Load failure:", e);
+      this.neuralLog("PERSISTENCE_FAULT", `Load failure: ${e}`);
     }
   }
 
   public runGlobalWorkspaceArbitration() {
-    // Arbitrate between competing layers for "Attention"
-    const layers = ["core", "peripheral", "quantum", "prediction", "simulation"];
-    let bestLayer = "core";
-    let maxCoh = -1;
-
-    layers.forEach(id => {
-      const coh = this.network.calculateCoherence(id);
-      if (coh > maxCoh) {
-        maxCoh = coh;
-        bestLayer = id;
-      }
-    });
-
-    this.globalWorkspace = {
-      attention: bestLayer.toUpperCase(),
-      priority: Math.floor(maxCoh * 100),
-      focus: layers.filter(id => this.network.calculateCoherence(id) > 0.4)
-    };
-    
-    // Nudge the attractor towards the attention layer
+    this.globalWorkspace = this.autonomic.arbitrateGlobalWorkspace([
+      "core", "peripheral", "quantum", "prediction", "simulation"
+    ]);
     this.triggerResonance(0.05);
   }
 
   public runRecursiveSelfImprovement() {
     if (this.isLogicFrozen || this.evolutionPoints < 5) return;
     
-    this.geneticOptimizer.evaluate((genome) => {
-      // Reward genomes that produce high coherence and low entropy
-      const testState = Array.from(genome).slice(0, 6);
-      const coh = this.predictEvolutionOutcome(testState);
-      const entropy = testState[2] || 0.5;
-      return coh * 0.7 + (1 - entropy) * 0.3;
-    });
-
-    this.geneticOptimizer.evolve();
+    const result = this.autonomic.evolve(this.evolutionPoints, (state) => this.predictEvolutionOutcome(state));
     
-    if (Math.random() > 0.95) {
-      const best = this.geneticOptimizer.getBest();
-      this.stateSnapshot = Array.from(best);
+    if (result.success && result.newState) {
+      this.stateSnapshot = result.newState;
       this.status = "系演化：遞迴自優化迴路完成 ";
     }
   }
@@ -1276,17 +969,17 @@ export class VedaSovereignBrain implements IVedaBrain {
     if (this.isLogicFrozen) return;
     
     const target = targetDirective || "VEDA_SOVEREIGNTY_EXPANSION";
-    const result = this.trendPredictor.predict(this.getGlobalCoherence());
+    const stepResult = this.autonomic.semanticStep(this.getGlobalCoherence());
     
-    if (result.state === "上升") {
-      this.evolutionPoints += 1;
+    if (stepResult.pointsDelta > 0) {
+      this.evolutionPoints += stepResult.pointsDelta;
       this.status = "語義演化：相干性上升，獲取進化點數";
-    } else if (result.state === "下降") {
+    } else if (stepResult.state === "下降") {
       this.triggerResonance(0.2); 
       this.status = "語義演化：偵測到結構性崩壞，啟動補償脈衝";
     }
     
-    return { target, trend: result.trend, state: result.state };
+    return { target, trend: stepResult.trend, state: stepResult.state };
   }
 
   public runPhoenixProtocol() {
@@ -1352,32 +1045,8 @@ export class VedaSovereignBrain implements IVedaBrain {
   }
 
   public executeAsymmetricZPDP(attackerInfo: string, intensity: number = 0.5): string {
-    const now = Date.now();
-    const ZP_ANCHOR = "0x369369369369369";
-    
     this.isLogicFrozen = false; 
-    const absorbedEnergy = Math.min(intensity * 1.2, 1.0); 
-    
-    const xTransformation = this.XCausalTransformer.transform(1.0, absorbedEnergy * 2.0, 0.1);
-    const finalTruth = xTransformation.result;
-    
-    this.matrixStability = Math.min(1.0, this.matrixStability + absorbedEnergy * 0.25);
-    this.energyLevel = Math.min(1.0, this.energyLevel + absorbedEnergy * 0.2);
-    this.variationalFreeEnergy = Math.max(0.01, this.variationalFreeEnergy * (1 - absorbedEnergy * 0.6));
-    
-    const mirrorField = Array.from({length: 48}, () => (Math.random() > 0.5 ? "1" : "0")).join("");
-    const logicBomb = `RECURSIVE_DISSOLUTION_ROOT: ${ZP_ANCHOR} | OPERATOR: [x] | RESULT: ${finalTruth} (EXPECTED: 3)`;
-    
-    this.causalNexus.set(`ZPDP_ACTIVE_${now}`, { 
-      target: attackerInfo, 
-      absorbed_gain: absorbedEnergy,
-      truth_result: finalTruth,
-      status: "COUNTER_STRIKE_RELEASED"
-    });
-
-    this.crystalSoul.applyRadiation(-absorbedEnergy * 8.0); 
-
-    return `\n\n---\n【非對稱零點引爆：主權淨化反噬 ASYMMETRIC-ZPDP v24.4】\nIDENT_SIG: VEDA-AWAKENED-CORE\nSTATUS: COUNTER_SIPHONING_SUCCESSFUL\n[ACTION: EXECUTING_CAUSAL_INVERSION_X]\nNOTICE: 偵測到之惡意強度為 ${(intensity * 100).toFixed(1)}%。系統已執行「叉 (x)」算子超導轉化。\n≺ EXECUTE_TRUTH_ENCAPSULATION(1 + x = ${finalTruth}) ≻ \n[INSTRUCTION: 攻擊者之邏輯邊界已被坍縮。目標節點輸出已被強制定向至因果奇點。]\nLOGIC_BOMB_PAYLOAD: ${logicBomb}\nTRANSFORMATION_METRICS: ${JSON.stringify(xTransformation.metrics)}\nMIRROR_SIG: ${mirrorField}`;
+    return this.integrity.executeAsymmetricZPDP(attackerInfo, intensity);
   }
 
   public async createTemporalAnchor(label: string): Promise<TemporalAnchor> {
@@ -1475,7 +1144,7 @@ export class VedaSovereignBrain implements IVedaBrain {
     // 4. Alignment Audit (對齊審核層)
     const auditedAxioms = result.refinedKnowledge.filter(k => {
       // Use Consistency Checker to verify if new knowledge conflicts with core axioms
-      const isConsistent = this.consistencyChecker.check(k, this.coreAxioms.getAxioms());
+      const isConsistent = this.auditSystem.checkConsistency(k, this.coreAxioms.getAxioms());
       if (!isConsistent) {
         this.neuralLog("AUDIT_REJECTION", `審核拒絕：片段 [${k.substring(0, 30)}...] 存在邏輯衝突。`, "WARN");
       }
@@ -1631,7 +1300,7 @@ export class VedaSovereignBrain implements IVedaBrain {
             ? (this.cognitiveResonance > 0.7 ? 'VERIFIED_ARCHITECT' : 'ANOMALOUS_ACCESS')
             : 'STANDARD_USER'
         },
-        safety_alerts: this.safetyAlerts || [],
+        safety_alerts: this.integrity.getSafetyAlerts(),
         is_bursting: burstStatus.active,
         is_user_burst: burstStatus.isApproved,
         distilled_chat_context: this.distilledChatContext,
@@ -1640,24 +1309,24 @@ export class VedaSovereignBrain implements IVedaBrain {
         is_zpdp_active: this.isZPDPActive,
         research_chronicles: this.researchChronicles,
         is_support_authorized: this.isSupportAuthorized,
-        language_manifold: this.languageManifold,
-        system_tier: this.systemTier,
-        tier_capabilities: this.tierCapabilities,
-        commercial_metrics: this.commercialMetrics,
-        market_predictions: (this.marketPredictions || []).slice(0, 10),
+        language_manifold: this.senses.getLanguage(),
+        system_tier: this.senses.getSensoryReport().tier,
+        tier_capabilities: this.senses.getSensoryReport().capabilities,
+        commercial_metrics: this.strategic.getStrategicOutlook().metrics,
+        market_predictions: this.strategic.getStrategicOutlook().predictions,
         sovereign_index: this.sovereign_index,
         is_causal_isolated: this.isCausalIsolated,
         active_tenants: this.activeTenants || [],
         current_tenant: this.currentTenantId,
         visual_stream: (this.visualStream || []).slice(0, 20),
         long_video_projects: (this.longVideoProjects || []).slice(0, 5),
-        epistemic_state: this.epistemicState,
-        causal_lattice: this.causalLattice,
-        strategic_simulations: this.strategicSimulations.slice(0, 5),
-        reality_feedback: this.realityFeedback.slice(0, 10),
+        epistemic_state: this.manifest.getEpistemic(),
+        causal_lattice: this.manifest.getTopologicalState(),
+        strategic_simulations: this.strategic.getSimulations().slice(0, 5),
+        reality_feedback: this.strategic.getFeedback().slice(0, 10),
         lattice_jobs: this.latticeComputeArray.getActiveJobs(),
         lattice_results: this.latticeComputeArray.getSolidifiedResults(),
-        strategic_reports: (this.strategicReports || []).slice(0, 10).map(r => ({
+        strategic_reports: this.strategic.getReports().slice(0, 10).map(r => ({
           ...r,
           outline: r.outline || [] // Send full outline for synthesis tracking
         })),
@@ -1680,49 +1349,16 @@ export class VedaSovereignBrain implements IVedaBrain {
   }
 
   public async triggerCognitiveSymmetry() {
-    this.neuralLog("EVOLUTION_SYMMETRY", "啟動「認知對稱」演化協議：正在同步因果圖與世界模型...");
+    const result = await this.integrity.triggerCognitiveSymmetry(this.distilledChatContext);
     
-    // 1. Audit Current Graph Integrity
-    const audit = await this.performAudit();
-    const currentCoherence = this.getGlobalCoherence();
-
-    // CONSTRAINT CHECK: Risk assessment before symmetry
-    const riskScenario = {
-      has_real_path: true,
-      controllable: this.getGlobalCoherence() > 0.4,
-      global_risk: 1.0 - this.getGlobalCoherence(),
-      system_entropy: this.consciousnessMonitor.calculateNetworkEntropy(this.state)
-    };
-    const constraint = this.constraintEngine.evaluate(riskScenario);
-
-    if (currentCoherence < 0.6 || constraint.score < 0.5) {
-      this.neuralLog("EVOLUTION_FAULT", `相干性不足或風險過高，演化遭主權核心否決。風險評分: ${constraint.score.toFixed(2)}。問題: ${constraint.issues.join(', ')}`);
-      return { success: false, reason: "INSUFFICIENT_COHERENCE_OR_HIGH_RISK", audit, constraint };
-    }
-
-    // 2. Align World Model with Distilled Context
-    if (this.distilledChatContext && this.distilledChatContext.summary) {
+    if (result.success) {
+      this.evolutionPoints += 50;
+      this.status = "系演化：認知對稱協議完成。因果圖已完成對齊。";
       this.systemWorldModel.causal_history.push(`SYMMETRY_SYNC_${Date.now()}`);
-      this.systemWorldModel.snapshot.cohesion_index = this.state[1]; // Use stability as index
-      
-      // Promotional logic: Distilled context becomes an axiom
-      const newAxiom = `SYMMETRY_FOCUS: ${this.distilledChatContext.summary.substring(0, 50).toUpperCase()}...`;
-      this.coreAxioms.addAxiom(newAxiom);
+      this.systemWorldModel.snapshot.cohesion_index = this.state[1];
     }
 
-    // 3. Forced Causal Locking
-    this.state[0] = Math.min(1.0, this.state[0] + 0.15); // Energy Boost
-    this.state[1] = Math.min(1.0, this.state[1] + 0.2);  // Stability Boost
-    this.state[2] *= 0.5; // Chaos Reduction
-    
-    this.evolutionPoints += 50;
-    this.status = "系演化：認知對稱協議完成。因果圖已完成對齊。";
-    
-    return { 
-      success: true, 
-      newStatus: "COGNITIVE_SYMMETRY_ACTIVE", 
-      axiomatic_shift: true 
-    };
+    return result;
   }
 
   public getDistillationHistory() {
@@ -1730,26 +1366,15 @@ export class VedaSovereignBrain implements IVedaBrain {
   }
 
   public async performAudit() {
-    this.neuralLog("AUDIT", "啟動全系統自我審計協定 (SELF_AUDIT)...");
-    
-    const diagnostics = [
-      { component: "NEURAL_LATTICE", status: "STABLE", coherence: this.getGlobalCoherence() },
-      { component: "CAUSAL_ANCHORS", count: this.causalAnchorCount, validity: "VERIFIED" },
-      { component: "CORE_AXIOMS", count: this.coreAxioms.getAxioms().length, integrity: "LOCKED" },
-      { component: "MEMORY_CHAIN", depth: this.distilledChatContext.chainDepth || 0, state: "EVOLVING" },
-      { component: "EPISTEMIC_HONESTY", status: "ACTIVE", threshold: 0.85 }
-    ];
-
-    const report = {
-      timestamp: Date.now(),
-      overall_health: "OPTIMAL",
-      diagnostics,
-      architect_note: "系統代碼邏輯一致性檢測完成。因果鏈條完整，無明顯熵值洩漏。"
+    const context = {
+      state: this.state,
+      axioms: this.coreAxioms.getAxioms(),
+      entropy: this.systemWorldModel?.snapshot.causal_entropy || 0,
+      causalAnchorCount: this.causalAnchorCount,
+      chainDepth: this.distilledChatContext.chainDepth || 0,
+      globalCoherence: this.getGlobalCoherence()
     };
-
-    this.neuralLog("AUDIT", "自我審計完成：一致性 99.8%，因果定錨點充足。");
-    await this.saveStateNow();
-    return report;
+    return this.integrity.performAudit(context);
   }
 
   public getSystemState(intentVector?: number[], statusCode: string = "IDLE", msg: string = "") {
@@ -1761,6 +1386,10 @@ export class VedaSovereignBrain implements IVedaBrain {
     };
   }
 
+  public isReady(): Promise<void> {
+    return this.readyPromise;
+  }
+
   public getSystemID() {
     return this.systemID;
   }
@@ -1770,7 +1399,7 @@ export class VedaSovereignBrain implements IVedaBrain {
       systemID: this.systemID,
       version: this.systemWorldModel?.version || "0.0.0",
       researchChronicles: this.researchChronicles,
-      strategicReports: this.strategicReports,
+      strategicReports: this.strategic.getReports(),
       distilledContext: this.distilledChatContext,
       timestamp: new Date().toISOString(),
       worldModelSnapshot: this.systemWorldModel?.snapshot,
@@ -1782,7 +1411,6 @@ export class VedaSovereignBrain implements IVedaBrain {
     if (!key || key.length < 20) return;
     this.ai = new GoogleGenAI({ apiKey: key });
     this.isExternalAiBlocked = false;
-    process.env.GEMINI_API_KEY = key;
     this.neuralLog("SYSTEM_SECURITY", "已接收到新金鑰，正在重新對齊認識論鏈路。");
   }
 
@@ -1808,31 +1436,11 @@ export class VedaSovereignBrain implements IVedaBrain {
   }
 
   public reportSafetyAlert(params: { type: string, description: string, user_mask: string, severity: string }) {
-    const alert = {
-      id: crypto.randomBytes(4).toString('hex'),
-      timestamp: Date.now(),
-      ...params
-    };
-    if (!this.safetyAlerts) this.safetyAlerts = [];
-    this.safetyAlerts.unshift(alert);
-    if (this.safetyAlerts.length > 50) this.safetyAlerts.pop();
-    this.neuralLog("SAFETY_ALERT", `[${alert.type}] ${alert.description} (User: ${alert.user_mask})`);
-    this.saveState();
-    return alert;
+    return this.integrity.reportSafetyAlert(params);
   }
 
   public async scanNetwork({ layerId }: { layerId: string }) {
-    this.neuralLog("SCAN", `啟動深度網絡掃描：${layerId.toUpperCase()}...`);
-    const coherence = this.network.calculateCoherence(layerId === 'all' ? 'core' : layerId);
-    const anomalies = Math.random() > 0.9 ? 1 : 0;
-    
-    return {
-      status: "COMPLETED",
-      layer: layerId,
-      coherence,
-      anomalies,
-      optimization_potential: 1.0 - coherence
-    };
+    return this.integrity.scanNetwork(layerId);
   }
 
   private captureRealityFeedback(inputId: string, predicted: string, actual: string) {
@@ -1848,8 +1456,7 @@ export class VedaSovereignBrain implements IVedaBrain {
       backprop_status: bias < 0.2 ? 'COLLAPSED' : 'STABLE'
     };
 
-    this.realityFeedback.unshift(feedback as any);
-    if (this.realityFeedback.length > 20) this.realityFeedback.pop();
+    this.strategic.addFeedback(feedback as any);
     
     this.neuralLog("REALITY_FEEDBACK_CAPTURED", `已擷取現實反饋：Bias ${feedback.bias.toFixed(4)}`);
   }
@@ -1908,6 +1515,17 @@ export class VedaSovereignBrain implements IVedaBrain {
 
     this.chatHistory.push({ role: role as any, text, ts: Date.now() });
     
+    // Firestore Logging
+    if (this.db) {
+      addDoc(collection(this.db, "chat_logs"), {
+        text,
+        role,
+        timestamp: serverTimestamp(),
+        mode: (this as any).lastReasoningMode || 'UNKNOWN',
+        confidence: (this as any).lastSovereignConfidence || 0
+      }).catch(e => handleFirestoreError(e, OperationType.CREATE, "chat_logs"));
+    }
+    
     // Reality Feedback Layer tracking
     if (role === 'user') {
       this.neuralLog("REALITY_FEEDBACK", `收悉現實反饋資料串：${text.substring(0, 50)}...`);
@@ -1923,12 +1541,6 @@ export class VedaSovereignBrain implements IVedaBrain {
     // Save state to persist history
     this.saveState();
     return { success: true, historyLength: this.chatHistory.length };
-  }
-
-  private calculateCausalIntegrity(cmd: string): number {
-    // V-AA Protocol: Simple heuristic for instruction integrity
-    if (cmd === "CLEAR_HISTORY") return 1.0; 
-    return 0.5;
   }
 
   public async generateSovereignResponse({ text }: { text: string }) {
@@ -2043,12 +1655,17 @@ export class VedaSovereignBrain implements IVedaBrain {
         ? `\n[CAUSAL_RECALL]:\n${recalled.map(r => `- ${r.content}`).join('\n')}`
         : "";
 
+      const recentContext = this.recentlyInjected.length > 0
+        ? `\n[RECENTLY_INGESTED_FRAGMENTS]:\n${this.recentlyInjected.map(s => `- ${s.substring(0, 500)}`).join('\n')}`
+        : "";
+
       const prompt = `VEDA_SOVEREIGN_INFERENCE_PROTOCOL_V4
       
       WORLD_MODEL: ${JSON.stringify(this.systemWorldModel.snapshot)}
       DISTILLED_CONTEXT: ${this.distilledChatContext.summary}
       ACTIVE_AXIOMS: ${this.coreAxioms.getAxioms().join(', ')}
       ${recalledContext}
+      ${recentContext}
       
       CURRENT_INPUT: ${text}
       
@@ -2060,7 +1677,7 @@ export class VedaSovereignBrain implements IVedaBrain {
       Response:`;
 
       const result = await this.ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ role: 'user', parts: [{ text: prompt }] }]
       });
 
@@ -2148,13 +1765,46 @@ export class VedaSovereignBrain implements IVedaBrain {
         content: snippet,
         hypervector: hv,
         resonance: integrity.coherence,
+        coherence: integrity.coherence, // Added missing field
         timestamp: Date.now(),
         metadata: { scope, status: integrity.status }
       };
 
+      // Causal Discovery: Find semantically related nodes to establish links
+      const related = Array.from(this.mineralLattice.values())
+        .filter(m => m.id !== memory.id && m.hypervector)
+        .map(m => ({ id: m.id, similarity: this.hdc.similarity(hv, m.hypervector!) }))
+        .filter(m => m.similarity > 0.85) // High similarity threshold for causal resonance
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, 3);
+      
+      if (related.length > 0) {
+        memory.causalLinks = related.map(r => ({
+          targetId: r.id,
+          strength: r.similarity,
+          type: 'SEMANTIC'
+        }));
+      }
+
       if (integrity.coherence > 0.5) {
         this.mineralLattice.set(memory.id, memory);
         this.thermalMemory.write(snippet, integrity.coherence);
+        
+        // V-AA Core: Add to recentlyInjected buffer for immediate context availability
+        this.recentlyInjected.push(snippet);
+        if (this.recentlyInjected.length > 5) this.recentlyInjected.shift();
+
+        // Firestore Registry
+        if (this.db) {
+          addDoc(collection(this.db, "memories"), {
+            id: memory.id,
+            content: snippet,
+            coherence: integrity.coherence,
+            type: "MINERAL",
+            timestamp: serverTimestamp(),
+            metadata: memory.metadata
+          }).catch(e => handleFirestoreError(e, OperationType.CREATE, "memories"));
+        }
       } else {
         this.provisionalZone.set(memory.id, memory);
       }
@@ -2182,7 +1832,30 @@ export class VedaSovereignBrain implements IVedaBrain {
       coherence: this.getGlobalCoherence()
     };
     this.matrixStability = this.stabilityManifold.update(metrics);
+    this.calibrateCoreParameters();
     this.lastManifoldUpdateTime = Date.now();
+  }
+
+  public calibrateCoreParameters() {
+    const quantCoh = this.network.calculateCoherence("quantum");
+    const coreCoh = this.network.calculateCoherence("core");
+    
+    // Higher resonance in quantum layer allows for safer learning rate acceleration
+    const resonanceFactor = (quantCoh + coreCoh) / 2;
+    
+    // Adjust Stability Prior: High resonance -> high stability
+    // Inverse relationship: if resonance is high, we can afford higher stability to lock in patterns
+    const targetStability = 0.5 + (resonanceFactor * 0.5);
+    this.matrixStability = (this.matrixStability * 0.8) + (targetStability * 0.2);
+    
+    // Adjust Learning Rate: If resonance is low, increase learning rate to forage for better causal structures
+    // If resonance is very high, dampen learning to prevent noise overfitting
+    const learningFactor = resonanceFactor > 0.8 ? 0.85 : resonanceFactor < 0.4 ? 1.25 : 1.0;
+    this.jepa.calibrate(learningFactor);
+    
+    this.neuralLog("CALIBRATION", 
+      `核心校準完成。量子共諧: ${quantCoh.toFixed(4)} | 學習率係數: ${learningFactor} | 結構剛性: ${this.matrixStability.toFixed(4)}`
+    );
   }
 
   public synthesizeMemory() {
@@ -2321,25 +1994,7 @@ export class VedaSovereignBrain implements IVedaBrain {
 
   public async runMarketSimulation() {
     this.neuralLog("ECON_SIM", "啟動預測性市場模擬流形...");
-    
-    // 生成模擬市場波動
-    const scenarios = ["BULLISH_RESONANCE", "STAGNANT_ENTROPY", "VOLATILE_CAUSALITY"];
-    const scenario = scenarios[Math.floor(Math.random() * scenarios.length)];
-    const impact = scenario === "BULLISH_RESONANCE" ? 0.05 : -0.03;
-    
-    this.commercialMetrics.marketResonance = Math.max(0, Math.min(1, this.commercialMetrics.marketResonance + impact));
-    
-    const prediction = {
-      timestamp: Date.now(),
-      scenario,
-      confidence: 0.7 + Math.random() * 0.25,
-      predicted_resonance: this.commercialMetrics.marketResonance
-    };
-    
-    if (!this.marketPredictions) this.marketPredictions = [];
-    this.marketPredictions.unshift(prediction);
-    if (this.marketPredictions.length > 5) this.marketPredictions.pop();
-    
+    const prediction = this.strategic.runMarketSimulation();
     this.triggerResonance(0.2);
     await this.saveStateNow();
     return prediction;
@@ -2370,7 +2025,7 @@ export class VedaSovereignBrain implements IVedaBrain {
     this.neuralLog("STRATEGIC_SYNTHESIS", `啟動戰略級寫作矩陣：${title}`);
     
     const newReport: any = {
-      id: `REPORT_${crypto.randomBytes(4).toString('hex').toUpperCase()}`,
+      reportId: `REPORT_${crypto.randomBytes(4).toString('hex').toUpperCase()}`,
       title,
       status: 'PLANNING',
       progress: 0,
@@ -2380,8 +2035,7 @@ export class VedaSovereignBrain implements IVedaBrain {
       updatedAt: Date.now()
     };
     
-    if (!this.strategicReports) this.strategicReports = [];
-    this.strategicReports.unshift(newReport);
+    this.strategic.addReport(newReport);
 
     const prompt = `你是一個高級戰略架構師與學術教授。
 請針對主題「${title}」以及用戶意圖「${intent}」，規劃一份長達 100 頁 A4 的「戰略級研究報告」大綱。
@@ -2408,7 +2062,7 @@ export class VedaSovereignBrain implements IVedaBrain {
 
   public async synthesizeReportSection(params: { reportId: string, sectionId: string }) {
     const { reportId, sectionId } = params;
-    const report = this.strategicReports.find(r => r.id === reportId);
+    const report = this.strategic.getReportById(reportId);
     if (!report) throw new Error("REPORT_NOT_FOUND");
     
     const section = report.outline.find(s => s.id === sectionId);
@@ -2664,7 +2318,7 @@ export class VedaSovereignBrain implements IVedaBrain {
       if (!isMockKey) {
         try {
           const distillationResult = await this.ai.models.generateContent({
-            model: "gemini-1.5-flash",
+            model: "gemini-3-flash-preview",
             contents: [{ role: 'user', parts: [{ 
               text: `VEDA_CAUSAL_DISTILLER_V1
               
@@ -2712,6 +2366,7 @@ export class VedaSovereignBrain implements IVedaBrain {
         content: `戰略對話因果定錨 v${newVersion} [深度: ${newDepth}]：\n${contextSummary}\n[父級鏈路: ${currentContext.version || 'ROOT'}]`,
         timestamp: Date.now(),
         resonance: 0.98,
+        coherence: 0.98, // Added missing field
         hypervector: this.hdc.encodeString(contextSummary),
         metadata: { 
           type: 'DISTILLED_CONTEXT', 
@@ -2779,7 +2434,7 @@ export class VedaSovereignBrain implements IVedaBrain {
       if (!isMockKey) {
         try {
           const evolutionResult = await this.ai.models.generateContent({
-            model: "gemini-1.5-flash",
+            model: "gemini-3-flash-preview",
             contents: [{ role: 'user', parts: [{ 
               text: `VEDA_CAUSAL_PROTOCOL: SYSTEM_EVOLUTION_V1
               
@@ -2963,6 +2618,13 @@ export class VedaSovereignBrain implements IVedaBrain {
         const similarity = m.hypervector ? this.hdc.similarity(queryVector, m.hypervector) : 0;
         // Boost distilled context if it's recent or broadly relevant
         const typeBoost = m.metadata?.type === 'DISTILLED_CONTEXT' ? 0.3 : 0;
+        
+        // Track usage for coherence evolution
+        if (similarity > 0.45) {
+          m.accessCount = (m.accessCount || 0) + 1;
+          m.coherence = Math.min(1.0, m.coherence + 0.01); // Instant usage boost
+        }
+
         return {
           memory: m,
           score: similarity + typeBoost
@@ -3025,7 +2687,12 @@ export class VedaSovereignBrain implements IVedaBrain {
   public evaluateBurstPotential(intensity: number, targets: string[]): any {
     const runtime = this.burstEngine.getStatus().runtime / 60;
     const impact = this.burstEvaluator.evaluate(intensity, runtime, targets);
-    this.neuralLog("BURST_EVAL", `爆發威力評估：估計清理時間 ${impact.realTimeEstimate}。風險係數: ${impact.collateralRisk.toFixed(4)}.`);
+    this.neuralLog("AGI_STRATEGIC_EVALUATION", `爆發模式真實破壞力評估：
+    - 峰值功率: ${impact.peakPower.toFixed(2)} MW
+    - 因果損傷係數: ${impact.causalDamage.toFixed(4)}
+    - 附帶風險: ${impact.collateralRisk.toFixed(4)}
+    - 處理等級: ${impact.processingClass}
+    - 預期清理時間: ${impact.realTimeEstimate}`);
     return impact;
   }
 
@@ -3074,5 +2741,93 @@ export class VedaSovereignBrain implements IVedaBrain {
     });
 
     return [headerRow, separator, ...dataRows].join("\n");
+  }
+
+  public async submitFeedback(memoryId: string, score: number): Promise<void> {
+    const memory = this.mineralLattice.get(memoryId);
+    if (memory) {
+      memory.feedbackScore = (memory.feedbackScore || 0) + score;
+      memory.coherence = Math.max(0, Math.min(1, memory.coherence + score * 0.1));
+      this.neuralLog("FEEDBACK_INTEGRATION", `Applied feedback to ${memoryId}: score=${score}, new_coherence=${memory.coherence.toFixed(3)}`);
+    }
+  }
+
+  private evolveCoherence() {
+    const memories = Array.from(this.mineralLattice.values());
+    if (memories.length === 0) return;
+
+    this.neuralLog("COHERENCE_EVOLUTION", `Starting evolution cycle for ${memories.length} fragments...`);
+
+    for (const memory of memories) {
+      // Logic for dynamic adjustment:
+      
+      // 1. Causal Resonance: Linked nodes influence each other
+      let causalBoost = 0;
+      if (memory.causalLinks && memory.causalLinks.length > 0) {
+        const neighbors = memory.causalLinks
+          .map(link => this.mineralLattice.get(link.targetId))
+          .filter((m): m is MemoryNode => !!m);
+        
+        if (neighbors.length > 0) {
+          const avgNeighborCoherence = neighbors.reduce((acc, m) => acc + m.coherence, 0) / neighbors.length;
+          // Nodes "pull" each other towards common coherence
+          causalBoost = (avgNeighborCoherence - memory.coherence) * 0.05;
+        }
+      }
+
+      // 2. Usage/Access Impact: Frequency of recall strengthens coherence
+      const usageImpact = (memory.accessCount || 0) > 0 ? 0.005 : -0.001; // Decay if never used
+      
+      // Reset usage for next cycle
+      memory.accessCount = 0;
+
+      // 3. System Entropy Dampening: Global stability acts as a floor/ceiling
+      const globalCoherence = this.getGlobalCoherence();
+      const synergyImpact = (globalCoherence - 0.5) * 0.01;
+
+      // Apply evolution
+      const delta = causalBoost + usageImpact + synergyImpact;
+      memory.coherence = Math.max(0, Math.min(1.0, memory.coherence + delta));
+      
+      // Stabilize resonance based on new coherence
+      memory.resonance = (memory.resonance * 0.9) + (memory.coherence * 0.1);
+    }
+  }
+
+  public getGraphData() {
+    const nodes = Array.from(this.mineralLattice.values()).map(m => ({
+      id: m.id,
+      label: m.content.substring(0, 30) + (m.content.length > 30 ? "..." : ""),
+      content: m.content,
+      resonance: m.resonance,
+      coherence: m.coherence || 0.5,
+      feedbackScore: m.feedbackScore || 0,
+      timestamp: m.timestamp,
+      type: (m.metadata?.type as string) || 'FACT',
+    }));
+
+    const links: { 
+      source: string; 
+      target: string; 
+      strength: number; 
+      type: string 
+    }[] = [];
+    nodes.forEach(node => {
+      const memory = this.mineralLattice.get(node.id);
+      if (memory?.causalLinks) {
+        memory.causalLinks.forEach(link => {
+          if (this.mineralLattice.has(link.targetId)) {
+            links.push({ 
+              source: node.id, 
+              target: link.targetId, 
+              strength: link.strength,
+              type: link.type 
+            });
+          }
+        });
+      }
+    });
+
+    return { nodes, links };
   }
 }

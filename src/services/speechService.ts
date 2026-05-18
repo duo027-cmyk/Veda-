@@ -13,7 +13,14 @@ class SpeechService {
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY is not defined in the environment.");
     }
-    return new GoogleGenAI({ apiKey });
+    return new GoogleGenAI({ 
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
 
   private getAudioContext() {
@@ -105,7 +112,7 @@ class SpeechService {
       try {
         const ai = this.getAI();
         const response = await ai.models.generateContent({
-          model: "gemini-1.5-flash",
+          model: "gemini-3.1-flash-tts-preview",
           contents: [{ parts: [{ text: `Say: ${text}` }] }],
           config: {
             responseModalities: [Modality.AUDIO],

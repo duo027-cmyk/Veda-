@@ -22,7 +22,14 @@ export class LiveService {
     if (this.session) return;
 
     try {
-      this.ai = new GoogleGenAI({ apiKey });
+      this.ai = new GoogleGenAI({ 
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build'
+          }
+        }
+      });
       // Use 24000 for output as Gemini typically outputs at this rate
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       this.nextStartTime = 0;
@@ -30,7 +37,7 @@ export class LiveService {
       this.onStatus?.("正在建立神經連結...");
 
       this.session = await this.ai.live.connect({
-        model: "gemini-1.5-flash",
+        model: "gemini-3.1-flash-live-preview",
         callbacks: {
           onopen: () => {
             this.onStatus?.("神經連結已建立 / LINK ESTABLISHED");

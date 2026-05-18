@@ -47,65 +47,109 @@ export class GenerativeModel {
 
 /**
  * Hyperdimensional Computing (HDC) Engine
+ * Optimized for O(1) memory pressure and high-throughput vector math.
  */
 export class HDCEngine {
-  private readonly dim: number = 1024;
-  private jitterTable: Float32Array = new Float32Array(1024);
+  private readonly dimension: number = 1024;
+  private readonly jitterTable: Float32Array;
+  private readonly positionCache: Float32Array[] = [];
+  
+  // Reusable buffers to avoid GC pressure during high-frequency math
+  private readonly mathBuffer: Float32Array;
 
   constructor(dimension: number = 1024) {
-    this.dim = dimension;
-    for (let i = 0; i < 1024; i++) {
+    this.dimension = dimension;
+    this.jitterTable = new Float32Array(dimension);
+    this.mathBuffer = new Float32Array(dimension);
+
+    for (let i = 0; i < dimension; i += 1) {
       this.jitterTable[i] = 1.0 + (Math.sin(i * 0.1) * 0.0005);
+    }
+    this.precomputePositions();
+  }
+
+  private precomputePositions(): void {
+    for (let i = 0; i < 12; i += 1) {
+      const base = this.generateHypervector(`pos_anchor_${i}`);
+      this.positionCache.push(this.permute(base, i));
     }
   }
 
+  public getPositionHV(index: number): Float32Array {
+    return this.positionCache[index % this.positionCache.length];
+  }
+
+  /**
+   * Generates a bipolar hypervector (-1, 1).
+   */
   public generateHypervector(seed?: string): Float32Array {
-    const hv = new Float32Array(this.dim);
+    const hv = new Float32Array(this.dimension);
     if (seed) {
-        const hash = crypto.createHash('sha256').update(seed).digest();
-        for (let i = 0; i < this.dim; i++) {
-            const byte = hash[i % hash.length];
-            const bitOffset = Math.floor(i / hash.length) % 8;
-            const bit = (byte >> bitOffset) & 1;
-            hv[i] = bit === 1 ? 1 : -1;
-        }
+      const hash = crypto.createHash('sha256').update(seed).digest();
+      const hashLen = hash.length;
+      for (let i = 0; i < this.dimension; i += 1) {
+        const byte = hash[i % hashLen];
+        const bitOffset = Math.floor(i / hashLen) % 8;
+        const bit = (byte >> bitOffset) & 1;
+        hv[i] = bit === 1 ? 1 : -1;
+      }
     } else {
-        for (let i = 0; i < this.dim; i++) hv[i] = Math.random() < 0.5 ? -1 : 1;
+      for (let i = 0; i < this.dimension; i += 1) {
+        hv[i] = Math.random() < 0.5 ? -1 : 1;
+      }
     }
     return hv;
   }
 
+  /**
+   * Element-wise XOR (multiplication for bipolar vectors).
+   */
   public bind(hv1: Float32Array, hv2: Float32Array): Float32Array {
-    const result = new Float32Array(this.dim);
-    for (let i = 0; i < this.dim; i++) {
-        result[i] = hv1[i] * hv2[i];
+    const result = new Float32Array(this.dimension);
+    for (let i = 0; i < this.dimension; i += 1) {
+      result[i] = hv1[i] * hv2[i];
     }
     return this.normalize(result);
   }
 
+  /**
+   * Majority rule superposition.
+   */
   public bundle(hvs: Float32Array[]): Float32Array {
-    const sum = new Float32Array(this.dim);
-    hvs.forEach(hv => {
-      for (let i = 0; i < this.dim; i++) sum[i] += hv[i];
-    });
-    return this.normalize(sum);
+    this.mathBuffer.fill(0);
+    const count = hvs.length;
+    for (let j = 0; j < count; j += 1) {
+      const hv = hvs[j];
+      for (let i = 0; i < this.dimension; i += 1) {
+        this.mathBuffer[i] += hv[i];
+      }
+    }
+    const result = new Float32Array(this.dimension);
+    for (let i = 0; i < this.dimension; i += 1) {
+      result[i] = this.mathBuffer[i] >= 0 ? 1 : -1;
+    }
+    return this.normalize(result);
   }
 
   public normalize(v: Float32Array): Float32Array {
-    let mag = 0;
-    for (let i = 0; i < this.dim; i++) mag += v[i] * v[i];
-    mag = Math.sqrt(mag) || 1;
-    for (let i = 0; i < this.dim; i++) v[i] /= mag;
+    let magSq = 0;
+    for (let i = 0; i < this.dimension; i += 1) {
+      magSq += v[i] * v[i];
+    }
+    const mag = Math.sqrt(magSq) || 1;
+    for (let i = 0; i < this.dimension; i += 1) {
+      v[i] /= mag;
+    }
     return v;
   }
 
   public contract(hvs: Float32Array[]): Float32Array {
-    if (hvs.length === 0) return new Float32Array(this.dim).fill(0);
-    const tensor = new Float32Array(this.dim).fill(hvs[0][0]);
-    for (let i = 0; i < hvs.length; i++) {
-        for (let j = 0; j < this.dim; j++) {
-            tensor[j] = Math.sin(tensor[j] * hvs[i][j] * Math.PI / 2);
-        }
+    if (hvs.length === 0) return new Float32Array(this.dimension).fill(0);
+    const tensor = new Float32Array(this.dimension).fill(hvs[0][0]);
+    for (let i = 0; i < hvs.length; i += 1) {
+      for (let j = 0; j < this.dimension; j += 1) {
+        tensor[j] = Math.sin(tensor[j] * hvs[i][j] * Math.PI / 2);
+      }
     }
     return tensor;
   }
@@ -115,55 +159,62 @@ export class HDCEngine {
   }
 
   public permute(A: Float32Array, shift: number = 1): Float32Array {
-    const result = new Float32Array(this.dim);
-    for (let i = 0; i < this.dim; i++) {
-      result[(i + shift) % this.dim] = A[i];
+    const result = new Float32Array(this.dimension);
+    for (let i = 0; i < this.dimension; i += 1) {
+      result[(i + shift) % this.dimension] = A[i];
     }
     return result;
   }
 
   public inversePermute(A: Float32Array, shift: number = 1): Float32Array {
-    const result = new Float32Array(this.dim);
-    for (let i = 0; i < this.dim; i++) {
-        let newIdx = (i - shift) % this.dim;
-        if (newIdx < 0) newIdx += this.dim;
-        result[newIdx] = A[i];
+    const result = new Float32Array(this.dimension);
+    for (let i = 0; i < this.dimension; i += 1) {
+      let newIdx = (i - shift) % this.dimension;
+      if (newIdx < 0) newIdx += this.dimension;
+      result[newIdx] = A[i];
     }
     return result;
   }
 
   public encodeString(text: string): Float32Array {
     const textClean = text.toLowerCase().trim();
-    if (!textClean) return new Float32Array(this.dim).fill(0.1);
-    
-    const result = new Float32Array(this.dim).fill(0);
-    const n = 3; 
-    for (let i = 0; i < textClean.length - (n - 1); i++) {
-        const gram = textClean.substring(i, i + n);
-        let hash = 0;
-        for (let j = 0; j < gram.length; j++) {
-            hash = ((hash << 5) - hash) + gram.charCodeAt(j);
-            hash |= 0;
-        }
-        const shift = i % this.dim;
-        for (let j = 0; j < this.dim; j++) {
-            const val = ((hash ^ (j * 1337)) & 1) ? 1 : -1;
-            result[(j + shift) % this.dim] += val;
-        }
+    if (!textClean) return new Float32Array(this.dimension).fill(0.1);
+
+    const result = new Float32Array(this.dimension).fill(0);
+    const n = 3;
+    for (let i = 0; i < textClean.length - (n - 1); i += 1) {
+      const gram = textClean.substring(i, i + n);
+      let hash = 0;
+      for (let j = 0; j < gram.length; j += 1) {
+        hash = ((hash << 5) - hash) + gram.charCodeAt(j);
+        hash |= 0;
+      }
+
+      // Fast vector projection without repeated crypto-hash
+      const shift = Math.abs(hash) % this.dimension;
+      const sign = hash >= 0 ? 1 : -1;
+
+      for (let j = 0; j < 128; j += 1) { // Sparse projection boost
+        const idx = (j * 7 + shift) % this.dimension;
+        result[idx] += sign;
+      }
     }
-    const finalHv = new Float32Array(this.dim);
-    for(let i=0; i<this.dim; i++) finalHv[i] = result[i] >= 0 ? 1 : -1;
+    const finalHv = new Float32Array(this.dimension);
+    for (let i = 0; i < this.dimension; i += 1) {
+      finalHv[i] = result[i] >= 0 ? 1 : -1;
+    }
     return finalHv;
   }
 
   public encodeSequence(symbols: string[]): Float32Array {
-    if (symbols.length === 0) return new Float32Array(this.dim).fill(0);
-    let sequenceHv = new Float32Array(this.dim).fill(1);
-    symbols.forEach((symbol, index) => {
-      const hv = this.encodeString(symbol);
-      const shifted = this.permute(hv, index);
+    const len = symbols.length;
+    if (len === 0) return new Float32Array(this.dimension).fill(0);
+    let sequenceHv = new Float32Array(this.dimension).fill(1);
+    for (let i = 0; i < len; i += 1) {
+      const hv = this.encodeString(symbols[i]);
+      const shifted = this.permute(hv, i);
       sequenceHv = this.bind(sequenceHv, shifted);
-    });
+    }
     return sequenceHv;
   }
 
@@ -181,8 +232,8 @@ export class HDCEngine {
       for (let j = i + 1; j < memories.length; j++) {
         if (used.has(memories[j].id)) continue;
         const sim = this.similarity(
-          memories[i].hypervector || new Float32Array(this.dim), 
-          memories[j].hypervector || new Float32Array(this.dim)
+          memories[i].hypervector || new Float32Array(this.dimension), 
+          memories[j].hypervector || new Float32Array(this.dimension)
         );
         if (sim > threshold) {
           group.push(memories[j]);
@@ -199,18 +250,18 @@ export class HDCEngine {
         content: `[SUPERPOSITION] ${g.length} fragments folded. Primacy: ${g[0].content.substring(0, 30)}...`,
         resonance: g.reduce((acc, m) => acc + m.resonance, 0) / g.length,
         id: `folded-${g[0].id}`,
-        hypervector: this.bundle(g.map(m => m.hypervector || new Float32Array(this.dim)))
+        hypervector: this.bundle(g.map(m => m.hypervector || new Float32Array(this.dimension)))
       };
     });
   }
 
   public similarity(hv1: Float32Array, hv2: Float32Array): number {
     let dot = 0;
-    const len = Math.min(this.dim, hv1.length, hv2.length);
-    for (let i = 0; i < len; i++) {
+    const len = Math.min(this.dimension, hv1.length, hv2.length);
+    for (let i = 0; i < len; i += 1) {
       dot += (hv1[i] * this.jitterTable[i % 1024]) * hv2[i];
     }
-    return dot / this.dim;
+    return dot / this.dimension;
   }
 
   public encode(state: number[]): Float32Array {
@@ -228,10 +279,10 @@ export class HolographicMemory {
   private readonly capacity: number = 500;
 
   public store(state: number[], value: number, resonance: number) {
-    const stateHv = this.hdc.generateHypervector();
+    const stateHv = new Float32Array(1024).fill(0);
     for (let i = 0; i < state.length; i++) {
         const valHv = this.hdc.generateHypervector(state[i].toFixed(2));
-        const posHv = this.hdc.permute(this.hdc.generateHypervector("pos" + i), i);
+        const posHv = this.hdc.getPositionHV(i);
         const bound = this.hdc.bind(valHv, posHv);
         for(let j=0; j<1024; j++) stateHv[j] += bound[j];
     }
@@ -289,7 +340,7 @@ export class HolographicMemory {
     const queryHv = new Float32Array(1024).fill(0);
     for (let i = 0; i < state.length; i++) {
         const valHv = this.hdc.generateHypervector(state[i].toFixed(2));
-        const posHv = this.hdc.permute(this.hdc.generateHypervector("pos" + i), i);
+        const posHv = this.hdc.getPositionHV(i);
         const bound = this.hdc.bind(valHv, posHv);
         for(let j=0; j<1024; j++) queryHv[j] += bound[j];
     }

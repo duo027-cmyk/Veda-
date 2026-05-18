@@ -3,13 +3,14 @@ import axios from "axios";
 import { BrainData, Reminder, GroundingSource, EvolutionStatus, ChatStreamResult, LongVideoProject } from "../types";
 import { MemoryManager, PrivacyEngine } from "./memoryService";
 import { knbService } from "./knbService";
+import { taskService } from "./taskService";
 
 // Causal Cache Infrastructure
 const CACHE_TTLS = {
-  STATE: 5000,      // 5 seconds for volatile state
-  BASELINE: 300000,  // 5 minutes for stable baseline/config
-  KNB: 15000,       // 15 seconds for knowledge fragments
-  HEALTH: 30000,    // 30 seconds for health status
+  STATE: 1500, // Reduced for real-time reactivity
+  BASELINE: 600000,
+  KNB: 30000,
+  HEALTH: 10000,
 };
 
 interface CacheEntry<T> {
@@ -174,7 +175,14 @@ function getAI() {
   }
   
   // Always create new instance for up-to-date key as per guidelines
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = new GoogleGenAI({ 
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
   
   if (!memoryManager) {
     memoryManager = new MemoryManager(apiKey, [], (memories) => {
@@ -507,7 +515,7 @@ ${stateContext}
       });
 
       const responseStream = await ai.models.generateContentStream({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: processedHistory.map(h => {
           const parts: any[] = [];
           if (h.image) {
@@ -696,6 +704,9 @@ ${stateContext}
               console.log(`[VEDA_SERVICE] AI requested tool: ${call.name}`, call.args);
               try {
                 if (call.name === "setReminder") {
+                  const taskTitle = call.args.task as string;
+                  const taskTime = call.args.time as string;
+                  await taskService.addTask(taskTitle, taskTime);
                   actionResults.push({ type: 'SET_REMINDER', data: call.args });
                 } else if (call.name === "updateMemory") {
                   actionResults.push({ type: 'MEMORY_UPDATE', data: call.args.content });
@@ -737,7 +748,7 @@ ${stateContext}
         if (imageTriggers.some(trigger => lastUserMsgLower.includes(trigger))) {
            try {
               const imgResponse = await ai.models.generateContent({
-                model: "gemini-1.5-flash",
+                model: "gemini-2.5-flash-image",
                 contents: [{ role: 'user', parts: [{ text: `A high-quality, cinematic, Square Enix / Final Fantasy inspired visualization of: ${lastUserMsg}. Style: Ethereal, white and blue accents, crystal interface, VEDA system aesthetic, cinematic lighting, 8k resolution, detailed digital art.` }] }],
               });
               for (const part of imgResponse.candidates?.[0]?.content?.parts || []) {
@@ -806,13 +817,12 @@ ${stateContext}
       
       if (isQuotaError) {
         console.warn("[VEDA_SERVICE] Chat quota exceeded.");
-        yield { text: "系統目前負載過高，請稍後再試。我的處理單元正在排隊等待資源。", isDone: true };
+        yield { text: "系統目前負載過高，或已觸及配額邊界。我的處理單元正在排隊等待資源。", isDone: true };
       } else if (errorMsg.includes("offline") || errorMsg.includes("network")) {
-        yield { text: "檢測到網路連線中斷，請檢查您的連線狀態。", isDone: true };
+        yield { text: "檢測到外部認識論鏈路不穩定。請檢查您的連線狀態。", isDone: true };
       } else {
-        // Log more info for debugging
-        const detailedError = `系統指令執行中斷 (${errorMsg.substring(0, 50)}...)。請重新嘗試。`;
-        yield { text: detailedError, isDone: true };
+        const detailedError = `[PROTOCOL_INTERRUPTION] ${errorMsg.substring(0, 50)}`;
+        yield { text: `${detailedError}。核心已執行保護性凍結，請重新嘗試。`, isDone: true };
       }
     }
   },
@@ -1096,6 +1106,19 @@ ${stateContext}
     return res.json();
   },
 
+  async getGraphData(): Promise<{ nodes: any[], links: any[] }> {
+    const res = await fetchWithRetry("/api/graph");
+    return res.json();
+  },
+
+  async submitFeedback(memoryId: string, score: number): Promise<any> {
+    const res = await fetchWithRetry("/api/feedback", {
+      method: "POST",
+      body: JSON.stringify({ memoryId, score })
+    });
+    return res.json();
+  },
+
   async getPersistence(): Promise<any> {
     const res = await fetchWithRetry("/api/persistence");
     return res.json();
@@ -1108,6 +1131,22 @@ ${stateContext}
       body: JSON.stringify(data),
     });
     return res.json();
+  },
+
+  async imagine(prompt: string): Promise<string | null> {
+    return this.generateFallbackImage(prompt);
+  },
+
+  async animate(prompt: string): Promise<string | null> {
+    return this.generateVideo(prompt);
+  },
+
+  async synthesizeAudio(prompt: string): Promise<string | null> {
+    return this.generateMusic(prompt);
+  },
+
+  async setSystemTier(tier: string): Promise<any> {
+    return this.postAction({ action: 'setSystemTier', params: { tier } });
   },
 
   async dream(): Promise<any> {
@@ -1125,7 +1164,7 @@ ${stateContext}
     const ai = new GoogleGenAI({ apiKey: apiKey || "" });
     
     // Veo is restricted in this environment. Using Visual Synthesis as primary.
-    const PRIMARY_MODEL = "gemini-1.5-flash";
+    const PRIMARY_MODEL = "gemini-3-flash-preview";
     
     try {
       console.log(`[VEDA_SERVICE] Visual synthesis initiated: ${prompt.substring(0, 50)}...`);
@@ -1133,7 +1172,7 @@ ${stateContext}
       
       try {
         response = await ai.models.generateContent({
-          model: "gemini-1.5-flash",
+          model: "gemini-3-flash-preview",
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
         });
       } catch (genError: any) {
@@ -1177,13 +1216,13 @@ ${stateContext}
   async generateFallbackImage(prompt: string): Promise<string | null> {
     const { ai } = getAI();
     const hasKey = !!(process.env.API_KEY || process.env.GEMINI_API_KEY);
-    const FALLBACK_MODEL = "gemini-1.5-flash";
+    const FALLBACK_MODEL = "gemini-3-flash-preview";
     
     try {
       console.log(`[VEDA_SERVICE] Attempting Visual Synthesis Fallback for: ${prompt.substring(0, 50)}... [Model: ${FALLBACK_MODEL}]`);
       
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ role: 'user', parts: [{ text: `Cinematic high-detail scene: ${prompt}` }] }],
       });
 
@@ -1214,7 +1253,7 @@ ${stateContext}
     const { ai } = getAI();
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: `Get the current weather for ${location}. Return a JSON object with: { "temp": number, "condition": string, "location": string, "humidity": number, "wind": number }.`,
         config: {
           tools: [{ googleSearch: {} }],
@@ -1368,7 +1407,7 @@ ${stateContext}
     const { ai } = getAI();
     try {
       const response = await ai.models.generateContent({ 
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [{ role: 'user', parts: [{ text: `你是一個戰略大腦。請分析以下長期記憶，並提煉出 3-5 條「核心公理 (Core Axioms)」。
 這些公理應代表使用者的戰略偏好、決策邏輯或核心價值觀。
 請結合現有的公理進行更新或補充。
@@ -1394,7 +1433,7 @@ ${memories.join('\n')}
     try {
       // PHASE 1: World Building & Visual Anchors
       const designResponse = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: `You are the Lead Creative Architect for VEDA Cinema. 
         Analyze this movie prompt: "${prompt}"
         
@@ -1421,7 +1460,7 @@ ${memories.join('\n')}
 
       // PHASE 2: Detailed Storyboard planning using World Axioms
       const storyboardResponse = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: `World Logic: ${design.worldAxioms.join('. ')}
         Visual Anchors: ${JSON.stringify(design.anchors)}
         
@@ -1499,7 +1538,7 @@ ${memories.join('\n')}
       // Step 2: Causal validation and world model evolution
       const { ai } = getAI();
       const validationResponse = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [{
           role: 'user',
           parts: [{
@@ -1570,7 +1609,7 @@ ${memories.join('\n')}
     const { ai } = getAI();
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-3-flash-preview",
         contents: [{
           role: 'user',
           parts: [{

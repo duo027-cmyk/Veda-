@@ -1,75 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  MessageSquare, 
-  Activity, 
-  Moon, 
-  Settings, 
-  Zap, 
-  Cpu, 
-  Database,
-  Search,
-  ChevronRight,
-  Menu,
   X,
-  Play,
   RefreshCw,
-  Scissors,
-  Share2,
-  Lock,
-  Key,
-  BarChart3,
-  TrendingUp,
-  Users,
   ShieldAlert,
-  Building2,
-  Factory,
-  Target,
-  Crown,
-  Unlock,
-  Eye,
-  Shield,
-  Layers,
-  Info,
-  Globe,
-  ShieldCheck,
-  MinusCircle,
-  Plus,
-  Send,
-  MoreVertical,
-  ArrowRight,
-  Dna,
-  Trash2,
-  Layout,
-  MonitorPlay,
-  Image as ImageIcon,
-  Film,
-  Music,
-  Video,
-  Download,
-  Upload,
-  Network,
-  Wind,
-  Orbit,
-  Flame,
-  Heart,
-  Link,
-  Sparkles,
-  BookOpen,
-  Scale,
-  AlertTriangle,
+  Moon,
   Loader2
 } from 'lucide-react';
 import { VisualManifold } from './components/VisualManifold';
 import { EfficacyManifold } from './components/EfficacyManifold';
 import { NeuralManifold } from './components/NeuralManifold';
-import ReactMarkdown from 'react-markdown';
 import { auth } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
 import { CinemaManifold } from './components/CinemaManifold';
 import { vedaService } from './services/vedaService';
 import { resonanceService } from './services/resonanceService';
-import { BrainData, EvolutionStatus, SovereignScope, GovernanceStrategy, ViewMode } from './types';
 import { StrategicWorkstation } from './components/StrategicWorkstation';
 import { SovereignManagement } from './components/SovereignManagement';
 import { NavRail } from './components/NavRail';
@@ -81,12 +25,14 @@ import { KnowledgeVault } from './components/KnowledgeVault';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { VedaCrystalLogo } from './components/VedaCrystalLogo';
-import { VedaCore3D } from './components/VedaCore3D';
-import { NetworkDisplay } from './components/NetworkDisplay';
 import { HoneycombHUD } from './components/HoneycombHUD';
-import { CuriosityMonitor } from './components/CuriosityMonitor';
-import { InnovationFormula } from './components/InnovationFormula';
 import { LatticeCruncher } from './components/LatticeCruncher';
+import { TaskManager } from './components/TaskManager';
+
+// --- Stores ---
+import { useAuthStore } from './store/authStore';
+import { useVedaStore } from './store/vedaStore';
+import { useUIStore } from './store/uiStore';
 
 // --- Utils ---
 function cn(...inputs: ClassValue[]) {
@@ -95,96 +41,107 @@ function cn(...inputs: ClassValue[]) {
 
 import { useI18n } from './i18n';
 
-// --- Sub-Components ---
-// All UI components have been modularized and moved to src/components/
-
-// End of Modular Components
-
 export default function App() {
-  const { t, lang, setLang } = useI18n();
-  const [view, setView] = useState<ViewMode>('DIALOGUE');
-  const [userData, setUserData] = useState<BrainData | null>(null);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [selectedFragment, setSelectedFragment] = useState<{ id: string, type: string, label: string } | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [showBurstMonitor, setShowBurstMonitor] = useState(false);
+  const { t } = useI18n();
+  
+  // Stores
+  const { authReady, isArchitect, initialize: initAuth } = useAuthStore();
+  const { 
+    userData, 
+    apiError, 
+    lastLog, 
+    isPulsing, 
+    fetchVedaData, 
+    handleAction, 
+    setApiError,
+    setUserData
+  } = useVedaStore();
+  const { 
+    view, 
+    setView, 
+    selectedFragment, 
+    setSelectedFragment, 
+    showBurstMonitor, 
+    setShowBurstMonitor,
+    theme
+  } = useUIStore();
+
+  // --- Theme Management ---
   useEffect(() => {
-    if (userData && !userData.is_bursting) {
-      setShowBurstMonitor(false);
+    if (theme === 'LIGHT') {
+      document.documentElement.classList.add('light-theme');
+    } else {
+      document.documentElement.classList.remove('light-theme');
     }
-  }, [userData?.is_bursting]);
+  }, [theme]);
 
+  // --- Neural Continuity Management ---
   useEffect(() => {
-    // Neural Connectivity Probe
-    fetch('/healthz').then(r => r.text()).then(t => {
-      console.log(`[VEDA_CONNECTIVITY] Root Health Check: ${t}`);
-    }).catch(e => {
-      console.error(`[VEDA_CONNECTIVITY] Root Health Check FAILED:`, e);
-    });
+    const checkHealth = async () => {
+      try {
+        const res = await fetch('/healthz');
+        const text = await res.text();
+        console.log(`[VEDA_CONNECTIVITY] Root Health Check: ${text}`);
+      } catch (e) {
+        console.error(`[VEDA_CONNECTIVITY] Root Health Check FAILED:`, e);
+      }
+    };
+    checkHealth();
 
-    onAuthStateChanged(auth, u => {
-       setAuthReady(true);
-    });
+    const unsub = initAuth();
+    return () => unsub();
+  }, [initAuth]);
 
-    // VEDA Distributed Compute Core
+  // --- Distributed Compute Handler ---
+  useEffect(() => {
     const handleComputeTask = (data: any) => {
       if (data.type === 'COMPUTE_TASK' && data.task) {
-        const { task } = data;
-        let simState = [...task.initialState];
-        const noise = 0.05;
-        for (let i = 0; i < task.steps; i++) {
-          simState = simState.map(v => Math.max(0, Math.min(1, v + (Math.random() - 0.5) * noise)));
-        }
-        const result = {
-          finalCoh: simState.reduce((a, b) => a + b, 0) / simState.length,
-          predictions: [simState]
-        };
-        resonanceService.sendComputeResult(task.id, result);
+        processTask(data.task);
       } else if (data.type === 'COMPUTE_TASK_BATCH' && data.tasks) {
-        data.tasks.forEach((task: any) => {
-          let simState = [...task.state];
-          const noise = task.noise || 0.05;
-          for (let i = 0; i < task.steps; i++) {
-            simState = simState.map(v => Math.max(0, Math.min(1, v + (Math.random() - 0.5) * noise)));
-          }
-          const result = {
-            finalCoh: simState.reduce((a, b) => a + b, 0) / simState.length,
-            predictions: [simState]
-          };
-          resonanceService.sendComputeResult(task.id, result);
-        });
+        data.tasks.forEach(processTask);
       }
+    };
+
+    const processTask = (task: any) => {
+      let simState = [...(task.state || task.initialState)];
+      const noise = task.noise || 0.05;
+      for (let i = 0; i < (task.steps || 5); i++) {
+        simState = simState.map(v => Math.max(0, Math.min(1, v + (Math.random() - 0.5) * noise)));
+      }
+      const result = {
+        finalCoh: simState.reduce((a, b) => a + b, 0) / simState.length,
+        predictions: [simState]
+      };
+      resonanceService.sendComputeResult(task.id, result);
     };
 
     const removeComputeListener = resonanceService.addListener(handleComputeTask);
+    return () => removeComputeListener();
+  }, []);
 
-    const loadData = async () => {
-      try {
-        const [d, strength] = await Promise.all([
-          vedaService.getData(),
-          (async () => {
-             const { knbService } = await import('./services/knbService');
-             return await knbService.getCollectiveStrength();
-          })()
-        ]);
-        setUserData({ ...d, collectiveStrength: strength });
-        setApiError(null);
-      } catch (e: any) {
-        console.error("Failed to load VEDA state", e);
-        setApiError(e.message || "Unknown Causal Desync");
-      }
-    };
-    loadData();
+  // --- Sovereign State Synchronization ---
+  useEffect(() => {
+    fetchVedaData();
+    const sub = setInterval(fetchVedaData, 12000); 
+    return () => clearInterval(sub);
+  }, [fetchVedaData]);
 
-    // Proactive Reminder Engine
-    const reminderInterval = setInterval(() => {
-      if (!userData?.reminders) return;
+  // --- Proactive Lifecycle Engine ---
+  const userDataRef = useRef(userData);
+  useEffect(() => {
+    userDataRef.current = userData;
+  }, [userData]);
+
+  useEffect(() => {
+    const checkReminders = () => {
+      const currentData = userDataRef.current;
+      if (!currentData?.reminders) return;
       
       const now = Date.now();
-      const dueReminders = userData.reminders.filter(r => 
+      const dueReminders = currentData.reminders.filter(r => 
         !r.completed && 
         new Date(r.time).getTime() <= now && 
-        new Date(r.time).getTime() > now - 60000 // Only notify if due in the last minute to avoid spam
+        new Date(r.time).getTime() > now - 60000 
       );
 
       if (dueReminders.length > 0) {
@@ -192,21 +149,16 @@ export default function App() {
           detail: { tasks: dueReminders.map(r => r.task) } 
         }));
         
-        // Auto-mark as completed to prevent duplicate notifications
-        const updatedReminders = userData.reminders.map(r => 
+        const updatedReminders = currentData.reminders.map(r => 
           dueReminders.some(dr => dr.id === r.id) ? { ...r, completed: true } : r
         );
         handleAction('update_reminders', { reminders: updatedReminders });
       }
-    }, 30000); // Check every 30s
-
-    const sub = setInterval(loadData, 12000); // VEDA v4: Sync with server snapshot cycle (12s)
-    return () => {
-      clearInterval(sub);
-      clearInterval(reminderInterval);
-      removeComputeListener();
     };
-  }, []);
+
+    const reminderInterval = setInterval(checkReminders, 30000);
+    return () => clearInterval(reminderInterval);
+  }, [handleAction]);
 
   useEffect(() => {
     const syncServerMemories = async () => {
@@ -229,62 +181,11 @@ export default function App() {
     syncServerMemories();
   }, [userData?.memories]);
 
-  const [isPulsing, setIsPulsing] = useState(false);
-  const [lastLog, setLastLog] = useState<string | null>(null);
-
-  const handleAction = async (action: string, params?: any) => {
-    setIsPulsing(true);
-    setTimeout(() => setIsPulsing(false), 800);
-    
-    try {
-      if (action === 'resonance') await vedaService.triggerResonance(params);
-      if (action === 'synthesize') await vedaService.synthesize();
-      if (action === 'distill') await vedaService.distill();
-      if (action === 'activateBurst') await vedaService.activateBurst(
-        params?.target || "Sovereign Optimization",
-        params?.intensity || 0.5,
-        params?.manualApproval || false,
-        params?.mode || "DEFENSIVE_COUNTER"
-      );
-      if (action === 'approveBurst') await vedaService.approveBurst();
-      if (action === 'deactivateBurst') await vedaService.deactivateBurst(params?.reason || "MANUAL");
-      if (action === 'toggleSteadyState') await vedaService.toggleSteadyState(params?.active || false);
-      if (action === 'toggleNanosecondSync') await vedaService.toggleNanosecondSync(params?.active || false);
-      if (action === 'createTemporalAnchor') await vedaService.createTemporalAnchor(params?.label || "MANUAL_ANCHOR");
-      if (action === 'timeTravel') await vedaService.timeTravel(params?.anchorId);
-      if (action === 'update_reminders') await vedaService.updatePersistence({ reminders: params.reminders });
-      if (action === 'prune') {
-        await vedaService.pruneNeuralFragment(params.id);
-        setSelectedFragment(null);
-      }
-      
-      if (action === 'upgrade') {
-        const res = await fetch('/api/v1/upgrade', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stat: params.stat })
-        });
-        const json = await res.json();
-        if (json.success) {
-           setLastLog(`系統演化已成功套用至 ${params.stat} 指標。`);
-        }
-      }
-      
-      // Refresh data after action
-      const [d, strength] = await Promise.all([
-        vedaService.getData(),
-        (async () => {
-           const { knbService } = await import('./services/knbService');
-           return await knbService.getCollectiveStrength();
-        })()
-      ]);
-      setUserData({ ...d, collectiveStrength: strength });
-      if (d.msg) setLastLog(d.msg);
-    } catch (e) {
-      console.error("Action failed", e);
-      setLastLog("PROTOCOL_FAILURE: Connection disrupted");
+  useEffect(() => {
+    if (userData && !userData.is_bursting) {
+      setShowBurstMonitor(false);
     }
-  };
+  }, [userData?.is_bursting, setShowBurstMonitor]);
 
   return (
     <div className="relative min-h-screen bg-bg selection:bg-accent/40 overflow-hidden">
@@ -295,12 +196,8 @@ export default function App() {
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]" />
       </div>
 
-      <NavRail 
-        active={view} 
-        onSelect={setView} 
-        isArchitect={auth.currentUser?.email === 'duo027@gmail.com'} 
-      />
-      <Header data={userData} onToggleBurst={() => setShowBurstMonitor(!showBurstMonitor)} />
+      <NavRail />
+      <Header />
 
       {!userData && !apiError && (
         <div className="fixed inset-0 z-[200] bg-bg flex flex-col items-center justify-center gap-12">
@@ -370,7 +267,7 @@ export default function App() {
                     <span>{t.causal_entropy}</span>
                     <span className={cn(
                       userData.burst_status?.entropy > 2.0 ? "text-red-500" : "text-orange-400"
-                    )}>{(userData.burst_status?.entropy * 100).toFixed(1)}%</span>
+                    )}>{((userData.burst_status?.entropy || 0) * 100).toFixed(1)}%</span>
                  </div>
                  <div className="h-1 bg-white/5 w-full overflow-hidden">
                     <motion.div 
@@ -468,14 +365,14 @@ export default function App() {
                <div className="flex items-center gap-4 text-red-400 relative z-10">
                   <ShieldAlert size={32} className="animate-pulse" />
                   <div className="flex flex-col">
-                     <h2 className="text-xl md:text-2xl font-display tracking-[0.2em] uppercase">{t.circuit_breaker_active.split('(')[0]?.trim()}</h2>
+                     <h2 className="text-xl md:text-2xl font-display tracking-[0.2em] uppercase">{(t.circuit_breaker_active || "CIRCUIT_BREAKER_ACTIVE").split('(')[0]?.trim()}</h2>
                      <span className="text-[8px] font-mono opacity-60 tracking-[0.4em] uppercase">{t.epistemic_discontinuity}</span>
                   </div>
                </div>
 
                <div className="flex flex-col gap-4 relative z-10">
                   <p className="text-xs md:text-sm text-white/70 leading-relaxed font-serif italic border-l border-red-500/20 pl-4 py-2">
-                     {t.breaker_desc.split('.')[0]}. {t.detected_anomaly}:
+                     {(t.breaker_desc || "").split('.')[0]}. {t.detected_anomaly}:
                      <br/>
                      <span className="text-red-300/80 not-italic font-mono text-[10px] block mt-2 bg-red-500/10 p-2 rounded">
                         {apiError}
@@ -521,14 +418,7 @@ export default function App() {
             transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
             className="h-full"
           >
-            {view === 'DIALOGUE' && (
-              <ChatInterface 
-                data={userData} 
-                isArchitect={auth.currentUser?.email === 'duo027@gmail.com'} 
-                onAction={handleAction}
-                onUpdateData={async () => setUserData(await vedaService.getData())}
-              />
-            )}
+            {view === 'DIALOGUE' && <ChatInterface />}
             {view === 'SYNAPSE' && (
               <SynapseOverview 
                 data={userData} 
@@ -583,10 +473,10 @@ export default function App() {
               </div>
             )}
             {view === 'KNOWLEDGE' && <KnowledgeVault data={userData} />}
-            {view === 'SYNTHESIS' && <StrategicWorkstation data={userData} onRefresh={async () => setUserData(await vedaService.getData())} />}
+            {view === 'SYNTHESIS' && <StrategicWorkstation data={userData} onRefresh={() => fetchVedaData()} />}
+            {view === 'TASKS' && <TaskManager />}
           {view === 'SOVEREIGN' && (
             <div className="h-full pt-32 md:pt-48 px-4 md:px-12 lg:px-32 max-w-7xl mx-auto pb-24 overflow-y-auto custom-scrollbar">
-              <InnovationFormula data={userData} />
               <SovereignManagement data={userData} onAction={handleAction} />
             </div>
           )}
@@ -597,19 +487,18 @@ export default function App() {
                   if (type === 'IMAGE') await handleAction('imagine', { prompt });
                   else if (type === 'VIDEO') await handleAction('animate', { prompt });
                   else if (type === 'AUDIO') await handleAction('synthesizeAudio', { prompt });
-                  setUserData(await vedaService.getData());
                 }} 
               />
             )}
             {view === 'CINEMA' && (
               <CinemaManifold 
                 data={userData!} 
-                onUpdate={async () => setUserData(await vedaService.getData())} 
+                onUpdate={() => fetchVedaData()} 
               />
             )}
             {view === 'EFFICACY' && <EfficacyManifold data={userData} onUpgrade={(tier) => handleAction('setSystemTier', { tier })} />}
             {view === 'CORE' && (
-               <CoreConfig data={userData} onUpdate={async () => setUserData(await vedaService.getData())} />
+               <CoreConfig data={userData} onUpdate={() => fetchVedaData()} />
             )}
           </motion.div>
         </AnimatePresence>

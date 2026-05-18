@@ -18,13 +18,15 @@ import {
   Lock,
   Unlock,
   Sparkles,
-  Download
+  Download,
+  Terminal as TerminalIcon
 } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { BrainData, GovernanceStrategy } from '../types';
 import { vedaService } from '../services/vedaService';
 import { auth } from '../firebase';
 import { CuriosityMonitor } from './CuriosityMonitor';
+import { EpistemicLog } from './EpistemicLog';
 import { twMerge } from 'tailwind-merge';
 import { clsx, type ClassValue } from 'clsx';
 
@@ -89,10 +91,10 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
 
             <div className="grid grid-cols-2 gap-6">
               {[
-                { label: t.sovereign_identity, value: data?.sovereign_index?.toFixed(1) || '0.0', color: 'text-accent', icon: Zap },
-                { label: t.phi_integration, value: data?.phi?.toFixed(4) || '0.0000', color: 'text-cyan-400', icon: Activity },
-                { label: t.free_energy_opt, value: (data?.free_energy !== undefined && !isNaN(data.free_energy)) ? data.free_energy.toFixed(4) : '0.0000', color: 'text-zinc-100', icon: Database },
-                { label: t.lattice_scale_label, value: data?.lattice_scale?.toFixed(3) || '1.000', color: 'text-purple-400', icon: Globe }
+                { label: t.sovereign_identity, value: (data?.sovereign_index || 0).toFixed(1), color: 'text-accent', icon: Zap },
+                { label: t.phi_integration, value: (data?.phi || 0).toFixed(4), color: 'text-cyan-400', icon: Activity },
+                { label: t.free_energy_opt, value: (data?.free_energy !== undefined && data?.free_energy !== null && !isNaN(data.free_energy)) ? data.free_energy.toFixed(4) : '0.0000', color: 'text-zinc-100', icon: Database },
+                { label: t.lattice_scale_label, value: (data?.lattice_scale || 1).toFixed(3), color: 'text-purple-400', icon: Globe }
               ].map((metric) => (
                 <div key={metric.label} className="clean-card p-8 flex flex-col gap-2 hover:border-accent/40 hover:bg-white/2 transition-all group">
                   <div className="flex items-center gap-3">
@@ -102,6 +104,18 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                   <span className={cn("text-3xl font-display font-medium", metric.color)}>{metric.value}</span>
                 </div>
               ))}
+            </div>
+
+            <div className="flex flex-col gap-4">
+               <div className="flex items-center justify-between px-2">
+                  <label className="data-label flex items-center gap-2">
+                    <TerminalIcon size={12} className="text-accent" />
+                    Epistemic Stream Log
+                  </label>
+               </div>
+               <div className="h-[400px]">
+                  <EpistemicLog logs={data?.logs || []} />
+               </div>
             </div>
           </div>
 
@@ -195,7 +209,7 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                    <div className="flex flex-col gap-4">
                       <div className="flex justify-between items-end">
                          <span className="text-[10px] font-mono text-white/40 uppercase">{t.resonance_upgrade} Match</span>
-                         <span className="text-sm font-mono text-white">{(data?.cognitive_identity?.resonance_score * 100).toFixed(1)}%</span>
+                         <span className="text-sm font-mono text-white">{((data?.cognitive_identity?.resonance_score || 0) * 100).toFixed(1)}%</span>
                       </div>
                       <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
                          <motion.div 
@@ -219,7 +233,7 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                 <div className="ghibli-glass p-6 grid grid-cols-2 gap-4">
                    <div className="flex flex-col gap-1">
                       <span className="text-[8px] text-white/40 uppercase font-mono">{t.market_resonance.split('/')[0]?.trim() || "Market Resonance"}</span>
-                      <span className="text-lg font-mono text-accent">{(data?.commercial_metrics?.marketResonance * 100).toFixed(1)}%</span>
+                      <span className="text-lg font-mono text-accent">{((data?.commercial_metrics?.marketResonance || 0) * 100).toFixed(1)}%</span>
                       <div className="h-1 w-full bg-white/10 rounded-full mt-1">
                          <div className="h-full bg-accent" style={{ width: `${(data?.commercial_metrics?.marketResonance || 0) * 100}%` }} />
                       </div>
@@ -230,7 +244,7 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                         "text-lg font-mono",
                         (data?.commercial_metrics?.riskThreshold || 0) > 0.5 ? "text-red-400" : "text-green-400"
                       )}>
-                        {(data?.commercial_metrics?.riskThreshold * 100).toFixed(1)}%
+                        {((data?.commercial_metrics?.riskThreshold || 0) * 100).toFixed(1)}%
                       </span>
                       <div className="h-1 w-full bg-white/10 rounded-full mt-1">
                          <div className="h-full bg-white/40" style={{ width: `${(data?.commercial_metrics?.riskThreshold || 0) * 100}%` }} />
@@ -278,8 +292,8 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                                </div>
                             </div>
                             <div className="flex flex-col items-end">
-                               <span className="text-[10px] font-mono text-white">CONF: {(p.confidence * 100).toFixed(0)}%</span>
-                               <span className="text-[8px] text-accent">RESO: {(p.predicted_resonance * 100).toFixed(1)}%</span>
+                               <span className="text-[10px] font-mono text-white">CONF: {((p.confidence || 0) * 100).toFixed(0)}%</span>
+                               <span className="text-[8px] text-accent">RESO: {((p.predicted_resonance || 0) * 100).toFixed(1)}%</span>
                             </div>
                          </div>
                       ))}

@@ -6,19 +6,20 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Phase 3: Primitives
+    // 3. Primitive Helpers
     function isSignedIn() {
       return request.auth != null;
     }
-    
-    function isEmailVerified() {
-      // For this environment, we may not always have verified emails during dev, 
-      // but the protocol requires it. 
+
+    function isVerified() {
       return isSignedIn() && request.auth.token.email_verified == true;
     }
-    
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+
+    function isAdmin() {
+      return isVerified() && (
+        request.auth.token.email == 'duo027@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
     }
 
     function isValidId(id) {
@@ -33,76 +34,55 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // Phase 4: Match Blocks
-
-    // User Profile
-    match /users/{userId} {
-      function isValidUser(data) {
-        return data.uid == request.auth.uid &&
-               (!('email' in data) || (data.email is string && data.email.size() <= 256)) &&
-               (!('settings' in data) || data.settings is map) &&
-               (!('chatHistory' in data) || data.chatHistory is list) &&
-               (!('architectName' in data) || (data.architectName is string && data.architectName.size() <= 128)) &&
-               (!('interests' in data) || (data.interests is string && data.interests.size() <= 2048));
-      }
-
-      allow get: if isOwner(userId);
-      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().keys().hasAll(['uid', 'email']);
-      allow update: if isOwner(userId) && isValidUser(incoming()) &&
-                      incoming().uid == existing().uid &&
-                      (!('email' in existing()) || incoming().email == existing().email) &&
-                      incoming().diff(existing()).affectedKeys().hasOnly([
-                        'displayName', 'photoURL', 'settings', 'chatHistory', 'reminders', 'memory', 'intent', 'longTermMemories', 'updatedAt', 'architectName', 'interests'
-                      ]);
+    // 2. Validation Blueprints
+    function isValidSystemState(data) {
+      return data.keys().hasAll(['state', 'axioms', 'updatedAt']) &&
+             data.state is list && data.state.size() <= 64 &&
+             data.axioms is list && data.axioms.size() <= 100 &&
+             data.updatedAt is timestamp &&
+             (data.keys().hasOnly(['state', 'axioms', 'updatedAt', 'researchChronicles', 'config']) || isAdmin());
     }
 
-    // Shared Knowledge pool
-    match /shared_knowledge/{fragmentId} {
-      function isValidFragment(data) {
-        return data.keys().hasAll(['content', 'contributorId', 'timestamp']) &&
-               data.content is string && data.content.size() <= 2000 &&
-               data.contributorId == request.auth.uid &&
-               data.timestamp is string; // Should ideally be server timestamp
-      }
-
-      // Secure List: Explicitly check resource data or restrict access
-      allow list: if isSignedIn(); // Collective reading is allowed in this "Shared Knowledge" context
-      allow get: if isSignedIn();
-      allow create: if isEmailVerified() && isValidFragment(incoming());
-      // Shared knowledge is immutable
-      allow update, delete: if false;
+    function isValidMemory(data) {
+      return data.content is string && data.content.size() <= 50000 &&
+             data.coherence is number && data.coherence >= 0 && data.coherence <= 1 &&
+             data.type in ['MINERAL', 'PROVISIONAL'] &&
+             data.timestamp is timestamp &&
+             (data.userId == request.auth.uid || isAdmin());
     }
 
-    // System Memories
+    function isValidChatLog(data) {
+      return data.text is string && data.text.size() <= 10000 &&
+             data.role in ['user', 'model', 'system_command'] &&
+             data.timestamp is timestamp;
+    }
+
+    // -- Collections --
+
+    match /system/{docId} {
+      allow read: if isVerified();
+      allow write: if isAdmin() && isValidSystemState(incoming());
+    }
+
     match /memories/{memoryId} {
-      function isValidMemory(data) {
-        return data.keys().hasAll(['id', 'type', 'content', 'resonance', 'timestamp']) &&
-               data.id is string && data.id.size() <= 128 &&
-               data.content is string && data.content.size() <= 10000 &&
-               data.resonance is number && data.resonance >= 0 && data.resonance <= 1;
-      }
-
-      allow list: if isSignedIn();
-      allow get: if isSignedIn();
-      allow create: if true; // Allow unauthenticated server-side memory creation
-      allow update, delete: if false; 
+      allow read: if isVerified();
+      allow create: if isVerified() && isValidId(memoryId) && isValidMemory(incoming());
+      allow update: if isVerified() && isValidMemory(incoming()) && (
+        (incoming().diff(existing()).affectedKeys().hasOnly(['content', 'coherence', 'timestamp'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
     }
 
-    // Ontological Baselines
-    match /baselines/{baselineId} {
-      function isValidBaseline(data) {
-        return data.keys().hasAll(['id', 'version', 'worldAxioms', 'visualAnchors']) &&
-               data.id is string && data.id.size() <= 128 &&
-               data.version is string && data.version.size() <= 32 &&
-               data.worldAxioms is list && data.worldAxioms.size() <= 50 &&
-               data.visualAnchors is list && data.visualAnchors.size() <= 20;
-      }
-
-      allow list: if isSignedIn();
-      allow get: if isSignedIn();
-      allow create: if isEmailVerified() && isValidBaseline(incoming());
-      // Baselines are strictly immutable
-      allow update, delete: if false;
+    match /chat_logs/{logId} {
+      allow read: if isVerified() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(logId) && isValidChatLog(incoming()) && incoming().userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+    
+    match /admins/{adminId} {
+      allow read: if isVerified();
+      allow write: if false; // Only manageable via console
     }
   }
 }

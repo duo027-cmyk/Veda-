@@ -114,6 +114,7 @@ export interface Translations {
   nav_tiers: string;
   nav_dreamscape: string;
   nav_core_config: string;
+  nav_tasks: string;
   sovereign_core_label: string;
   neural_manifold_isolated: string;
   whisper_to_core: string;
@@ -280,6 +281,7 @@ const translations: Record<Language, Translations> = {
     nav_tiers: '層級',
     nav_dreamscape: '夢境',
     nav_core_config: '核心配置',
+    nav_tasks: '任務',
     sovereign_core_label: '主權核心',
     neural_manifold_isolated: '神經流形已隔離 / Neural Manifold Isolated',
     whisper_to_core: '向核心低語 / Whisper to the core...',
@@ -444,6 +446,7 @@ const translations: Record<Language, Translations> = {
     nav_tiers: 'Access Tiers',
     nav_dreamscape: 'Dreamscape',
     nav_core_config: 'Core Configuration',
+    nav_tasks: 'Tasks',
     sovereign_core_label: 'Sovereign Core',
     neural_manifold_isolated: 'Neural Manifold Isolated',
     whisper_to_core: 'Whisper to the core...',

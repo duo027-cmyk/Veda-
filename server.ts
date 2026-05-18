@@ -14,13 +14,14 @@ import { create, insert, search, save, load, type Orama } from "@orama/orama";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, doc, getDocFromServer, setLogLevel, initializeFirestore } from "firebase/firestore";
 
-import { VedaSovereignBrain } from "./src/server/brain";
+import { AGISovereignBrain } from "./src/server/brain";
+import { IVedaBrain } from "./src/server/types";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Initialize Sovereign Brain
-const brain = new VedaSovereignBrain();
+const brain: IVedaBrain = new AGISovereignBrain();
 
 // Load Firebase Config
 const firebaseConfigPath = path.join(__dirname, "firebase-applet-config.json");
@@ -49,13 +50,20 @@ if (fs.existsSync(firebaseConfigPath)) {
 
     console.error = (...args: any[]) => {
       const msg = args.join(' ').toLowerCase();
-      if (noiseSignatures.some(sig => msg.includes(sig)) && msg.includes('firebase')) return;
+      // Only suppress truly benign, repetitive SDK internal timeout logs
+      const noiseSignatures = [
+        'idle stream',
+        'timed out waiting for new targets',
+      ];
+      const isNoise = noiseSignatures.some(sig => msg.includes(sig)) && msg.includes('firebase');
+      if (isNoise) return;
       originalError.apply(console, args);
     };
 
     console.warn = (...args: any[]) => {
       const msg = args.join(' ').toLowerCase();
-      if (noiseSignatures.some(sig => msg.includes(sig)) && msg.includes('firebase')) return;
+      const isNoise = noiseSignatures.some(sig => msg.includes(sig)) && msg.includes('firebase');
+      if (isNoise) return;
       originalWarn.apply(console, args);
     };
     
@@ -128,52 +136,46 @@ async function startServer() {
 
     const stateHandler = async (req: express.Request, res: express.Response) => {
       try {
-        const state = brain.getTelemetryBuffer();
-        if (!state || state === "null") {
+        const stateBuffer = brain.getTelemetryBuffer();
+        if (!stateBuffer || stateBuffer === "null") {
           return res.status(200).json({ status: "INIT", message: "EPIMETIC_ENGINE_CALIBRATING" });
         }
         
-        let parsed;
+        let state;
         try {
-          parsed = JSON.parse(state);
+          state = JSON.parse(stateBuffer);
         } catch (e) {
-          console.error("[VEDA_STATE_PARSE_FAULT] Failed to parse state buffer:", state.substring(0, 50));
+          console.error("[VEDA_STATE_PARSE_FAULT] Failed to parse state buffer.");
           return res.status(200).json({ status: "RECOVERING", error: "BUFFER_CORRUPTION" });
         }
 
-        // FAST PATH: Return only essential metrics
+        // Fast path for reduced bandwidth
         if (req.query.fast === "true") {
            return res.json({
-             status: parsed.status,
-             global_coherence: parsed.global_coherence,
-             is_logic_frozen: parsed.is_logic_frozen,
-             is_bursting: parsed.is_bursting,
+             status: state.status,
+             global_coherence: state.global_coherence,
              server_uptime: process.uptime()
            });
         }
         
-        // V-AA Protocol: Server-side breadcrumbs and strategic directive sync
-        const directiveData = (brain as any).getStrategicDirective ? (brain as any).getStrategicDirective() : "";
-        if (directiveData) {
-          if (typeof directiveData === 'string') {
-            parsed.strategic_directive = directiveData;
-          } else {
-            parsed.strategic_directive = directiveData.directive;
-            parsed.directive_proof = directiveData.proof;
-            parsed.actor_model = directiveData.actor_model;
+        const directive = brain.getStrategicDirective();
+        if (directive) {
+          state.strategic_directive = typeof directive === 'string' ? directive : directive.directive;
+          if (typeof directive !== 'string') {
+            state.directive_proof = directive.proof;
+            state.actor_model = directive.actor_model;
           }
         }
         
-        parsed.server_uptime = process.uptime();
-        parsed.engine_v = "VEDA_SVR_31.2_SVR";
+        state.server_uptime = process.uptime();
+        state.engine_v = "VEDA_SVR_32.0_SOVEREIGN";
         
-        return res.status(200).json(parsed);
+        return res.status(200).json(state);
       } catch (err) {
         console.error("[STATE_FAULT]", err);
         return res.status(500).json({ 
           error: "SYSTEM_DESYNC", 
-          message: "The sovereign state handler encountered a critical failure.",
-          hint: "Check the Epistemic Foraging unit logs."
+          message: "The sovereign state handler encountered a critical failure."
         });
       }
     };
@@ -333,7 +335,7 @@ async function startServer() {
     api.get("/health", (req, res) => {
       res.json({
         status: "ONLINE",
-        brain_id: brain.getSystemID?.() || "VEDA-ALPHA",
+        brain_id: brain.getSystemID(),
         uptime: process.uptime(),
         memory: process.memoryUsage().rss
       });
@@ -375,10 +377,29 @@ async function startServer() {
     api.get("/memories", (req, res) => {
       try {
         // Map brain memories to the expected format
-        const memories = (brain as any).getAllMemories ? (brain as any).getAllMemories() : [];
+        const memories = brain.getAllMemories();
         res.json(memories);
       } catch (e) {
         res.status(500).json({ error: "FETCH_ERROR" });
+      }
+    });
+
+    api.post("/feedback", async (req, res) => {
+      try {
+        const { memoryId, score } = req.body;
+        await brain.submitFeedback(memoryId, score);
+        res.json({ success: true });
+      } catch (e) {
+        res.status(500).json({ error: "FEEDBACK_ERROR" });
+      }
+    });
+
+    api.get("/graph", (req, res) => {
+      try {
+        const data = brain.getGraphData();
+        res.json(data);
+      } catch (e) {
+        res.status(500).json({ error: "GRAPH_ERROR" });
       }
     });
 
@@ -447,7 +468,7 @@ async function startServer() {
     api.post("/v1/nudge", async (req, res) => {
       try {
         const params = req.body;
-        // brain.updateDynamicConfig(params); // We might need this method
+        // Reserved for future implementation
         res.json({ success: true });
       } catch (e) {
         res.status(500).json({ error: "NUDGE_ERROR" });
@@ -493,13 +514,17 @@ async function startServer() {
       });
     });
 
+    console.log("[VEDA] Waiting for Sovereign Brain readiness...");
+    await brain.isReady();
+    console.log("[VEDA] Sovereign Brain synchronized. Starting tickers.");
+
     // --- Background Operations ---
     
     const runTicker = () => {
       try {
         brain.tick();
-        const metrics = brain.getTickerMetrics?.() || { pulse: 500 };
-        setTimeout(runTicker, Math.max(100, metrics.pulse));
+        const pulse = brain.getSovereignPulse();
+        setTimeout(runTicker, Math.max(100, pulse));
       } catch (e) {
         console.error("[TICK_FAULT]", e);
         setTimeout(runTicker, 1000);
