@@ -18,6 +18,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { useUIStore } from '../store/uiStore';
 import { useAuthStore } from '../store/authStore';
 import { ViewMode } from '../types';
+import { EpistemicStatus } from './EpistemicStatus';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -47,7 +48,7 @@ export const NavRail = () => {
   return (
     <nav className="fixed left-0 bottom-0 md:top-0 md:bottom-0 w-full md:w-24 h-20 md:h-auto flex flex-row md:flex-col items-center justify-around md:justify-start md:py-12 z-[100] ghibli-glass border-t md:border-t-0 md:border-r border-border-subtle transition-all duration-500">
       <div className="absolute top-0 left-0 w-full h-1 bg-accent/20 hidden md:block" />
-      <div className="flex-1 flex flex-row md:flex-col items-center gap-4 sm:gap-10">
+      <div className="flex-1 flex flex-row md:flex-col items-center gap-4 sm:gap-10 overflow-y-auto no-scrollbar py-2">
         {items.map((item) => (
           <button
             key={item.id}
@@ -66,8 +67,8 @@ export const NavRail = () => {
           </button>
         ))}
       </div>
-      <div className="p-6 opacity-20 hover:opacity-100 transition-opacity cursor-help hidden md:block">
-        <Zap size={20} className="text-gold" />
+      <div className="opacity-20 hover:opacity-100 transition-opacity cursor-help hidden md:block border-t border-white/5 w-full">
+        <EpistemicStatus />
       </div>
     </nav>
   );

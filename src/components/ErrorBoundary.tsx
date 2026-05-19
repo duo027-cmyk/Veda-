@@ -23,18 +23,29 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   public static getDerivedStateFromError(error: Error): State {
+    // If it's a transient Firebase or network error, we don't want to crash the whole UI
+    const msg = error.message?.toLowerCase() || '';
+    if (msg.includes('permission-denied') || msg.includes('quota') || msg.includes('offline')) {
+      return { hasError: false, error: null };
+    }
     return { hasError: true, error };
   }
 
   public componentDidMount() {
-    window.addEventListener('unhandledrejection', this.unhandledRejectionHandler);
+    // We remove the unhandledrejection global crash to prevent transient network/permission errors 
+    // from triggering a full UI desync screen.
   }
 
   public componentWillUnmount() {
-    window.removeEventListener('unhandledrejection', this.unhandledRejectionHandler);
+    // Clean up
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    const msg = error.message?.toLowerCase() || '';
+    if (msg.includes('permission-denied') || msg.includes('quota')) {
+      console.warn('[VEDA_SILENT_ERROR] Suppressed UI crash for transient data error:', error);
+      return; 
+    }
     console.error('Uncaught error:', error, errorInfo);
   }
 

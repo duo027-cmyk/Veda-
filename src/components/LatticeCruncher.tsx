@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { vedaService } from '../services/vedaService';
 import { BrainData } from '../types';
-import { Activity, Cpu, Zap, ShieldCheck, Database, GitBranch, Terminal, AlertTriangle, CheckCircle2, RefreshCw, XCircle } from 'lucide-react';
+import { Activity, Cpu, Zap, ShieldCheck, Database, GitBranch, Terminal, AlertTriangle, CheckCircle2, RefreshCw, XCircle, TrendingUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Type } from '@google/genai';
 
@@ -16,6 +16,7 @@ interface LatticeJob {
 
 export const LatticeCruncher: React.FC<{ brain: BrainData | null }> = ({ brain }) => {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [strategicMetrics, setStrategicMetrics] = useState<any>(null);
   const [showVitals, setShowVitals] = useState(false);
   const [errorCount, setErrorCount] = useState(0);
   const isCrunched = useRef<Set<string>>(new Set());
@@ -56,6 +57,20 @@ export const LatticeCruncher: React.FC<{ brain: BrainData | null }> = ({ brain }
     };
 
     crunchJobs();
+
+    // Fetch strategic metrics
+    const fetchStrategic = async () => {
+      try {
+        const data = await vedaService.getStrategicMetrics();
+        setStrategicMetrics(data);
+      } catch (e) {
+        console.warn("[LATTICE_CRUNCHER] Failed to fetch strategic metrics", e);
+      }
+    };
+    fetchStrategic();
+    const sub = setInterval(fetchStrategic, 5000);
+
+    return () => clearInterval(sub);
   }, [brain, activeJobId]);
 
   const executeJob = async (job: LatticeJob) => {
@@ -220,6 +235,86 @@ ${rawContent.substring(0, 3000)}`;
                 <span className="text-slate-400 uppercase">因果晶格節點</span>
                 <span className="text-cyan-300">{lattice?.nodes?.length || 0} / 30</span>
               </div>
+
+              {/* Strategic Planning Unit (SPU) Weights */}
+              {strategicMetrics && (
+                <div className="pt-2 border-t border-white/5">
+                  <div className="flex justify-between text-[10px] text-cyan-400 uppercase font-mono mb-2">
+                    <span>戰略權重比 (Value Model)</span>
+                    <TrendingUp className="w-3 h-3" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {['Stb', 'Ent', 'Eng', 'Int'].map((label, i) => (
+                      <div key={label} className="text-[10px] font-mono flex flex-col gap-1">
+                        <div className="flex justify-between text-slate-500">
+                          <span>{label}</span>
+                          <span className="text-cyan-200">{(strategicMetrics.weights[i] * 100).toFixed(0)}%</span>
+                        </div>
+                        <div className="h-1 bg-slate-800 rounded-full">
+                          <motion.div 
+                            className="h-full bg-cyan-400"
+                            animate={{ width: `${strategicMetrics.weights[i] * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-between text-[8px] text-slate-600 mt-2 font-mono uppercase">
+                    <span>PWM: {strategicMetrics.complexity} | LWM: {strategicMetrics.latentComplexity}</span>
+                    <span>Risk: {strategicMetrics.riskMetrics.knownFailures} Fail</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Spatial Proprioception (Blind World Model) */}
+              {brain?.spatial_manifold && (
+                <div className="pt-2 border-t border-white/5">
+                  <div className="flex justify-between text-[10px] text-emerald-400 uppercase font-mono mb-2">
+                    <span>非視覺空間流形 (SPU)</span>
+                    <GitBranch className="w-3 h-3" />
+                  </div>
+                  <div className="text-[9px] font-mono text-slate-300 bg-emerald-500/5 p-2 rounded border border-emerald-500/10">
+                    <div className="flex justify-between mb-1">
+                      <span className="text-slate-500">拓撲節點:</span>
+                      <span>{brain.spatial_manifold.nodes}</span>
+                    </div>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-slate-500">因果邊緣:</span>
+                      <span>{brain.spatial_manifold.edges}</span>
+                    </div>
+                    <div className="flex justify-between mb-1 truncate">
+                      <span className="text-slate-500">自我中心:</span>
+                      <span>({brain.spatial_manifold.ego_center.map(v => v.toFixed(2)).join(',')})</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Subsystem Registry Status */}
+              {brain?.subsystems && (
+                <div className="pt-2 border-t border-white/5">
+                  <div className="flex justify-between text-[10px] text-indigo-400 uppercase font-mono mb-2">
+                    <span>子系統晶格 (Subsystem Lattice)</span>
+                    <ShieldCheck className="w-3 h-3" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {Object.entries(brain.subsystems).map(([name, data]: [string, any]) => (
+                      <div key={name} className="text-[8px] font-mono bg-indigo-500/5 p-1 rounded border border-indigo-500/10 flex flex-col gap-0.5">
+                        <div className="flex justify-between">
+                          <span className="text-indigo-300">{name.toUpperCase()}</span>
+                          <span className={data.status === 'ONLINE' ? 'text-emerald-400' : 'text-amber-400'}>
+                             {data.status}
+                          </span>
+                        </div>
+                        <div className="flex justify-between opacity-60">
+                          <span>COHERENCE:</span>
+                          <span>{(data.coherence * 100).toFixed(0)}%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Strategic simulations */}
               <div>

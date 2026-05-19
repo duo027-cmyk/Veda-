@@ -367,6 +367,18 @@ export interface BrainData {
     prompt: string;
     timestamp: number;
   }>;
+  spatial_manifold?: {
+    nodes: number;
+    edges: number;
+    ego_center: number[];
+    descriptor: string;
+  };
+  subsystems?: Record<string, {
+    status: 'ONLINE' | 'STANDBY' | 'DEGRADED' | 'FAULT';
+    coherence: number;
+    lastUpdate: number;
+    [key: string]: any;
+  }>;
   burst_status?: {
     active: boolean;
     isApproved: boolean;

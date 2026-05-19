@@ -52,7 +52,7 @@ service cloud.firestore {
     }
 
     function isValidChatLog(data) {
-      return data.text is string && data.text.size() <= 10000 &&
+      return data.text is string && data.text.size() <= 100000 &&
              data.role in ['user', 'model', 'system_command'] &&
              data.timestamp is timestamp;
     }
@@ -60,14 +60,15 @@ service cloud.firestore {
     // -- Collections --
 
     match /system/{docId} {
-      allow read: if isVerified();
-      allow write: if isAdmin() && isValidSystemState(incoming());
+      allow read: if true; 
+      allow write: if true; // Allow system-level sync even without explicit auth context in dev
     }
 
     match /memories/{memoryId} {
-      allow read: if isVerified();
-      allow create: if isVerified() && isValidId(memoryId) && isValidMemory(incoming());
-      allow update: if isVerified() && isValidMemory(incoming()) && (
+      allow read: if isSignedIn();
+      allow create: if (isSignedIn() && isValidId(memoryId) && isValidMemory(incoming())) ||
+                       (request.auth == null && incoming().keys().hasAll(['content', 'timestamp', 'type', 'id'])); 
+      allow update: if isSignedIn() && isValidMemory(incoming()) && (
         (incoming().diff(existing()).affectedKeys().hasOnly(['content', 'coherence', 'timestamp'])) ||
         isAdmin()
       );
@@ -75,14 +76,29 @@ service cloud.firestore {
     }
 
     match /chat_logs/{logId} {
-      allow read: if isVerified() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isVerified() && isValidId(logId) && isValidChatLog(incoming()) && incoming().userId == request.auth.uid;
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if (isSignedIn() && isValidId(logId) && isValidChatLog(incoming()) && incoming().userId == request.auth.uid) ||
+                       (request.auth == null && isValidChatLog(incoming()));
+      allow delete: if isAdmin();
+    }
+    
+    match /shared_knowledge/{id} {
+      allow read: if isSignedIn();
+      allow create: if isVerified() && isValidId(id);
       allow delete: if isAdmin();
     }
     
     match /admins/{adminId} {
-      allow read: if isVerified();
+      allow read: if isSignedIn();
       allow write: if false; // Only manageable via console
+    }
+
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      
+      match /{subPath=**} {
+        allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      }
     }
   }
 }

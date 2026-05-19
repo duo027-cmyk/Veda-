@@ -23,13 +23,24 @@ const getInitialTheme = (): 'DARK' | 'LIGHT' => {
   return 'DARK';
 };
 
+const getInitialView = (): ViewMode => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('veda-view') as ViewMode;
+    if (saved) return saved;
+  }
+  return 'DIALOGUE';
+};
+
 export const useUIStore = create<UIState>((set) => ({
-  view: 'DIALOGUE',
+  view: getInitialView(),
   selectedFragment: null,
   showBurstMonitor: false,
   theme: getInitialTheme(),
   
-  setView: (view) => set({ view }),
+  setView: (view) => {
+    localStorage.setItem('veda-view', view);
+    set({ view });
+  },
   setSelectedFragment: (selectedFragment) => set({ selectedFragment }),
   setShowBurstMonitor: (showBurstMonitor) => set({ showBurstMonitor }),
   setTheme: (theme) => {

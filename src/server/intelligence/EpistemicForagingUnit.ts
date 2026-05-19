@@ -1,12 +1,13 @@
 import crypto from "crypto";
 import { AGI_JEPA_Arch } from "./AGI_JEPA_Arch";
 import { CoreAxioms } from "./CoreAxioms";
+import { BaseSubsystem } from "../Subsystem";
 
 /**
  * EpistemicForagingUnit - 認識論覓食單元 (Active Self-Learning)
  * Executes Active Inference by proactively seeking information that minimizes future surprise.
  */
-export class EpistemicForagingUnit {
+export class EpistemicForagingUnit extends BaseSubsystem {
   private curiosityBuffer: string[] = [];
   private jepa: AGI_JEPA_Arch;
   private uncertaintyThreshold: number = 0.15;
@@ -14,8 +15,32 @@ export class EpistemicForagingUnit {
   private axioms: CoreAxioms;
 
   constructor(jepa: AGI_JEPA_Arch, axioms: CoreAxioms) {
+    super();
     this.jepa = jepa;
     this.axioms = axioms;
+  }
+
+  public async initialize(): Promise<void> {
+    this.status = 'ONLINE';
+    this.log("READY", "認識論覓食單元已就緒。");
+    
+    // Subscribe to state updates if we want to move 'step' logic here
+    this.bus?.subscribe('STATE_UPDATE', (event) => {
+      // Logic could be moved here to further decouple brain.ts
+    });
+  }
+
+  public tick(delta: number, globalState: number[]): void {
+    this.lastUpdate = Date.now();
+  }
+
+  public override getTelemetry() {
+    return {
+      ...super.getTelemetry(),
+      curiosityLevel: this.curiosityBuffer.length / 100,
+      logs: this.logs.slice(-5),
+      metrics: this.getInnovationMetrics()
+    };
   }
 
   public async step(currentState: number[], lastAction: number[], nextState: number[]) {

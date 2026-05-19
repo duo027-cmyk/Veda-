@@ -139,6 +139,7 @@ export interface IVedaBrain {
   performAudit(): Promise<any>;
   triggerCognitiveSymmetry(): Promise<any>;
   setDatabase(db: any): void;
+  setAdminDatabase(db: any): void;
   updateAxioms(data: { axioms: string[] }): Promise<any>;
   getResearchExport(): any;
   getGlobalCoherence(): number;
@@ -152,5 +153,7 @@ export interface IVedaBrain {
   setSystemTier(tier: string): Promise<any>;
   runDreamCycle(wss: any): Promise<void>;
   submitFeedback(memoryId: string, score: number): Promise<void>;
+  getStrategicStatus(): any;
+  generateStrategicReport(): any;
   autoEvolve(): Promise<{ log: string; adjustment: number[] }>;
 }

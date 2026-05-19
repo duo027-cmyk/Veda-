@@ -122,12 +122,15 @@ export default function App() {
   // --- Sovereign State Synchronization ---
   useEffect(() => {
     fetchVedaData();
-    const sub = setInterval(fetchVedaData, 12000); 
+    // Increase heartbeat interval for stability on mobile
+    const sub = setInterval(fetchVedaData, 20000); 
     return () => clearInterval(sub);
   }, [fetchVedaData]);
 
   // --- Proactive Lifecycle Engine ---
   const userDataRef = useRef(userData);
+  const syncedMemoriesRef = useRef<Set<string>>(new Set());
+  
   useEffect(() => {
     userDataRef.current = userData;
   }, [userData]);
@@ -162,9 +165,20 @@ export default function App() {
 
   useEffect(() => {
     const syncServerMemories = async () => {
-      if (userData?.memories && userData.memories.length > 0) {
+      if (!userData?.memories || userData.memories.length === 0) return;
+      
+      const newMemories = userData.memories.filter(m => !syncedMemoriesRef.current.has(m.id));
+      if (newMemories.length === 0) return;
+
+      try {
         const { knbService } = await import('./services/knbService');
-        for (const m of userData.memories) {
+        for (const m of newMemories) {
+          // Content safety guard
+          if (!m.content || m.content.length > 50000) {
+            syncedMemoriesRef.current.add(m.id);
+            continue;
+          }
+
           const exists = await (knbService as any).db.fragments.where('content').equals(m.content).first();
           if (!exists) {
             console.log(`[SYNC] Integrating server memory: ${m.content.substring(0, 20)}...`);
@@ -174,11 +188,19 @@ export default function App() {
               resonance: m.resonance,
               id: m.id
             });
+            // Delay to keep the main thread fluid
+            await new Promise(r => setTimeout(r, 150));
           }
+          syncedMemoriesRef.current.add(m.id);
         }
+      } catch (e) {
+        console.error("[SYNC_FAULT] Memory integration interrupted:", e);
       }
     };
-    syncServerMemories();
+    
+    // Add a small delay to prevent blocking the initial mount
+    const timer = setTimeout(syncServerMemories, 3000);
+    return () => clearTimeout(timer);
   }, [userData?.memories]);
 
   useEffect(() => {
@@ -341,16 +363,17 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Causal Circuit Breaker (API Error Overlay) */}
-      <AnimatePresence>
-        {apiError && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4 md:p-12"
-          >
-            <div className="max-w-xl w-full p-8 md:p-12 ghibli-glass border border-red-500/30 flex flex-col gap-8 relative overflow-hidden group">
+      {/* Causal Circuit Breaker (API Error Overlay) - Now scoped to main area */}
+      <div className="pl-0 md:pl-24 h-screen w-full fixed inset-0 pointer-events-none z-[500]">
+       <AnimatePresence>
+         {apiError && !apiError.toLowerCase().includes('permission-denied') && (
+           <motion.div 
+             initial={{ opacity: 0 }}
+             animate={{ opacity: 1 }}
+             exit={{ opacity: 0 }}
+             className="w-full h-full bg-black/80 backdrop-blur-xl flex items-center justify-center p-4 md:p-12 pointer-events-auto"
+           >
+             <div className="max-w-xl w-full p-8 md:p-12 ghibli-glass border border-red-500/30 flex flex-col gap-8 relative overflow-hidden group">
                {/* Glitch Background Effect */}
                <div className="absolute inset-0 bg-red-500/5 opacity-20 pointer-events-none" />
                <motion.div 
@@ -407,6 +430,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
 
       <main className="pl-0 md:pl-24 h-screen relative z-30 transition-all duration-500">
         <AnimatePresence mode="wait">
@@ -463,9 +487,9 @@ export default function App() {
                      <div className="mt-12 text-left space-y-4 max-h-40 overflow-y-auto scrollbar-none opacity-40 hover:opacity-100 transition-opacity">
                         <p className="text-[10px] tracking-[0.4em] uppercase text-gold/60 text-center">Synthesized Axioms</p>
                         {userData.axioms.map((a, i) => (
-                          <div key={i} className="text-xs font-serif italic border-l border-gold/20 pl-4 py-1">
-                            {a}
-                          </div>
+                           <div key={`${i}-${a.substring(0, 20)}`} className="text-xs font-serif italic border-gold/20 pl-4 py-1">
+                             {a}
+                           </div>
                         ))}
                      </div>
                    )}

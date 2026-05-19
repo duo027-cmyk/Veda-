@@ -38,7 +38,10 @@ export const useVedaStore = create<VedaState>((set, get) => ({
     try {
       const [d, strength] = await Promise.all([
         vedaService.getData(),
-        knbService.getCollectiveStrength()
+        knbService.getCollectiveStrength().catch(err => {
+          console.warn("[KNB] Strength check failed - ignoring for stability", err);
+          return 0;
+        })
       ]);
       const safeData = d ? {
         ...d,
@@ -52,10 +55,22 @@ export const useVedaStore = create<VedaState>((set, get) => ({
           uncertaintyVariance: 0
         }
       } : null;
-      set({ userData: safeData, apiError: d ? null : "SYSTEM_STATE_EMPTY", isLoading: false });
+      
+      set({ 
+        userData: safeData, 
+        apiError: d ? null : "SYSTEM_STATE_EMPTY", 
+        isLoading: false 
+      });
     } catch (e: any) {
-      console.error("Failed to load VEDA state", e);
-      set({ apiError: e.message || "Unknown Causal Desync", isLoading: false });
+      console.warn("[VEDA_SYCHRONIZATION] Transient sync failure:", e);
+      // Only set apiError for actual routing/404/500 errors, not just transient timeouts
+      const msg = e.message?.toLowerCase() || "";
+      if (msg.includes('routing') || msg.includes('404') || msg.includes('500') || msg.includes('network error')) {
+        set({ apiError: e.message || "Unknown Causal Desync", isLoading: false });
+      } else {
+        // Silently fail or show a minor log
+        set({ isLoading: false });
+      }
     }
   },
 

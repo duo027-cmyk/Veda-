@@ -1118,11 +1118,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
                 </div>
               )}
 
-              {messages.filter(m => m.role !== 'thought').map((msg, i) => (
+              {messages.filter(m => m.role !== 'thought').map((msg) => (
                 <motion.div
                   initial={{ opacity: 0, x: msg.role === 'user' ? 20 : -20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  key={i}
+                  key={msg.id}
                   className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} group`}
                 >
                   <div className={`max-w-[92%] p-5 rounded-none text-sm leading-relaxed relative overflow-hidden crystal-panel transition-all duration-500 group-hover:shadow-[0_0_40px_rgba(255,255,255,0.15)] ${

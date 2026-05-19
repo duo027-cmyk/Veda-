@@ -71,9 +71,13 @@ import {
   SelfHealingProtocol,
   CausalBurstEngine,
   BurstMode,
-  EpistemicForagingUnit
+  EpistemicForagingUnit,
+  StrategicPlanningUnit,
+  LanguageEncoder,
+  SpatialProprioceptionUnit
 } from "./intelligence";
 
+import { SubsystemManager } from "./SubsystemManager";
 import { MemoryFragment, MemoryNode, IVedaBrain, WorldModel, TemporalAnchor, StrategicReport } from "./types";
 import { CONFIG, SYSTEM_FEEDBACK, STATE_PATH, ORAMA_PATH, CHAT_HISTORY_PATH } from "./constants";
 
@@ -123,6 +127,9 @@ export class AGISovereignBrain implements IVedaBrain {
   private burstEvaluator: BurstImpactEvaluator = new BurstImpactEvaluator();
   private selfHealing: SelfHealingProtocol = new SelfHealingProtocol();
   private burstEngine: CausalBurstEngine = new CausalBurstEngine();
+  private strategicPlanning: StrategicPlanningUnit = new StrategicPlanningUnit();
+  private langEncoder: LanguageEncoder = new LanguageEncoder();
+  private spatialProprioception: SpatialProprioceptionUnit = new SpatialProprioceptionUnit();
   private epistemicForaging: EpistemicForagingUnit;
   private evolutionManager: EvolutionManager;
   private integrity: SovereignIntegrity;
@@ -142,6 +149,7 @@ export class AGISovereignBrain implements IVedaBrain {
   private strategicRank: string = "NETWORK-BETA (B)";
   private isLogicFrozen: boolean = false;
   private isZPDPActive: boolean = false; 
+  private subsystemManager: SubsystemManager = new SubsystemManager();
   private zdpdTimer: NodeJS.Timeout | null = null;
   private isDreaming: boolean = false;
   private isSteadyStateActive: boolean = false; 
@@ -254,6 +262,7 @@ export class AGISovereignBrain implements IVedaBrain {
   private temporalAnchors: TemporalAnchor[] = [];
   private systemWorldModel: WorldModel;
   private db: any = null;
+  private adminDb: any = null;
 
     public sovereign_index: number = 0; // Will be calculated dynamically
 
@@ -273,6 +282,8 @@ export class AGISovereignBrain implements IVedaBrain {
     this.agiJEPA = new AGI_JEPA_Arch(6);
     this.epistemicForaging = new EpistemicForagingUnit(this.agiJEPA, this.coreAxioms);
     this.hyperLattice = new HyperLatticeCoordinator(this.hdc);
+
+    this.initializeSubsystems();
 
     this.systemWorldModel = {
       snapshot: {
@@ -403,6 +414,17 @@ export class AGISovereignBrain implements IVedaBrain {
     }
   }
 
+  private initializeSubsystems() {
+    this.subsystemManager.register("strategic", this.strategicPlanning);
+    this.subsystemManager.register("spatial", this.spatialProprioception);
+    this.subsystemManager.register("foraging", this.epistemicForaging);
+    this.subsystemManager.register("lattice", this.hyperLattice);
+    
+    this.subsystemManager.initializeAll().catch(e => {
+      console.warn("[SUBSYSTEM_FAULT] Initialization error", e);
+    });
+  }
+
   private async initializeBaselines() {
     try {
       this.baseline = await this.persistenceSystem.loadBaselines();
@@ -421,6 +443,28 @@ export class AGISovereignBrain implements IVedaBrain {
 
   public setDatabase(db: any) {
     this.db = db;
+  }
+
+  public setAdminDatabase(db: any) {
+    this.adminDb = db;
+    if (db) {
+      console.log("[VEDA] Admin Database link established.");
+    }
+  }
+
+  private isAdminOperational(): boolean {
+    return !!this.adminDb && (!this.lastTelemetryState || this.lastTelemetryState.admin_storage !== "DEGRADED");
+  }
+
+  private handleAdminFirebaseError(e: any, operation: string) {
+    const msg = (e instanceof Error ? e.message : String(e)).toUpperCase();
+    if (msg.includes("NOT_FOUND") || msg.includes("PERMISSION_DENIED") || msg.includes("UNAUTHENTICATED")) {
+      console.error(`[VEDA_ADMIN_FIREBASE_FAULT] ${operation} blocked:`, msg);
+      // Circuit breaker: Temporarily degrade admin functionality but keep system running
+      this.lastTelemetryState = { ...(this.lastTelemetryState || {}), admin_storage: "DEGRADED" };
+    } else {
+      console.error(`[VEDA_ADMIN_FIREBASE_ERROR] ${operation} failed:`, e);
+    }
   }
 
   private normalize(v: Float32Array): Float32Array {
@@ -467,8 +511,32 @@ export class AGISovereignBrain implements IVedaBrain {
 
     if (this.isLogicFrozen) return;
 
-    // 0. PEC & Evolution Optimization
+    // 0. Strategic Planning & Multistep Rollout
+    // Use the Probability World Model (PWM) to resolve optimal causal paths
+    const candidateIntents = [
+      this.intent,
+      this.intent.map((v, i) => Math.min(1, Math.max(0, v + (i % 2 === 0 ? 0.04 : -0.04)))),
+      this.intent.map((v, i) => Math.min(1, Math.max(0, v + (i % 2 === 0 ? -0.04 : 0.04)))),
+      [0.6, 0.7, 0.2, 0.4, 0.5, 0.5] // Optimized Target Configuration
+    ];
+
+    const optimalIntent = this.strategicPlanning.plan(this.state, candidateIntents, 3);
+    this.intent = [...optimalIntent];
+
+    // Active Inference: Record the transition and update internal world model
+    this.strategicPlanning.observe(this.stateSnapshot, this.intent, this.state);
+    this.stateSnapshot = [...this.state];
+
+    // 1. PEC & Evolution Optimization
     this.state = this.evolutionManager.processPEC(this.state, this.intent, this.physicalOpsCount, this.getGlobalCoherence());
+
+    // --- Subsystem Lattice Integration ---
+    this.subsystemManager.tickAll(delta, this.state);
+    this.subsystemManager.getBus().publish({ 
+      type: 'STATE_UPDATE', 
+      payload: { delta, state: [...this.state] } 
+    });
+    // -------------------------------------
 
     // 1. Structural Decay & Environmental Adaptation
     this.state[2] = Math.min(1.0, this.state[2] + CONFIG.NETWORK_DECAY * (1 + this.resonancePulse));
@@ -868,6 +936,13 @@ export class AGISovereignBrain implements IVedaBrain {
       await this.persistenceSystem.saveState(data);
       
       // Save to Firestore
+      if (this.isAdminOperational()) {
+        this.adminDb.collection("system").doc("state").set({
+          ...data,
+          updatedAt: new Date()
+        }).catch((e: any) => this.handleAdminFirebaseError(e, "system_state_save"));
+      } 
+      
       if (this.db) {
         setDoc(doc(this.db, "system", "state"), {
           ...data,
@@ -1293,6 +1368,12 @@ export class AGISovereignBrain implements IVedaBrain {
           status: "LOCKED"
         } : null,
         vectors: this.state,
+        spatial_manifold: {
+          nodes: this.spatialProprioception.getManifoldComplexity(),
+          edges: parseInt(this.spatialProprioception.getTopologicalDescriptor().split('|')[1]?.split(':')[1]?.trim() || '0'),
+          ego_center: this.spatialProprioception.getEgoCenter(),
+          descriptor: this.spatialProprioception.getTopologicalDescriptor()
+        },
         cognitive_identity: {
           resonance_score: this.cognitiveResonance,
           behavioral_baseline_match: this.cognitiveResonance > 0.8,
@@ -1307,6 +1388,7 @@ export class AGISovereignBrain implements IVedaBrain {
         system_world_model: this.systemWorldModel,
         is_steady_state: this.isSteadyStateActive,
         is_zpdp_active: this.isZPDPActive,
+        subsystems: this.subsystemManager.getGlobalTelemetry(),
         research_chronicles: this.researchChronicles,
         is_support_authorized: this.isSupportAuthorized,
         language_manifold: this.senses.getLanguage(),
@@ -1469,6 +1551,19 @@ export class AGISovereignBrain implements IVedaBrain {
         this.state[2] = Math.min(1.0, this.state[2] + epistemicResult.entropy * 0.2);
       }
       
+      // Language Encoding: Map directive to latent intention space
+      const encodedIntent = this.langEncoder.encode(text);
+      this.intent = this.intent.map((v, i) => v * 0.8 + (encodedIntent[i] || 0.5) * 0.2);
+
+      // Non-Visual Spatial Integration (Proprioception)
+      // Simulates how the mind constructs space without visual buffers
+      const action = this.intent.slice(0, 3); // Use intent deltas as pseudo-actions
+      const spatialResult = this.spatialProprioception.integrate(action, this.state[1], this.state[2]);
+      
+      this.neuralLog("SPATIAL_INF", `空間流形構建中：EgoPos(${spatialResult.x.toFixed(2)},${spatialResult.y.toFixed(2)}) 複雜度: ${this.spatialProprioception.getManifoldComplexity()}`);
+
+      this.neuralLog("INTENT_SHIFT", `意圖向量已因語言輸入偏移：[${this.intent.map(v => v.toFixed(2)).join(',')}]`);
+
       // Reality Input Layer -> Causal Lattice Layer
       this.constructCausalLattice(text);
       
@@ -1513,9 +1608,21 @@ export class AGISovereignBrain implements IVedaBrain {
       return { success: false, status: "INTEGRITY_MISMATCH" };
     }
 
-    this.chatHistory.push({ role: role as any, text, ts: Date.now() });
+    const msgId = crypto.randomBytes(8).toString('hex');
+    this.chatHistory.push({ id: msgId, role: role as any, text, ts: Date.now() });
     
     // Firestore Logging
+    if (this.isAdminOperational()) {
+      this.adminDb.collection("chat_logs").add({
+        text,
+        role,
+        timestamp: new Date(),
+        mode: (this as any).lastReasoningMode || 'UNKNOWN',
+        confidence: (this as any).lastSovereignConfidence || 0
+      }).catch((e: any) => this.handleAdminFirebaseError(e, "chat_logs_log"));
+    } 
+    
+    // Always attempt client-side logging if admin fails or as double-entry for development
     if (this.db) {
       addDoc(collection(this.db, "chat_logs"), {
         text,
@@ -1795,6 +1902,17 @@ export class AGISovereignBrain implements IVedaBrain {
         if (this.recentlyInjected.length > 5) this.recentlyInjected.shift();
 
         // Firestore Registry
+        if (this.isAdminOperational()) {
+          this.adminDb.collection("memories").add({
+            id: memory.id,
+            content: snippet,
+            coherence: integrity.coherence,
+            type: "MINERAL",
+            timestamp: new Date(),
+            metadata: memory.metadata
+          }).catch((e: any) => this.handleAdminFirebaseError(e, "memory_log_mineral"));
+        } 
+        
         if (this.db) {
           addDoc(collection(this.db, "memories"), {
             id: memory.id,
@@ -1877,6 +1995,19 @@ export class AGISovereignBrain implements IVedaBrain {
         this.holographicMemory.store(this.state, fragment.resonance, fragment.resonance);
         
         // Background persistence to Firestore
+        if (this.isAdminOperational()) {
+           const memoryPayload = {
+            id: fragment.id,
+            type: fragment.type || 'SYNTHESIS',
+            content: fragment.content,
+            resonance: fragment.resonance,
+            timestamp: new Date().toISOString(),
+          };
+          this.adminDb.collection("memories").add(memoryPayload).catch((e: any) => 
+            this.handleAdminFirebaseError(e, "memory_synthesis_persistence")
+          );
+        } 
+        
         if (this.db) {
           const memoryPayload = {
             id: fragment.id,
@@ -1903,6 +2034,14 @@ export class AGISovereignBrain implements IVedaBrain {
     this.neuralLog("RESONANCE_EVENT", "偵測到極限相干脈衝，啟動自動深化...");
     this.activateSovereignBurst("RESONANCE_AUTO_SYNERGY", 0.7, false);
     this.triggerResonance(0.5);
+  }
+
+  public getStrategicStatus(): any {
+    return this.strategicPlanning.getTelemetry();
+  }
+
+  public generateStrategicReport(): any {
+    return this.strategicPlanning.getTelemetry();
   }
 
   public getGlobalCoherence(): number {
@@ -2391,6 +2530,17 @@ export class AGISovereignBrain implements IVedaBrain {
       }
 
       // Firestore Axiom/Memory Snapshot
+      if (this.isAdminOperational()) {
+        const snapshotId = `AXIOM-${fragment.id}`;
+        this.adminDb.collection("memories").doc(snapshotId).set({
+          id: fragment.id,
+          type: "DISTILLED_AXIOM",
+          content: fragment.content,
+          resonance: fragment.resonance,
+          timestamp: new Date().toISOString(),
+        }).catch((e: any) => this.handleAdminFirebaseError(e, "axiom_persistence"));
+      } 
+      
       if (this.db) {
         const snapshotId = `AXIOM-${fragment.id}`;
         setDoc(doc(this.db, "memories", snapshotId), {

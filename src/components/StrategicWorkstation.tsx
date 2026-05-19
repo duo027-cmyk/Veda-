@@ -231,7 +231,7 @@ export const StrategicWorkstation: React.FC<StrategicWorkstationProps> = ({ data
                    <h2 className="text-xl font-display tracking-[0.2em] uppercase text-accent">{selectedReport.title}</h2>
                    <div className="flex gap-4">
                       {selectedReport.axioms.map((a, i) => (
-                        <span key={i} className="text-[7px] font-mono text-white/20 tracking-[0.2em] border border-white/10 px-2 py-0.5 uppercase">
+                        <span key={`rep-ax-${i}-${a.substring(0, 10)}`} className="text-[7px] font-mono text-white/20 tracking-[0.2em] border border-white/10 px-2 py-0.5 uppercase">
                           AXIOM_{i}: {a}
                         </span>
                       ))}

@@ -20,3 +20,6 @@ export * from "./intelligence/AGI_JEPA_Arch";
 export * from "./intelligence/TrendPredictor";
 export * from "./intelligence/GeneticOptimizer";
 export * from "./intelligence/EpistemicForagingUnit";
+export * from "./intelligence/StrategicPlanningUnit";
+export * from "./intelligence/LanguageEncoder";
+export * from "./intelligence/SpatialProprioceptionUnit";

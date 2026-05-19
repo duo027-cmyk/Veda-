@@ -11,8 +11,10 @@ import http from "http";
 import fs from "fs";
 import { promises as fsPromises } from "fs";
 import { create, insert, search, save, load, type Orama } from "@orama/orama";
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, doc, getDocFromServer, setLogLevel, initializeFirestore } from "firebase/firestore";
+import admin from "firebase-admin";
+import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 
 import { AGISovereignBrain } from "./src/server/brain";
 import { IVedaBrain } from "./src/server/types";
@@ -31,11 +33,39 @@ let db: any = null;
 if (fs.existsSync(firebaseConfigPath)) {
   try {
     const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
-    const app = initializeApp(firebaseConfig);
+    const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    
+    // Initialize Admin SDK for server-side operations (bypasses rules)
+    let adminApp;
+    if (admin.apps.length === 0) {
+      try {
+        adminApp = admin.initializeApp();
+        console.log("[VEDA_ADMIN] Admin SDK initialized via Default Credentials.");
+      } catch (e) {
+        console.warn("[VEDA_ADMIN_WARNING] Default initialization failed, using explicit projectId.");
+        adminApp = admin.initializeApp({
+          projectId: firebaseConfig.projectId
+        });
+      }
+    } else {
+      adminApp = admin.app();
+    }
+    
+    let adminDb;
+    const requestedDbId = firebaseConfig.firestoreDatabaseId || "(default)";
+    try {
+      adminDb = (requestedDbId !== '(default)')
+        ? getAdminFirestore(adminApp, requestedDbId)
+        : getAdminFirestore(adminApp);
+      console.log(`[VEDA_ADMIN] Admin SDK linked to database: ${requestedDbId}`);
+    } catch (e) {
+      console.warn(`[VEDA_ADMIN_WARNING] Failed to link to ${requestedDbId}, falling back to (default).`, e);
+      adminDb = getAdminFirestore(adminApp);
+    }
     
     // Silence internal SDK logs early
     setLogLevel('silent');
-
+    
     // Global Log Filter: Suppress benign Firebase SDK internal lifecycle "errors"
     const originalError = console.error;
     const originalWarn = console.warn;
@@ -67,16 +97,37 @@ if (fs.existsSync(firebaseConfigPath)) {
       originalWarn.apply(console, args);
     };
     
-    // Use standard getFirestore with databaseId
-        // The 3rd parameter of initializeFirestore is indeed databaseId, but getFirestore is simpler.
-        const firestoreSettings = process.env.NODE_ENV === "production" ? {} : { experimentalForceLongPolling: true };
-        
-        db = initializeFirestore(app, firestoreSettings, firebaseConfig.firestoreDatabaseId);
+    // Choose standard getFirestore with databaseId
+    const firestoreSettings = process.env.NODE_ENV === "production" ? {} : { experimentalForceLongPolling: true };
+    const dbId = firebaseConfig.firestoreDatabaseId || "(default)";
+    
+    try {
+      // Try initializing with settings
+      db = initializeFirestore(app, firestoreSettings, dbId);
+    } catch (e: any) {
+      // If already initialized (common in dev/HMR), use getFirestore
+      if (e.code === 'failed-precondition' || e.message?.includes('already been called')) {
+        db = getFirestore(app, dbId);
+      } else {
+        throw e;
+      }
+    }
 
-        brain.setDatabase(db);
-        console.log(`[FIREBASE] VEDA Persistent Memory Interface Online. Database: ${firebaseConfig.firestoreDatabaseId || "(default)"}`);
-        
-        // Non-blocking connectivity check with retry
+    brain.setDatabase(db);
+    brain.setAdminDatabase(adminDb);
+    console.log(`[FIREBASE] VEDA Persistent Memory Interface Online. Database: ${firebaseConfig.firestoreDatabaseId || "(default)"}`);
+    
+    // Safety: Global Process Guard
+    process.on('uncaughtException', (err) => {
+      console.error("[CRITICAL_SERVER_ERROR] Uncaught Exception:", err);
+      // We don't exit to prevent dev server crash loop
+    });
+    
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error("[CRITICAL_SERVER_ERROR] Unhandled Rejection at:", promise, "reason:", reason);
+    });
+    
+    // Non-blocking connectivity check with retry
         const verifyConnection = async (retries = 3) => {
           for (let i = 0; i < retries; i++) {
             try {
@@ -134,6 +185,7 @@ async function startServer() {
       next();
     });
 
+    // v-AA Protocol: Unified state handler
     const stateHandler = async (req: express.Request, res: express.Response) => {
       try {
         const stateBuffer = brain.getTelemetryBuffer();
@@ -149,7 +201,6 @@ async function startServer() {
           return res.status(200).json({ status: "RECOVERING", error: "BUFFER_CORRUPTION" });
         }
 
-        // Fast path for reduced bandwidth
         if (req.query.fast === "true") {
            return res.json({
              status: state.status,
@@ -182,7 +233,7 @@ async function startServer() {
 
     // --- Hardened API Endpoints ---
     api.get("/v1/state", stateHandler);
-    api.get("/state", stateHandler); // Alternate path for resilience
+    api.get("/state", stateHandler); 
 
     api.get("/v1/export", (req, res) => {
       try {
@@ -193,20 +244,6 @@ async function startServer() {
       } catch (e) {
         res.status(500).json({ error: "EXPORT_ERROR", message: e instanceof Error ? e.message : String(e) });
       }
-    });
-    
-    // Mount the API router
-    app.use("/api", api);
-    app.get("/healthz", (req, res) => res.send("OK"));
-
-    // v-AA Protocol: Unified catch-all for any /api requests that fell through
-    app.all("/api/*", (req, res) => {
-      console.warn(`[VEDA_API_FALLTHROUGH] ${req.method} ${req.originalUrl}`);
-      res.status(404).json({
-        error: "NOT_FOUND",
-        message: "The requested VEDA endpoint is not registered in the sovereign logic.",
-        path: req.originalUrl
-      });
     });
 
     api.post("/action", async (req, res) => {
@@ -306,7 +343,6 @@ async function startServer() {
               const msgId = params.text.replace("DELETE_MSG:", "");
               result.data = { success: true, deletedId: msgId };
             } else if (params.text?.trim().startsWith("AIzaSy")) {
-              // Auto-detect key in chat
               brain.updateApiKey(params.text.trim());
               result.data = await brain.handleChatMessage("金鑰已更新，正在重新連結外部認識論...", "model");
             } else {
@@ -333,17 +369,43 @@ async function startServer() {
     });
 
     api.get("/health", (req, res) => {
-      res.json({
-        status: "ONLINE",
-        brain_id: brain.getSystemID(),
-        uptime: process.uptime(),
-        memory: process.memoryUsage().rss
-      });
+      try {
+        res.json({
+          status: "ONLINE",
+          brain_id: brain.getSystemID(),
+          uptime: process.uptime(),
+          memory: process.memoryUsage().rss
+        });
+      } catch (e) {
+        res.status(500).json({ error: "HEALTH_QUERY_FAULT" });
+      }
     });
 
     // --- Specific API Paths (Compatibility with vedaService.ts) ---
     api.get("/ping", (req, res) => res.json({ pong: true, time: Date.now() }));
     
+    api.get("/strategic", async (req, res) => {
+      try {
+        console.log(`[VEDA_OS] Serving strategic metrics...`);
+        const report = brain.generateStrategicReport();
+        if (!report) {
+          return res.status(200).json({ 
+            status: "STBY", 
+            message: "EPIMETIC_CRYSTALLIZATION",
+            metrics: { stability: 0.8, coherence: 1.0 }
+          });
+        }
+        res.json(report);
+      } catch (e) {
+        console.error("[VEDA_STRATEGIC_FAULT]", e);
+        res.status(500).json({ 
+          error: "STRATEGIC_REPORT_ERROR", 
+          details: e instanceof Error ? e.message : String(e),
+          fallback: true
+        });
+      }
+    });
+
     api.get("/persistence", async (req, res) => {
       const PERSISTENCE_PATH = path.join(process.cwd(), "veda_persistence.json");
       try {
@@ -376,7 +438,6 @@ async function startServer() {
 
     api.get("/memories", (req, res) => {
       try {
-        // Map brain memories to the expected format
         const memories = brain.getAllMemories();
         res.json(memories);
       } catch (e) {
@@ -438,7 +499,6 @@ async function startServer() {
 
     api.post("/dream", async (req, res) => {
       try {
-        // Run dream cycle in background
         brain.runDreamCycle(wss).catch(e => console.error("Dream failed", e));
         res.json({ status: "DREAMING_STARTED" });
       } catch (e) {
@@ -467,8 +527,6 @@ async function startServer() {
 
     api.post("/v1/nudge", async (req, res) => {
       try {
-        const params = req.body;
-        // Reserved for future implementation
         res.json({ success: true });
       } catch (e) {
         res.status(500).json({ error: "NUDGE_ERROR" });
@@ -487,30 +545,27 @@ async function startServer() {
     api.post("/v1/upgrade", async (req, res) => {
       try {
         const { stat } = req.body;
-        const result = await brain.setSystemTier(stat === 'ARCHITECT' ? 'ARCHITECT' : 'STRATEGIC'); // Example logic
+        const result = await brain.setSystemTier(stat === 'ARCHITECT' ? 'ARCHITECT' : 'STRATEGIC'); 
         res.json({ success: true, ...result });
       } catch (e) {
         res.status(500).json({ error: "UPGRADE_ERROR" });
       }
     });
 
-    // API Internal Fallback - Catch unmatched /api/* requests before they leave the router
-    api.use((req, res) => {
-      console.warn(`[VEDA_API_INTERNAL_404] Unmatched route inside API router: ${req.method} ${req.originalUrl}`);
-      res.status(404).json({ 
-        error: "NOT_FOUND", 
-        message: "The requested VEDA endpoint is not registered in the sovereign logic.",
-        path: req.originalUrl 
-      });
-    });
+    // Mount the API router AFTER all routes are defined.
+    // This ensures Express properly builds the internal route stack.
+    app.use("/api", api);
+    app.get("/healthz", (req, res) => res.send("OK"));
 
-    // App-level API Fallback (if router falls through entirely)
-    app.use("/api", (req, res) => {
-      console.error(`[VEDA_API_DEAD_END] ${req.method} ${req.url}`);
-      res.status(404).json({ 
-        error: "ENDPOINT_UNAVAILABLE", 
-        message: "The requested path entered the API bridge but reached a dead end.",
-        path: req.originalUrl
+    // Unified fallthrough for /api that fell through the router
+    app.all("/api/*", (req, res) => {
+      console.warn(`[VEDA_API_FALLTHROUGH] ${req.method} ${req.originalUrl}`);
+      // Ensure we NEVER send HTML for anything starting with /api/
+      res.status(404).json({
+        error: "NOT_FOUND",
+        message: "The requested VEDA endpoint is not registered in the sovereign logic.",
+        path: req.originalUrl,
+        protocol: "VEDA_OVAL_V3"
       });
     });
 

@@ -1111,6 +1111,11 @@ ${stateContext}
     return res.json();
   },
 
+  async getStrategicMetrics(): Promise<any> {
+    const res = await fetchWithRetry("/api/strategic");
+    return res.json();
+  },
+
   async submitFeedback(memoryId: string, score: number): Promise<any> {
     const res = await fetchWithRetry("/api/feedback", {
       method: "POST",

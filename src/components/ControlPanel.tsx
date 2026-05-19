@@ -818,7 +818,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                   {isAxiomEditMode ? (
                     <div className="space-y-2">
                       {editingAxioms.map((ax, i) => (
-                        <div key={i} className="flex gap-2">
+                        <div key={`edit-ax-${i}`} className="flex gap-2">
                           <input 
                             value={ax}
                             onChange={(e) => {
@@ -851,7 +851,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                     ) : (
                       axioms.map((axiom, idx) => (
                         <motion.div 
-                          key={idx}
+                          key={`axiom-view-${idx}-${axiom.substring(0, 10)}`}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: idx * 0.1 }}
@@ -882,7 +882,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                   <div className="space-y-1.5">
                     {(data?.axioms || ["秩序高於混亂", "相干即是真理"]).map((axiom: string, i: number) => (
                       <motion.div 
-                        key={i}
+                        key={`data-ax-${i}-${axiom.substring(0, 10)}`}
                         initial={{ opacity: 0, x: -5 }}
                         animate={{ opacity: 1, x: 0 }}
                         className="text-[10px] text-orange-200/80 font-mono leading-tight"
@@ -901,7 +901,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                   <div className="space-y-1.5">
                     {(data?.reflections || []).map((thought: string, i: number) => (
                       <motion.div 
-                        key={i}
+                        key={`reflection-${i}-${thought.substring(0, 10)}`}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         className="text-[9px] text-cyan-200/60 italic leading-relaxed"
@@ -1166,7 +1166,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
             </h2>
             <div className="flex-1 overflow-y-auto text-[8px] space-y-1.5 opacity-60 custom-scrollbar font-light text-white ff-text-body">
               {logs.map((log, i) => (
-                <div key={i} className={
+                <div key={`kernel-log-${i}-${log.time}`} className={
                   log.type === EvolutionStatus.SUCCESS ? 'text-cyan-400' : 
                   log.type === EvolutionStatus.CRITICAL_REJECTION ? 'text-red-400 font-bold' : 
                   log.type === EvolutionStatus.ULTIMATE_SANCTION ? 'text-purple-400 font-black animate-pulse' :

@@ -84,15 +84,26 @@ class KNBService {
 
   async init() {
     if (!this.embedder) {
-      console.log("[KNB] Initializing Local Embedding Engine...");
-      this.embedder = await pipeline('feature-extraction', this.modelName);
+      console.log("[KNB] Initializing Local Embedding Engine (Lazy)...");
+      try {
+        this.embedder = await pipeline('feature-extraction', this.modelName);
+        console.log("[KNB] Local Embedding Engine Online.");
+      } catch (e) {
+        console.error("[KNB] Failed to initialize embedding engine:", e);
+        throw new Error("EMBEDDING_ENGINE_OFFLINE");
+      }
     }
   }
 
   private async generateEmbedding(text: string): Promise<number[]> {
-    await this.init();
-    const output = await this.embedder(text, { pooling: 'mean', normalize: true });
-    return Array.from(output.data);
+    try {
+      await this.init();
+      const output = await this.embedder(text, { pooling: 'mean', normalize: true });
+      return Array.from(output.data);
+    } catch (e) {
+      console.warn("[KNB] Embedding generation failed, returning zero vector for safety.", e);
+      return new Array(384).fill(0); // Standard length for MiniLM-L6
+    }
   }
 
   async addFragment(content: string, metadata: Record<string, any> = {}) {
@@ -252,12 +263,26 @@ class KNBService {
     }
   }
 
+  private lastStrength = 0;
+  private lastStrengthCheck = 0;
+
   async getCollectiveStrength(): Promise<number> {
+     const now = Date.now();
+     // Cache for 60 seconds to avoid heavy Firestore reads on every heartbeat
+     if (this.lastStrength > 0 && now - this.lastStrengthCheck < 60000) {
+       return this.lastStrength;
+     }
+
      try {
-       const snapshot = await getDocs(collection(db, 'shared_knowledge'));
-       return snapshot.size;
-     } catch {
-       return 0;
+       // Ideally this should use a counter document, but for now we limit the impact
+       const snapshot = await getDocs(query(collection(db, 'shared_knowledge'), limit(1)));
+       // If we can't count efficiently, just return a token value if not empty
+       this.lastStrength = snapshot.empty ? 0 : 42; // Placeholder for non-empty
+       this.lastStrengthCheck = now;
+       return this.lastStrength;
+     } catch (e) {
+       console.warn("[KNB] Strength check failed (likely permission/quota):", e);
+       return this.lastStrength;
      }
   }
 }

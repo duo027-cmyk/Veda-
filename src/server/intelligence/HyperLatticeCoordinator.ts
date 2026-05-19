@@ -1,13 +1,37 @@
 import { HDCEngine } from "../engines";
+import { BaseSubsystem } from "../Subsystem";
 
-export class HyperLatticeCoordinator {
+export class HyperLatticeCoordinator extends BaseSubsystem {
   private federationNodes: Map<string, { hypervector: Float32Array, coherence: number, lastSync: number }> = new Map();
   private globalAxiomField: Float32Array = new Float32Array(1024).fill(0);
   private hdc: HDCEngine;
   private semanticBridge: Map<string, string[]> = new Map();
 
   constructor(hdc: HDCEngine) {
+    super();
     this.hdc = hdc;
+  }
+
+  public async initialize(): Promise<void> {
+    this.status = 'ONLINE';
+    this.log("READY", "超晶格協調器(HDC)已就緒。");
+  }
+
+  public tick(delta: number, globalState: number[]): void {
+    this.lastUpdate = Date.now();
+  }
+
+  public override getTelemetry() {
+    return {
+      ...super.getTelemetry(),
+      nodeCount: this.federationNodes.size,
+      bridgeComplexity: this.semanticBridge.size,
+      fieldStrength: this.calculateFieldStrength()
+    };
+  }
+
+  private calculateFieldStrength(): number {
+    return Array.from(this.federationNodes.values()).reduce((acc, n) => acc + n.coherence, 0) / (this.federationNodes.size || 1);
   }
 
   public bridgeDomains(domainA: string, domainB: string) {

@@ -30,6 +30,8 @@ function cn(...inputs: ClassValue[]) {
 }
 
 interface Message {
+  id?: string;
+  ts?: number;
   role: 'user' | 'veda';
   text: string;
   imageUrl?: string;
@@ -273,7 +275,7 @@ export const ChatInterface = () => {
           )}
           {messages.map((msg, idx) => (
             <motion.div
-              key={idx}
+              key={msg.id || `${msg.role}-${msg.ts || idx}`}
               className={cn(
                 "flex flex-col gap-2",
                 msg.role === 'user' ? "items-end" : "items-start"

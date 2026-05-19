@@ -280,7 +280,7 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                    </div>
                    <div className="p-4 flex flex-col gap-2">
                       {data?.market_predictions?.map((p, i) => (
-                         <div key={i} className="flex items-center justify-between p-2 bg-white/5 rounded border border-white/5">
+                         <div key={`${i}-${p.scenario}-${p.timestamp}`} className="flex items-center justify-between p-2 bg-white/5 rounded border border-white/5">
                             <div className="flex items-center gap-3">
                                <div className={cn(
                                   "w-1.5 h-1.5 rounded-full",
