@@ -579,6 +579,29 @@ async function startServer() {
       try {
         brain.tick();
         const pulse = brain.getSovereignPulse();
+
+        // High-frequency partial broadcast for UI smoothness
+        if (wss.clients.size > 0) {
+          const stateBuffer = brain.getTelemetryBuffer();
+          if (stateBuffer) {
+            const s = JSON.parse(stateBuffer);
+            broadcast({
+              type: "VEDA_STATE_PARTIAL",
+              data: {
+                global_coherence: s.global_coherence,
+                phi: s.phi,
+                energy: s.energy,
+                tension: s.tension,
+                entropy: s.entropy,
+                status_code: s.status_code,
+                is_bursting: s.is_bursting,
+                is_logic_frozen: s.is_logic_frozen,
+                msg: s.msg
+              }
+            });
+          }
+        }
+
         setTimeout(runTicker, Math.max(100, pulse));
       } catch (e) {
         console.error("[TICK_FAULT]", e);
@@ -632,13 +655,37 @@ async function startServer() {
     }
 
     // --- WebSocket Handlers ---
+    const broadcast = (data: any) => {
+      const payload = JSON.stringify(data);
+      wss.clients.forEach(c => {
+        if (c.readyState === WebSocket.OPEN) {
+          c.send(payload);
+        }
+      });
+    };
+
     wss.on("connection", (ws) => {
+      console.log(`[VEDA_SOCKET] New logic link established. Active clients: ${wss.clients.size}`);
+      
+      // Initial state push
+      const stateBuffer = brain.getTelemetryBuffer();
+      if (stateBuffer) {
+        ws.send(JSON.stringify({ type: "VEDA_STATE_FULL", data: JSON.parse(stateBuffer) }));
+      }
+
       ws.on("message", (msg) => {
         try {
           const data = JSON.parse(msg.toString());
           if (data.type === "RESONANCE_PULSE") brain.triggerResonance(data.intensity || 0.1);
           if (data.type === "UPDATE_AXIOMS") brain.updateAxioms({ axioms: data.axioms });
-        } catch (e) {}
+          if (data.type === "PING") ws.send(JSON.stringify({ type: "PONG", ts: Date.now() }));
+        } catch (e) {
+          console.error("[VEDA_SOCKET_ERR] Message parse fault:", e);
+        }
+      });
+
+      ws.on("close", () => {
+        console.log(`[VEDA_SOCKET] Logic link severed.`);
       });
     });
 

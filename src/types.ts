@@ -132,50 +132,7 @@ export interface LatticeJob {
   timestamp: number;
 }
 
-export interface BrainData {
-  lattice_jobs?: any[];
-  lattice_results?: any[];
-  epistemic_state?: {
-    credibility: number;
-    pollution_level: number;
-    last_verification_ts: number;
-  };
-  causal_lattice?: {
-    nodes: Array<{ id: string; label: string; weight: number; layer: string }>;
-    edges: Array<{ source: string; target: string; strength: number }>;
-  };
-  strategic_simulations?: Array<{
-    id: string;
-    scenario: string;
-    paths: Array<{ id: string; outcome: string; probability: number; risk: number }>;
-    best_path_id: string;
-    entropy: number;
-  }>;
-  reality_feedback?: Array<{
-    id: string;
-    inputId: string;
-    predictedOutcome: string;
-    actualOutcome: string;
-    bias: number;
-    backprop_status: 'STABLE' | 'COLLAPSED' | 'REPAIRED';
-  }>;
-  status: string;
-  status_code: EvolutionStatus;
-  rejection_count: number;
-  pain: number;
-  msg: string;
-  vectors: number[];
-  labels: string[];
-  history: number[];
-  coherence_history?: number[];
-  version: string;
-  is_unique_architect?: boolean;
-  strategic_rank?: string;
-  sovereign_confidence?: number;
-  reasoning_mode?: 'LOCAL' | 'HYBRID' | 'EXTERNAL';
-  network?: number[][]; // Renamed from lattice
-  layers: NetworkLayer[];
-  crystal?: CrystalStatus;
+export interface BrainMetrics {
   global_coherence: number;
   sovereign_coherence?: number;
   phi?: number;
@@ -185,83 +142,66 @@ export interface BrainData {
   bias?: number;
   free_energy?: number;
   resonance?: number;
-  shadow_count?: number;
-  active_attention?: string;
-  hybrid_mode?: 'WARRIOR' | 'ARCHITECT';
-  quantum_waveform?: number[];
-  manifold_points?: { id: string; x: number; y: number; z: number; label: string; type: string }[];
-  trend?: number;
-  trend_state?: string;
-  axioms?: string[];
-  reflections?: string[];
-  memories?: MemoryFragment[];
+  collectiveStrength?: number;
+  pain?: number;
+  tension_index?: number;
+  confidence_score?: number;
+  variational_free_energy?: number;
+  omega_integrity?: number;
+}
+
+export interface BrainStatus {
+  status: string;
+  status_code: EvolutionStatus;
+  rejection_count: number;
+  msg: string;
+  version: string;
+  system_tier?: 'STANDARD' | 'COMMERCIAL' | 'INDUSTRIAL' | 'STRATEGIC' | 'ARCHITECT';
   isFocusMode?: boolean;
   isLocked?: boolean;
   isDreaming?: boolean;
   is_bursting?: boolean;
   is_user_burst?: boolean;
+  is_logic_frozen?: boolean;
   is_steady_state?: boolean;
-  is_support_authorized?: boolean;
-  language_manifold?: 'AUTO' | 'ZH_TW' | 'EN' | 'JP' | 'VI' | 'KO';
-  commercial_metrics?: {
-    marketResonance: number;
-    operationalUptime: number;
-    riskThreshold: number;
-    serviceTier: string;
-  };
-  market_predictions?: Array<{
-    timestamp: number;
-    scenario: string;
-    confidence: number;
-    predicted_resonance: number;
-  }>;
-  is_causal_isolated?: boolean;
-  active_tenants?: string[];
-  current_tenant?: string;
-  system_tier?: 'STANDARD' | 'COMMERCIAL' | 'INDUSTRIAL' | 'STRATEGIC' | 'ARCHITECT';
-  tier_capabilities?: {
-    processing_power: number;
-    causal_depth: number;
-    market_foresight: number;
-    security_clearance: number;
-  };
+}
+
+export interface BrainData extends BrainMetrics, BrainStatus {
+  // Vectors and History
+  vectors: number[];
+  labels: string[];
+  history: number[];
+  coherence_history?: number[];
+  quantum_waveform?: number[];
+
+  // Infrastructure
+  network?: number[][];
+  layers: NetworkLayer[];
+  crystal?: CrystalStatus;
+  manifold_points?: { id: string; x: number; y: number; z: number; label: string; type: string }[];
+  
+  // Data Assets
+  axioms?: string[];
+  reflections?: string[];
+  memories?: MemoryFragment[];
+  reminders?: Reminder[];
+  
+  // Complex Subsystems
+  lattice_jobs?: any[];
+  lattice_results?: any[];
+  strategic_simulations?: any[];
+  long_video_projects?: LongVideoProject[];
+  strategic_reports?: StrategicReport[];
+  
+  // Intelligence & Modeling
+  system_world_model?: WorldModel;
   distilled_chat_context?: {
     version: string;
     chainDepth: number;
-    parentHash?: string;
     summary: string;
   };
-  system_world_model?: WorldModel;
-  long_video_projects?: LongVideoProject[];
-  strategic_reports?: StrategicReport[];
-  research_chronicles?: any[];
-  baseline?: {
-    version: string;
-    axioms: string[];
-    anchors: any[];
-    status: string;
-  } | null;
-  burst_progress?: number;
-  burst_phase?: string;
-  is_logic_frozen?: boolean;
-  v9_status?: string;
-  logs?: any[];
-  settings?: any;
-  active_layer?: string;
-  collectiveStrength?: number;
-  effective_node_count?: number;
-  lattice_scale?: number;
-  omega_integrity?: number;
-  fractal_depth?: number;
-  throughput?: number;
-  causal_congruence?: number;
-  reminders?: Reminder[];
-  systemID?: string;
-  evolution_points?: number;
-  governanceRules?: GovernanceRule[];
-  negative_energy?: number;
-  guardian_mode?: boolean;
-  lattice_integrity?: number;
+  
+  // Environment
   weather?: {
     temp: number;
     condition: string;
@@ -274,73 +214,8 @@ export interface BrainData {
     rotation: { x: number; y: number; z: number };
     imu: { accel: number; gyro: number };
   };
-  is_solomon_active?: boolean;
-  is_nanosecond_sync?: boolean;
-  is_zpdp_active?: boolean;
-  matrix_latency?: number;
-  causal_anchor?: number;
-  matrix_stability?: number;
-  vfe?: number;
-  energy_level?: number;
-  holographic_coherence?: number;
-  causal_nexus?: any; // Global nexus map
-  proactive_goal?: string;
-  autonomy_degree?: number;
-  prediction_error?: number;
-  ops_per_tick?: number;
-  is_planck_active?: boolean;
-  coherence_threshold?: number;
-  last_sovereign_action?: string;
-  vault_active?: boolean;
-  sovereign_index?: number;
-  active_governance?: string[];
-  state_hash?: string;
-  hallucination_index?: number;
-  alignment_integrity?: number;
-  audit_status?: string;
-  evolution_logs?: string[];
-  tension_index?: number;
-  confidence_score?: number;
-  simulation?: {
-    actors: {
-      name: string;
-      decision: 'ESCALATE' | 'RESPOND_LIMITED' | 'HOLD';
-      risk_level: number;
-      utility_score?: number;
-    }[];
-    constraints: {
-      score: number;
-      issues: string[];
-    };
-    event: {
-      name: string;
-      intensity: number;
-    };
-  };
-  stability?: number;
-  variational_free_energy?: number;
-  pipeline?: {
-    generator_output: number;
-    scenario_depth: number;
-    constraint_load: number;
-    actor_coherence: number;
-    trigger_fidelity: number;
-  };
-  failure_analysis?: {
-    logic_drift: number;
-    data_gap: number;
-    norm_deviation: number;
-  };
-  jepa?: {
-    avgEnergy: number;
-    currentEnergy: number;
-    latentState: number[];
-  };
-  foraging_status?: {
-    curiosityLevel: number;
-    recentLogs: string[];
-    surpriseAverages: number;
-  };
+
+  // Misc
   innovation_manifold?: {
     innovationIndex: number;
     experienceSum: number;
@@ -348,37 +223,7 @@ export interface BrainData {
     alignmentIndex: number;
     uncertaintyVariance?: number;
     protocol: string;
-    throughput_teraops?: number;
-    latency_ns?: number;
   };
-  federation?: any[];
-  cortex_array?: any[];
-  federation_multiplier?: number;
-  safety_alerts?: SafetyAlert[];
-  chat_history?: any[];
-  cognitive_identity?: {
-    resonance_score: number;
-    behavioral_baseline_match: boolean;
-    identity_status: 'VERIFIED_ARCHITECT' | 'ANOMALOUS_ACCESS' | 'STANDARD_USER';
-  };
-  visual_stream?: Array<{
-    type: 'IMAGE' | 'VIDEO' | 'AUDIO';
-    url: string;
-    prompt: string;
-    timestamp: number;
-  }>;
-  spatial_manifold?: {
-    nodes: number;
-    edges: number;
-    ego_center: number[];
-    descriptor: string;
-  };
-  subsystems?: Record<string, {
-    status: 'ONLINE' | 'STANDBY' | 'DEGRADED' | 'FAULT';
-    coherence: number;
-    lastUpdate: number;
-    [key: string]: any;
-  }>;
   burst_status?: {
     active: boolean;
     isApproved: boolean;
@@ -388,6 +233,7 @@ export interface BrainData {
     entropy: number;
     runtime: number;
   };
+  [key: string]: any; // Keep any as fallback for legacy fields during transition
 }
 
 declare global {

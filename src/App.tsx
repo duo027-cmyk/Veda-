@@ -34,6 +34,10 @@ import { useAuthStore } from './store/authStore';
 import { useVedaStore } from './store/vedaStore';
 import { useUIStore } from './store/uiStore';
 
+import { SovereignInitialization } from './components/SovereignInitialization';
+import { BurstMonitor } from './components/BurstMonitor';
+import { SovereignCircuitBreaker } from './components/SovereignCircuitBreaker';
+
 // --- Utils ---
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -121,11 +125,27 @@ export default function App() {
 
   // --- Sovereign State Synchronization ---
   useEffect(() => {
+    // 1. Initial State Retrieval
     fetchVedaData();
-    // Increase heartbeat interval for stability on mobile
-    const sub = setInterval(fetchVedaData, 20000); 
+
+    // 2. Establish Real-time Logic Link (WebSocket)
+    vedaService.setupWebSocket((realtimeData) => {
+      setUserData((prev: any) => {
+        // Deep merge logic for partial updates
+        if (!prev) return realtimeData;
+        return { 
+          ...prev, 
+          ...realtimeData,
+          // Special handling for nested objects if needed
+          burst_status: realtimeData.burst_status ? { ...prev.burst_status, ...realtimeData.burst_status } : prev.burst_status
+        };
+      });
+    });
+
+    // 3. Fallback Heartbeat (Reduced frequency to 60s as WebSocket now handles real-time)
+    const sub = setInterval(fetchVedaData, 60000); 
     return () => clearInterval(sub);
-  }, [fetchVedaData]);
+  }, [fetchVedaData, setUserData]);
 
   // --- Proactive Lifecycle Engine ---
   const userDataRef = useRef(userData);
@@ -221,116 +241,16 @@ export default function App() {
       <NavRail />
       <Header />
 
-      {!userData && !apiError && (
-        <div className="fixed inset-0 z-[200] bg-bg flex flex-col items-center justify-center gap-12">
-           <VedaCrystalLogo size={100} className="animate-pulse" />
-           <div className="text-center space-y-4">
-              <h2 className="text-[12px] tracking-[0.8em] uppercase text-white/40">Initializing Sovereign Core</h2>
-              <div className="flex gap-2 justify-center">
-                 {[0, 1, 2].map(i => (
-                    <motion.div 
-                      key={i}
-                      animate={{ opacity: [0, 1, 0] }}
-                      transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.4 }}
-                      className="w-1.5 h-1.5 bg-accent rounded-full"
-                    />
-                 ))}
-              </div>
-           </div>
-        </div>
-      )}
+      {!userData && !apiError && <SovereignInitialization />}
 
       {/* Global Overload Filter for Sovereign Burst */}
-      {userData?.is_bursting && showBurstMonitor && (
-        <>
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: [0, 0.08, 0.03, 0.12, 0.05] }}
-            transition={{ duration: 0.15, repeat: Infinity }}
-            className="fixed inset-0 pointer-events-none z-[999] bg-orange-600/10 mix-blend-overlay"
-          />
-          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-md px-6">
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: -20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              className="ff-panel border-orange-500/40 p-4 md:p-6 bg-black/80 backdrop-blur-2xl shadow-2xl overflow-hidden"
-            >
-              <div className="flex justify-between items-center mb-6">
-                 <div>
-                    <h3 className="text-[10px] md:text-xs font-bold tracking-[0.4em] text-orange-500 uppercase ff-font">{t.burst_monitor}</h3>
-                    <p className="text-[7px] text-white/30 uppercase tracking-[0.2em] ff-font mt-1">{t.peak_power}</p>
-                 </div>
-                 <div className="flex items-center gap-3">
-                    <div className="animate-pulse bg-orange-500/20 px-3 py-1 border border-orange-500/40 hidden sm:block">
-                       <span className="text-[8px] text-orange-500 font-bold ff-font">ACTIVE</span>
-                    </div>
-                    <button 
-                      onClick={() => setShowBurstMonitor(false)}
-                      className="p-1 hover:bg-white/10 text-white/40 hover:text-white transition-all"
-                    >
-                      <X size={16} />
-                    </button>
-                 </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-6 mb-6">
-                 <div>
-                    <label className="text-[7px] text-white/20 tracking-widest uppercase ff-font block mb-1">Target</label>
-                    <div className="text-[10px] md:text-sm text-white font-mono truncate ff-font">{userData.burst_status?.target}</div>
-                 </div>
-                 <div className="text-right">
-                    <label className="text-[7px] text-white/20 tracking-widest uppercase ff-font block mb-1">Peak Power Output</label>
-                    <div className="text-lg md:text-xl text-orange-400 font-display ff-font">{(userData.burst_status?.peakPower || 0).toFixed(2)} <span className="text-[10px] opacity-40 italic">MW</span></div>
-                 </div>
-              </div>
-
-              <div className="space-y-2 mb-6">
-                 <div className="flex justify-between items-center text-[7px] text-white/40 uppercase tracking-widest ff-font">
-                    <span>{t.causal_entropy}</span>
-                    <span className={cn(
-                      userData.burst_status?.entropy > 2.0 ? "text-red-500" : "text-orange-400"
-                    )}>{((userData.burst_status?.entropy || 0) * 100).toFixed(1)}%</span>
-                 </div>
-                 <div className="h-1 bg-white/5 w-full overflow-hidden">
-                    <motion.div 
-                      className="h-full bg-orange-500 shadow-[0_0_12px_rgba(249,115,22,0.8)]"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.min(100, (userData.burst_status?.entropy / 2.5) * 100)}%` }}
-                      transition={{ type: 'spring', damping: 20 }}
-                    />
-                 </div>
-              </div>
-              
-              <div className="flex gap-2">
-                 {!userData.is_user_burst && (
-                   <button 
-                     onClick={() => handleAction('approveBurst')}
-                     className="flex-1 py-2 bg-orange-500 text-black text-[9px] font-bold ff-font hover:bg-white transition-all uppercase tracking-widest"
-                   >
-                     {t.approve_label}
-                   </button>
-                 )}
-                 <button 
-                    onClick={() => setShowBurstMonitor(false)}
-                    className="flex-1 py-2 bg-white/10 text-white/60 text-[9px] ff-font hover:bg-white/20 transition-all uppercase tracking-widest"
-                  >
-                    {t.hide_label}
-                  </button>
-                  <button 
-                    onClick={() => handleAction('deactivateBurst', { reason: 'MANUAL' })}
-                    className="flex-1 py-2 bg-red-900/40 border border-red-500/20 text-red-100 text-[9px] ff-font hover:bg-red-600 transition-all uppercase tracking-widest"
-                  >
-                    {t.shutdown_label}
-                  </button>
-               </div>
-              
-              {/* Formula Decorative Overlay */}
-              <div className="absolute -right-4 -bottom-4 opacity-[0.03] text-[40px] pointer-events-none ff-font font-bold">
-                 P = E / τ
-              </div>
-            </motion.div>
-          </div>
-        </>
+      {userData && (
+        <BurstMonitor 
+          userData={userData} 
+          showBurstMonitor={showBurstMonitor} 
+          setShowBurstMonitor={setShowBurstMonitor} 
+          handleAction={handleAction} 
+        />
       )}
 
       {/* Logic Pulse Overlay */}
@@ -363,74 +283,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Causal Circuit Breaker (API Error Overlay) - Now scoped to main area */}
-      <div className="pl-0 md:pl-24 h-screen w-full fixed inset-0 pointer-events-none z-[500]">
-       <AnimatePresence>
-         {apiError && !apiError.toLowerCase().includes('permission-denied') && (
-           <motion.div 
-             initial={{ opacity: 0 }}
-             animate={{ opacity: 1 }}
-             exit={{ opacity: 0 }}
-             className="w-full h-full bg-black/80 backdrop-blur-xl flex items-center justify-center p-4 md:p-12 pointer-events-auto"
-           >
-             <div className="max-w-xl w-full p-8 md:p-12 ghibli-glass border border-red-500/30 flex flex-col gap-8 relative overflow-hidden group">
-               {/* Glitch Background Effect */}
-               <div className="absolute inset-0 bg-red-500/5 opacity-20 pointer-events-none" />
-               <motion.div 
-                 animate={{ 
-                   opacity: [0.1, 0.3, 0.1],
-                   x: [0, 10, -10, 0]
-                 }}
-                 transition={{ repeat: Infinity, duration: 4 }}
-                 className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-paper.png')] opacity-10" 
-               />
-               
-               <div className="flex items-center gap-4 text-red-400 relative z-10">
-                  <ShieldAlert size={32} className="animate-pulse" />
-                  <div className="flex flex-col">
-                     <h2 className="text-xl md:text-2xl font-display tracking-[0.2em] uppercase">{(t.circuit_breaker_active || "CIRCUIT_BREAKER_ACTIVE").split('(')[0]?.trim()}</h2>
-                     <span className="text-[8px] font-mono opacity-60 tracking-[0.4em] uppercase">{t.epistemic_discontinuity}</span>
-                  </div>
-               </div>
-
-               <div className="flex flex-col gap-4 relative z-10">
-                  <p className="text-xs md:text-sm text-white/70 leading-relaxed font-serif italic border-l border-red-500/20 pl-4 py-2">
-                     {(t.breaker_desc || "").split('.')[0]}. {t.detected_anomaly}:
-                     <br/>
-                     <span className="text-red-300/80 not-italic font-mono text-[10px] block mt-2 bg-red-500/10 p-2 rounded">
-                        {apiError}
-                     </span>
-                  </p>
-                  <p className="text-[10px] text-white/30 leading-relaxed font-mono uppercase tracking-wider">
-                     {t.breaker_reason}
-                  </p>
-               </div>
-
-               <div className="flex flex-col md:flex-row gap-4 relative z-10">
-                  <button 
-                    onClick={() => window.location.reload()}
-                    className="flex-1 py-4 bg-red-500/20 hover:bg-red-500/40 border border-red-500/40 text-red-100 text-[10px] font-mono font-bold tracking-[0.3em] uppercase transition-all flex items-center justify-center gap-3"
-                  >
-                     <RefreshCw size={14} className="animate-spin-slow" />
-                     {t.hard_reset_label}
-                  </button>
-                  <button 
-                    onClick={() => setApiError(null)}
-                    className="px-6 py-4 border border-white/10 hover:border-white/30 text-white/40 hover:text-white/80 text-[10px] font-mono uppercase transition-all"
-                  >
-                     {t.suppress_alert}
-                  </button>
-               </div>
-               
-               <div className="flex justify-between items-center text-[7px] font-mono text-white/10 mt-4 border-t border-white/5 pt-4">
-                  <span>VENDOR_LINK: DEGRADED</span>
-                  <span>VEDA_AA_PROTOCOL: ACTIVE</span>
-               </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      </div>
+      <SovereignCircuitBreaker apiError={apiError} setApiError={setApiError} />
 
       <main className="pl-0 md:pl-24 h-screen relative z-30 transition-all duration-500">
         <AnimatePresence mode="wait">

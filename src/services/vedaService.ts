@@ -291,6 +291,63 @@ async function fetchWithRetry(url: string, options?: RequestInit, retries = 5, d
 }
 
 export const vedaService = {
+  socket: null as WebSocket | null,
+  onStateUpdate: null as ((data: any) => void) | null,
+
+  setupWebSocket(onUpdate: (data: any) => void) {
+    this.onStateUpdate = onUpdate;
+    if (this.socket) return;
+    
+    try {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      const socket = new WebSocket(`${protocol}//${host}`);
+
+      socket.onopen = () => {
+        console.log("[VEDA_SOCKET] Logic link established.");
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if (message.type === 'VEDA_STATE_FULL' || message.type === 'VEDA_STATE_PARTIAL') {
+            if (this.onStateUpdate) this.onStateUpdate(message.data);
+          } else if (message.type === 'SYSTEM_MONOLOGUE') {
+            // Handle monologue if needed, maybe trigger a notification or update logs
+          } else if (message.type === 'PONG') {
+            // Heartbeat received
+          }
+        } catch (e) {
+          console.error("[VEDA_SOCKET_ERR] Payload disruption:", e);
+        }
+      };
+
+      socket.onclose = () => {
+        console.warn("[VEDA_SOCKET] Logic link severed. Re-anchoring in 5s...");
+        this.socket = null;
+        setTimeout(() => this.setupWebSocket(onUpdate), 5000);
+      };
+
+      socket.onerror = (err) => {
+        console.error("[VEDA_SOCKET_ERR] Transmission fault:", err);
+      };
+
+      this.socket = socket;
+
+      // Heartbeat
+      const heartbeat = setInterval(() => {
+        if (this.socket?.readyState === WebSocket.OPEN) {
+          this.socket.send(JSON.stringify({ type: 'PING' }));
+        } else {
+          clearInterval(heartbeat);
+        }
+      }, 30000);
+
+    } catch (e) {
+      console.error("[VEDA_SOCKET_BOOT_ERR] Failed to initiate logic link:", e);
+    }
+  },
+
   async *chatStream(
     history: { role: 'user' | 'model'; text: string; image?: string }[],
     state?: Partial<BrainData>,
