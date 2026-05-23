@@ -126,7 +126,7 @@ export const AmanoMasterpiece: React.FC<AmanoMasterpieceProps> = ({ data, memori
           <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-12">
             {memories.slice(0, 3).map((mem, i) => (
               <motion.div 
-                key={i}
+                key={`mem-${mem.id || i}`}
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.2 }}

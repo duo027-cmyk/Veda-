@@ -1,5 +1,14 @@
 // server.ts
 import "dotenv/config";
+
+// --- API Key Diagnostics ---
+const keyFound = !!(process.env.GEMINI_API_KEY || process.env.API_KEY);
+console.log(`[BOOT] GEMINI_API_KEY found: ${keyFound}`);
+if (keyFound) {
+  const k = (process.env.GEMINI_API_KEY || process.env.API_KEY || "");
+  console.log(`[BOOT] Key Check: ${k.substring(0, 4)}...${k.substring(k.length - 4)}`);
+}
+
 import express from "express";
 import cors from "cors";
 import { createServer as createViteServer } from "vite";
@@ -18,6 +27,7 @@ import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 
 import { AGISovereignBrain } from "./src/server/brain";
 import { IVedaBrain } from "./src/server/types";
+import { GoogleGenAI } from "@google/genai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -161,18 +171,57 @@ console.log("VEDA SERVER BOOTING...");
 
 async function startServer() {
   try {
+    console.log("[BOOT] VEDA_SERVER: Initializing infrastructure...");
     const app = express();
     const PORT = 3000;
     const server = http.createServer(app);
     const wss = new WebSocketServer({ server });
 
-    app.use(cors());
-    app.use(express.json({ limit: "20mb" }));
+    app.use(cors({
+      origin: (origin, callback) => callback(null, true), // Fully permissive for debug
+      credentials: true
+    }));
+    app.use(express.json({ limit: "50mb" }));
+
+    // Standard health check handler declared early for highest priority binding
+    const healthHandler = (req: express.Request, res: express.Response) => {
+      console.log(`[NET_TRACE] Service health check received.`);
+      res.json({
+        status: "ONLINE",
+        brain_id: brain.getSystemID(),
+        uptime: process.uptime(),
+        server_ts: Date.now(),
+        version: "v10.4-hardened"
+      });
+    };
+
+    // IMMEDIATE Debug Heartbeat & Health Check (Highest Priority block to bypass routing / Vite fallback)
+    app.get("/_veda_pulse", (req, res) => res.send("SOVEREIGN_PULSE_OK"));
+    app.get("/api/health", healthHandler);
+
+    // Global Logger (Balanced)
+    app.use((req, res, next) => {
+      const urlPath = req.url.split('?')[0];
+      const isStatic = urlPath.startsWith('/src/') || 
+                       urlPath.startsWith('/assets/') || 
+                       urlPath.startsWith('/@') || 
+                       urlPath.startsWith('/node_modules/') ||
+                       /\.(tsx?|jsx?|css|svg|png|jpg|jpeg|webp|gif|woff2?|ttf|json|ico)$/.test(urlPath);
+                       
+      if (!isStatic) {
+        const start = Date.now();
+        res.on('finish', () => {
+          const duration = Date.now() - start;
+          console.log(`[NET_TRACE] ${req.method} ${req.url} -> ${res.statusCode} (${duration}ms)`);
+        });
+      }
+      next();
+    });
 
     // --- API Router Definition ---
     const api = express.Router();
 
-    // v-AA Protocol: Middleware for router-level logging
+    // v-AA Protocol: Middleware for router-level logging (mounted FIRST)
     api.use((req, res, next) => {
       const start = Date.now();
       console.log(`[VEDA_ROUTER] ${req.method} ${req.path}`);
@@ -185,9 +234,71 @@ async function startServer() {
       next();
     });
 
+    api.get("/health", healthHandler);
+
+    // Secure Text-to-Speech proxy endpoint using gemini-3.1-flash-tts-preview
+    api.post("/speech/tts", async (req, res) => {
+      try {
+        const { text } = req.body;
+        if (!text || !text.trim()) {
+          return res.status(400).json({ error: "Text has zero length" });
+        }
+
+        const rawKey = (process.env.GEMINI_API_KEY || process.env.API_KEY || "").trim();
+        const isValid = rawKey && 
+                        rawKey.length > 10 && 
+                        rawKey !== "GEMINI_API_KEY" && 
+                        rawKey !== "DISABLED_KEY" && 
+                        rawKey !== "undefined" && 
+                        rawKey !== "null";
+
+        if (!isValid) {
+          console.warn("[VEDA_TTS] API key invalid or missing on server. Directing client to fallback speaker.");
+          return res.status(400).json({ error: "SERVER_API_KEY_INVALID" });
+        }
+
+        const tempAi = new GoogleGenAI({
+          apiKey: rawKey,
+          httpOptions: {
+            headers: {
+              'User-Agent': 'aistudio-build',
+            }
+          }
+        });
+
+        const result = await tempAi.models.generateContent({
+          model: "gemini-3.1-flash-tts-preview",
+          contents: [{ parts: [{ text: `Say: ${text}` }] }],
+          config: {
+            responseModalities: ["AUDIO"],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: 'Kore' },
+              },
+            },
+          },
+        });
+
+        const base64Audio = result.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (base64Audio) {
+          return res.json({ success: true, audio: base64Audio });
+        } else {
+          return res.status(500).json({ error: "Empty model inlineData waveform buffer payload" });
+        }
+      } catch (err: any) {
+        console.error("[VEDA_TTS_ERROR] Server speech proxy exception caught:", err);
+        return res.status(500).json({ error: err.message || "Synthesis session crash" });
+      }
+    });
+
+    // Mount API
+    app.use("/api", api);
+    app.get("/healthz", (req, res) => res.send("OK"));
+
     // v-AA Protocol: Unified state handler
     const stateHandler = async (req: express.Request, res: express.Response) => {
       try {
+        console.log(`[VEDA_STATE_REQUEST] ${req.query.fast === 'true' ? 'FAST' : 'FULL'}`);
         const stateBuffer = brain.getTelemetryBuffer();
         if (!stateBuffer || stateBuffer === "null") {
           return res.status(200).json({ status: "INIT", message: "EPIMETIC_ENGINE_CALIBRATING" });
@@ -234,6 +345,8 @@ async function startServer() {
     // --- Hardened API Endpoints ---
     api.get("/v1/state", stateHandler);
     api.get("/state", stateHandler); 
+    app.get("/api/v1/state", stateHandler); // Hardened fallback
+    app.get("/api/state", stateHandler);    // Hardened fallback
 
     api.get("/v1/export", (req, res) => {
       try {
@@ -339,14 +452,17 @@ async function startServer() {
             result.data = await brain.batchSynthesizeReport(params.reportId);
             break;
           case "handleChatMessage":
-            if (params.text?.startsWith("DELETE_MSG:")) {
-              const msgId = params.text.replace("DELETE_MSG:", "");
+            const chatText = String(params.text || "");
+            const chatRole = params.role || 'user';
+            
+            if (chatText.startsWith("DELETE_MSG:")) {
+              const msgId = chatText.replace("DELETE_MSG:", "");
               result.data = { success: true, deletedId: msgId };
-            } else if (params.text?.trim().startsWith("AIzaSy")) {
-              brain.updateApiKey(params.text.trim());
+            } else if (chatText.trim().startsWith("AIzaSy")) {
+              brain.updateApiKey(chatText.trim());
               result.data = await brain.handleChatMessage("金鑰已更新，正在重新連結外部認識論...", "model");
             } else {
-              result.data = await brain.handleChatMessage(params.text, params.role);
+              result.data = await brain.handleChatMessage(chatText, chatRole);
             }
             break;
           case "clearChatHistory":
@@ -365,19 +481,6 @@ async function startServer() {
       } catch (e) {
         console.error(`[API_FAULT] Action ${req.body?.action} failed:`, e);
         res.status(500).json({ error: "EXECUTION_ERROR", message: e instanceof Error ? e.message : String(e) });
-      }
-    });
-
-    api.get("/health", (req, res) => {
-      try {
-        res.json({
-          status: "ONLINE",
-          brain_id: brain.getSystemID(),
-          uptime: process.uptime(),
-          memory: process.memoryUsage().rss
-        });
-      } catch (e) {
-        res.status(500).json({ error: "HEALTH_QUERY_FAULT" });
       }
     });
 
@@ -404,6 +507,30 @@ async function startServer() {
           fallback: true
         });
       }
+    });
+
+    api.post("/recall", (req, res) => {
+      try {
+        const { query } = req.body;
+        const memories = brain.getCausalRecall(query || "");
+        res.json(memories);
+      } catch (e) {
+        res.status(500).json({ error: "RECALL_ERROR" });
+      }
+    });
+
+    api.post("/reset-chat", async (req, res) => {
+      try {
+        await brain.resetChatHistory();
+        res.json({ status: "SUCCESS" });
+      } catch (e) {
+        res.status(500).json({ error: "RESET_ERROR" });
+      }
+    });
+    // Direct fallback for strategic
+    app.get("/api/strategic", async (req, res) => {
+      const report = brain.generateStrategicReport();
+      res.json(report || { status: "STBY" });
     });
 
     api.get("/persistence", async (req, res) => {
@@ -552,94 +679,82 @@ async function startServer() {
       }
     });
 
-    // Mount the API router AFTER all routes are defined.
-    // This ensures Express properly builds the internal route stack.
-    app.use("/api", api);
-    app.get("/healthz", (req, res) => res.send("OK"));
-
-    // Unified fallthrough for /api that fell through the router
-    app.all("/api/*", (req, res) => {
-      console.warn(`[VEDA_API_FALLTHROUGH] ${req.method} ${req.originalUrl}`);
-      // Ensure we NEVER send HTML for anything starting with /api/
-      res.status(404).json({
-        error: "NOT_FOUND",
-        message: "The requested VEDA endpoint is not registered in the sovereign logic.",
-        path: req.originalUrl,
-        protocol: "VEDA_OVAL_V3"
-      });
+    api.all("/*", (req, res) => {
+      res.status(404).json({ error: "NOT_FOUND", path: req.originalUrl });
     });
 
-    console.log("[VEDA] Waiting for Sovereign Brain readiness...");
-    await brain.isReady();
-    console.log("[VEDA] Sovereign Brain synchronized. Starting tickers.");
+    console.log("[VEDA] Waiting for Sovereign Brain synchronization (non-blocking server)...");
+    brain.isReady().then(() => {
+      console.log("[VEDA] Sovereign Brain synchronized. Starting background tickers.");
+      
+      // --- Background Operations ---
+      const runTicker = () => {
+        try {
+          brain.tick();
+          const pulse = brain.getSovereignPulse();
 
-    // --- Background Operations ---
-    
-    const runTicker = () => {
-      try {
-        brain.tick();
-        const pulse = brain.getSovereignPulse();
-
-        // High-frequency partial broadcast for UI smoothness
-        if (wss.clients.size > 0) {
-          const stateBuffer = brain.getTelemetryBuffer();
-          if (stateBuffer) {
-            const s = JSON.parse(stateBuffer);
-            broadcast({
-              type: "VEDA_STATE_PARTIAL",
-              data: {
-                global_coherence: s.global_coherence,
-                phi: s.phi,
-                energy: s.energy,
-                tension: s.tension,
-                entropy: s.entropy,
-                status_code: s.status_code,
-                is_bursting: s.is_bursting,
-                is_logic_frozen: s.is_logic_frozen,
-                msg: s.msg
-              }
-            });
+          if (wss.clients.size > 0) {
+            const stateBuffer = brain.getTelemetryBuffer();
+            if (stateBuffer) {
+              const s = JSON.parse(stateBuffer);
+              broadcast({
+                type: "VEDA_STATE_PARTIAL",
+                data: {
+                  global_coherence: s.global_coherence,
+                  phi: s.phi,
+                  energy: s.energy,
+                  energy_level: s.energy_level,
+                  tension: s.tension,
+                  entropy: s.entropy,
+                  status_code: s.status_code,
+                  is_bursting: s.is_bursting,
+                  is_logic_frozen: s.is_logic_frozen,
+                  msg: s.msg
+                }
+              });
+            }
           }
+          setTimeout(runTicker, Math.max(100, pulse));
+        } catch (e) {
+          console.error("[TICK_FAULT]", e);
+          setTimeout(runTicker, 1000);
         }
+      };
+      runTicker();
 
-        setTimeout(runTicker, Math.max(100, pulse));
-      } catch (e) {
-        console.error("[TICK_FAULT]", e);
-        setTimeout(runTicker, 1000);
-      }
-    };
-    runTicker();
-
-    const runTelemetrySync = async () => {
-      try {
-        await brain.syncTelemetryCache();
-      } catch (e) {
-        console.error("[TELEMETRY_SYNC_FAULT]", e);
-      }
-      setTimeout(runTelemetrySync, 10000); // V-AA Protocol: Increased to 10s to stabilize system load
-    };
-    runTelemetrySync();
-
-    const runEvolution = async () => {
-      try {
-        const result = await brain.autoEvolve();
-        if (result.log) {
-          const payload = JSON.stringify({
-            type: "SYSTEM_MONOLOGUE",
-            message: result.log,
-            adjustment: result.adjustment
-          });
-          wss.clients.forEach(c => c.readyState === WebSocket.OPEN && c.send(payload));
+      const runTelemetrySync = async () => {
+        try {
+          await brain.syncTelemetryCache();
+        } catch (e) {
+          console.error("[TELEMETRY_SYNC_FAULT]", e);
         }
-        const coherence = brain.getGlobalCoherence();
-        const delay = Math.max(20000, 60000 * (1 - coherence));
-        setTimeout(runEvolution, delay);
-      } catch (e) {
-        console.error("[EVOLUTION_FAULT]", e);
-        setTimeout(runEvolution, 45000);
-      }
-    };
-    runEvolution();
+        setTimeout(runTelemetrySync, 10000);
+      };
+      runTelemetrySync();
+
+      const runEvolution = async () => {
+        try {
+          const result = await brain.autoEvolve();
+          if (result.log) {
+            const payload = JSON.stringify({
+              type: "SYSTEM_MONOLOGUE",
+              message: result.log,
+              adjustment: result.adjustment
+            });
+            wss.clients.forEach(c => c.readyState === WebSocket.OPEN && c.send(payload));
+          }
+          const coherence = brain.getGlobalCoherence();
+          const delay = Math.max(20000, 60000 * (1 - coherence));
+          setTimeout(runEvolution, delay);
+        } catch (e) {
+          console.error("[EVOLUTION_FAULT]", e);
+          setTimeout(runEvolution, 45000);
+        }
+      };
+      runEvolution();
+    }).catch(err => {
+      console.error("[VEDA_BRAIN_READY_FAULT] Failed to synchronize brain state:", err);
+    });
 
     // --- Vite / Static Assets ---
     if (process.env.NODE_ENV !== "production") {
@@ -651,7 +766,20 @@ async function startServer() {
     } else {
       const distPath = path.join(process.cwd(), "dist");
       app.use(express.static(distPath));
-      app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
+      
+      // Hardened SPA Fallback: Only return index.html for navigation requests
+      app.get("*", (req, res) => {
+        const isApi = req.url.startsWith('/api') || req.url.startsWith('/_veda_pulse');
+        if (!isApi && !req.url.includes('.')) {
+          res.sendFile(path.join(distPath, "index.html"));
+        } else {
+          res.status(isApi ? 404 : 404).json({ 
+            error: "NOT_FOUND", 
+            path: req.url,
+            suggestion: isApi ? "Check API endpoint mapping" : "Static asset missing"
+          });
+        }
+      });
     }
 
     // --- WebSocket Handlers ---
@@ -673,12 +801,31 @@ async function startServer() {
         ws.send(JSON.stringify({ type: "VEDA_STATE_FULL", data: JSON.parse(stateBuffer) }));
       }
 
-      ws.on("message", (msg) => {
+      ws.on("message", async (msg) => {
         try {
           const data = JSON.parse(msg.toString());
           if (data.type === "RESONANCE_PULSE") brain.triggerResonance(data.intensity || 0.1);
           if (data.type === "UPDATE_AXIOMS") brain.updateAxioms({ axioms: data.axioms });
           if (data.type === "PING") ws.send(JSON.stringify({ type: "PONG", ts: Date.now() }));
+          
+          if (data.type === "EXECUTE_ACTION") {
+            const { action, params, requestId } = data;
+            console.log(`[VEDA_SOCKET_ACTION] Executing ${action} via WebSocket Link.`);
+            try {
+              let result: any = { success: true };
+              const method = (brain as any)[action];
+              if (typeof method === 'function') {
+                // Ensure 'this' context is preserved for class methods
+                result.data = await method.call(brain, params);
+              } else {
+                result = { success: false, error: `UNKNOWN_ACTION: ${action}` };
+              }
+              ws.send(JSON.stringify({ type: "ACTION_RESULT", requestId, result }));
+            } catch (err) {
+              console.error(`[VEDA_SOCKET_ACTION_ERR] Fail: ${action}`, err);
+              ws.send(JSON.stringify({ type: "ACTION_RESULT", requestId, result: { success: false, error: String(err) } }));
+            }
+          }
         } catch (e) {
           console.error("[VEDA_SOCKET_ERR] Message parse fault:", e);
         }
@@ -689,10 +836,10 @@ async function startServer() {
       });
     });
 
+    // Start listening
     server.listen(PORT, "0.0.0.0", () => {
-      console.log(`[VEDA_OS] Sovereign Interface online on port ${PORT}`);
+      console.log(`[BOOT] VEDA_OS: Sovereign Interface online on port ${PORT}`);
     });
-
   } catch (error) {
     console.error("[BOOT_FAULT]", error);
     process.exit(1);

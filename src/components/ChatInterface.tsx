@@ -115,7 +115,7 @@ export const ChatInterface = () => {
     const userMsg = input;
     setInput("");
     
-    const userMsgObj: Message = { role: 'user', text: userMsg };
+    const userMsgObj: Message = { id: Math.random().toString(36).substring(7), role: 'user', text: userMsg, ts: Date.now() };
     const currentMessages = [...messages, userMsgObj];
     setMessages(currentMessages);
     setIsTyping(true);
@@ -126,8 +126,14 @@ export const ChatInterface = () => {
         text: m.text
       }));
 
-      const assistantMsgIdx = currentMessages.length;
-      setMessages(prev => [...prev, { role: 'veda', text: "", isStreaming: true }]);
+      const assistantId = Math.random().toString(36).substring(7);
+      setMessages(prev => [...prev, { 
+        id: assistantId, 
+        role: 'veda', 
+        text: "", 
+        ts: Date.now(), 
+        isStreaming: true 
+      }]);
 
       const stream = vedaService.chatStream(history, {
         global_coherence: data?.global_coherence,
@@ -140,29 +146,30 @@ export const ChatInterface = () => {
 
       let fullText = "";
       for await (const chunk of stream) {
-        if (chunk.text) {
-          fullText = chunk.text;
+        if (chunk.text !== undefined || chunk.thought_trace) {
+          if (chunk.text !== undefined) fullText = chunk.text;
           setMessages(prev => {
-            const next = [...prev];
-            next[assistantMsgIdx] = { 
-              ...next[assistantMsgIdx], 
-              text: fullText,
-              imageUrl: chunk.imageUrl,
-              videoUrl: chunk.videoUrl,
-              audioUrl: chunk.audioUrl,
-              mode: chunk.reasoning_mode,
-              confidence: chunk.sovereign_confidence,
-              trace: chunk.thought_trace,
-              actions: chunk.actions
-            };
-            return next;
+            return prev.map(m => {
+              if (m.id === assistantId) {
+                return {
+                  ...m,
+                  text: fullText,
+                  imageUrl: chunk.imageUrl || m.imageUrl,
+                  videoUrl: chunk.videoUrl || m.videoUrl,
+                  audioUrl: chunk.audioUrl || m.audioUrl,
+                  mode: chunk.reasoning_mode || m.mode,
+                  confidence: chunk.sovereign_confidence !== undefined ? chunk.sovereign_confidence : m.confidence,
+                  trace: chunk.thought_trace || m.trace,
+                  actions: chunk.actions || m.actions
+                };
+              }
+              return m;
+            });
           });
         }
         if (chunk.isDone) {
           setMessages(prev => {
-             const next = [...prev];
-             next[assistantMsgIdx] = { ...next[assistantMsgIdx], isStreaming: false };
-             return next;
+             return prev.map(m => m.id === assistantId ? { ...m, isStreaming: false } : m);
           });
         }
       }

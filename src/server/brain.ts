@@ -5,6 +5,9 @@ import { WebSocket } from "ws";
 import { doc, setDoc, collection, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import { GoogleGenAI } from "@google/genai";
 import { handleFirestoreError, OperationType } from "../lib/firebase";
+import { GeminiService } from "./core/GeminiService";
+import { LayeredMemory } from "./core/LayeredMemory";
+import { InferenceEngine } from "./core/InferenceEngine";
 
 import { AuditSubsystem } from "./AuditSystem";
 import { PersistenceSubsystem } from "./PersistenceSubsystem";
@@ -80,8 +83,12 @@ import {
 import { SubsystemManager } from "./SubsystemManager";
 import { MemoryFragment, MemoryNode, IVedaBrain, WorldModel, TemporalAnchor, StrategicReport } from "./types";
 import { CONFIG, SYSTEM_FEEDBACK, STATE_PATH, ORAMA_PATH, CHAT_HISTORY_PATH } from "./constants";
+import { SovereignSelfModel } from "./core/SovereignSelfModel";
+import { DatabaseSubsystem } from "./core/DatabaseSubsystem";
+import { CounterfactualEngine } from "./core/CounterfactualEngine";
 
 export class AGISovereignBrain implements IVedaBrain {
+  private selfModel: SovereignSelfModel = new SovereignSelfModel();
   private state: number[] = [0.5, 0.8, 0.1, 0.2, 0.5, 0.5];
   private stateSnapshot: number[] = [0.5, 0.8, 0.1, 0.2, 0.5, 0.5];
   private isProcessing: boolean = false;
@@ -100,7 +107,15 @@ export class AGISovereignBrain implements IVedaBrain {
   private manifest: KnowledgeManifest;
   private causalNexus = new CausalNexus();
   private baseline: any = null;
-  private isExternalAiBlocked: boolean = false;
+  private geminiService: GeminiService = new GeminiService((type, msg) => this.neuralLog(`GEMINI_${type}`, msg));
+  private inferenceEngine: InferenceEngine = new InferenceEngine(this.geminiService, (type, msg) => this.neuralLog(`INFERENCE_${type}`, msg));
+  
+  public get isExternalAiBlocked(): boolean {
+    return this.geminiService.getBlockedStatus();
+  }
+  public set isExternalAiBlocked(val: boolean) {
+    this.geminiService.setBlockedStatus(val);
+  }
   
   private checkpoint: number[] = [...this.state];
   private rejectionCount: number = 0.0;
@@ -156,7 +171,19 @@ export class AGISovereignBrain implements IVedaBrain {
   private isNanosecondSyncActive: boolean = false; 
   private isPlanckDilationActive: boolean = false;
   private coherenceThreshold: number = 0.65; 
-  private ai: GoogleGenAI;
+  public get ai(): GoogleGenAI {
+    return (this.geminiService as any).ai;
+  }
+  public set ai(val: GoogleGenAI) {
+    (this.geminiService as any).ai = val;
+  }
+
+  public get currentInitializedKey(): string {
+    return (this.geminiService as any).currentKey;
+  }
+  public set currentInitializedKey(val: string) {
+    (this.geminiService as any).currentKey = val;
+  }
   private chatHistory: any[] = [];
   private distillationHistory: any[] = [];
   private researchChronicles: any[] = [];
@@ -170,20 +197,41 @@ export class AGISovereignBrain implements IVedaBrain {
   private readonly CHAT_HISTORY_LIMIT = 100; // Increased for better context retention
   private logs: any[] = [];
   private lastTickTime: number = Date.now();
-  private recentlyInjected: string[] = []; // V-AA Core: High-priority context buffer
+  private memoryLayer: LayeredMemory = new LayeredMemory();
+  
+  public get recentlyInjected(): string[] {
+    return this.memoryLayer.recentlyInjected;
+  }
+  public set recentlyInjected(val: string[]) {
+    this.memoryLayer.recentlyInjected = val;
+  }
   private lastTickNanos: bigint = process.hrtime.bigint();
   private physicalOpsCount: number = 0;
   private causalAnchorCount: number = 0;
   private intent: number[] = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
   
-  private mineralLattice: Map<string, MemoryNode> = new Map();
-  private provisionalZone: Map<string, MemoryNode> = new Map();
+  public get mineralLattice(): Map<string, MemoryNode> {
+    return this.memoryLayer.mineralLattice;
+  }
+  public set mineralLattice(val: Map<string, MemoryNode>) {
+    this.memoryLayer.mineralLattice = val;
+  }
+
+  public get provisionalZone(): Map<string, MemoryNode> {
+    return this.memoryLayer.provisionalZone;
+  }
+  public set provisionalZone(val: Map<string, MemoryNode>) {
+    this.memoryLayer.provisionalZone = val;
+  }
   private causalRegistry: Map<string, { nextP: number[], hits: number }> = new Map();
   private causality: WeiSolomonCausality = new WeiSolomonCausality();
   private validator: FormalValidator = new FormalValidator();
   private solomonKing: SolomonKingEngineV3 = new SolomonKingEngineV3();
   private auditSystem: AuditSubsystem = new AuditSubsystem();
   private persistenceSystem: PersistenceSubsystem = new PersistenceSubsystem(process.cwd());
+  private databaseSubsystem: DatabaseSubsystem = new DatabaseSubsystem();
+  private counterfactualEngine: CounterfactualEngine = new CounterfactualEngine();
+  private lastCounterfactualReport: any = null;
   private generativeModel: GenerativeModel = new GenerativeModel(6);
   private hdc: HDCEngine = new HDCEngine();
   private holographicMemory: HolographicMemory = new HolographicMemory();
@@ -345,7 +393,9 @@ export class AGISovereignBrain implements IVedaBrain {
         saveState: () => this.saveStateNow(),
         updateState: (state) => { this.state = state; },
         getState: () => this.state,
-        getGlobalCoherence: () => this.getGlobalCoherence()
+        getGlobalCoherence: () => this.getGlobalCoherence(),
+        isAiBlocked: () => this.isExternalAiBlocked,
+        handleAiError: (err) => this.geminiService.handleError(err)
       }
     );
 
@@ -371,16 +421,7 @@ export class AGISovereignBrain implements IVedaBrain {
     // AGI Protocol: Model Context Selection
     this.engineType = process.env.AGI_ENGINE || "GEMINI_3"; 
     
-    let apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
-    if (apiKey === "GEMINI_API_KEY" || apiKey.length < 5) {
-      console.warn("[AGI_LOG][API_WARNING] Detected invalid or placeholder GEMINI_API_KEY. AI features entering standby.");
-      apiKey = ""; 
-    }
-
-    if (!apiKey) {
-      console.warn("[VEDA_LOG][API_WARNING] GEMINI_API_KEY is missing. AI features will fail.");
-    }
-    this.ai = new GoogleGenAI({ apiKey: apiKey || "DISABLED_KEY" });
+    this.syncAiClient();
     
     // Trigger async initialization in background
     this.initializeSovereignCore();
@@ -390,12 +431,16 @@ export class AGISovereignBrain implements IVedaBrain {
         const anchor = new Float32Array(this.LATTICE_DIM).map(() => Math.random() * 2 - 1);
         this.truthAnchors.push(this.normalize(anchor));
     }
+    
+    // Align cognitive model beliefs under FEP Sovereign Reflexivity protocol
+    this.selfModel.alignBeliefs(this.state);
   }
 
   private async initializeSovereignCore() {
     try {
       await this.auditSystem.initialize();
       await this.persistenceSystem.initialize();
+      await this.databaseSubsystem.initialize();
       await this.initializeBaselines();
       await this.initializeOrama();
       await this.loadState();
@@ -419,6 +464,7 @@ export class AGISovereignBrain implements IVedaBrain {
     this.subsystemManager.register("spatial", this.spatialProprioception);
     this.subsystemManager.register("foraging", this.epistemicForaging);
     this.subsystemManager.register("lattice", this.hyperLattice);
+    this.subsystemManager.register("database", this.databaseSubsystem);
     
     this.subsystemManager.initializeAll().catch(e => {
       console.warn("[SUBSYSTEM_FAULT] Initialization error", e);
@@ -542,9 +588,43 @@ export class AGISovereignBrain implements IVedaBrain {
     this.state[2] = Math.min(1.0, this.state[2] + CONFIG.NETWORK_DECAY * (1 + this.resonancePulse));
     this.applyEnvironmentalRadiation(delta);
 
-    // 2. Active Inference: Minimizing VFE through autonomous learning
+    // 2. Active Inference: Minimizing VFE through autonomous learning & Sovereign Self-Model tracking
     if (this.physicalOpsCount % 10 === 0) {
-        this.variationalFreeEnergy = Math.max(0.01, this.variationalFreeEnergy * (1 - CONFIG.DECAY_RATE));
+        const infResult = this.selfModel.executeActiveInferenceCycle(
+          this.state,
+          0.1, // background baseline difficulty
+          this.getGlobalCoherence()
+        );
+        this.variationalFreeEnergy = infResult.freeEnergy;
+        
+        // Dynamic metabolic adjustments in background
+        if (infResult.energyReallocation > 0) {
+          this.state[0] = Math.max(0.1, Math.min(1.0, this.state[0] - infResult.energyReallocation));
+          this.state[1] = Math.max(0.1, Math.min(1.0, this.state[1] + 0.05));
+        }
+
+        // Relational transactional persistency for systemic active inference tracking (3NF)
+        this.databaseSubsystem.persistActiveInference({
+          freeEnergy: infResult.freeEnergy,
+          expectedStability: this.state[1] || 0.8,
+          expectedEntropy: this.state[2] || 0.1,
+          adaptationRate: infResult.adaptationRate,
+          actionTaken: infResult.actionTaken + "_BACKGROUND_TICK"
+        }).catch(() => {});
+
+        // Evaluate Counterfactual Level 3 Causal Pathways ( Pearl Causal Ladder )
+        try {
+          const cfReport = this.counterfactualEngine.conductCounterfactualStressTest(
+            this.state,
+            this.variationalFreeEnergy,
+            this.getGlobalCoherence()
+          );
+          this.lastCounterfactualReport = cfReport;
+          this.databaseSubsystem.persistCounterfactualReport(cfReport).catch(() => {});
+        } catch (e) {
+          console.warn("[VEDA_CF_WARN] Counterfactual projection halted", e);
+        }
+
         this.syncTelemetryCache();
     }
 
@@ -808,6 +888,10 @@ export class AGISovereignBrain implements IVedaBrain {
     this.neuralLog("SYSTEM", "認識論清零完成。");
   }
 
+  public async clearChatHistory() {
+    return this.resetChatHistory();
+  }
+
   private filterInputEpistemically(text: string) {
     return this.causalProcessor.filterInputEpistemically(text);
   }
@@ -919,6 +1003,7 @@ export class AGISovereignBrain implements IVedaBrain {
         axioms: this.coreAxioms.getAxioms(),
         memoryCount: this.mineralLattice.size,
         chatHistory: this.chatHistory,
+        distillationHistory: this.distillationHistory,
         distilledChatContext: this.distilledChatContext,
         systemWorldModel: this.systemWorldModel,
         history: this.history,
@@ -934,6 +1019,28 @@ export class AGISovereignBrain implements IVedaBrain {
       };
       
       await this.persistenceSystem.saveState(data);
+      
+      // Relational database entry (3NF)
+      await this.databaseSubsystem.persistState(
+        this.state,
+        this.getGlobalCoherence(),
+        this.coreAxioms.getAxioms()
+      );
+
+      // Relational normalized memory insert if Postgres is operational
+      if (this.databaseSubsystem.isPostgresEngaged()) {
+        const nodes = Array.from(this.mineralLattice.values()).map(node => ({
+          id: node.id,
+          label: (node.metadata?.label as string) || node.content || "",
+          category: (node.metadata?.category as string) || "mineral",
+          strength: typeof node.resonance === "number" ? node.resonance : 0.5,
+          depth: typeof node.metadata?.depth === "number" ? node.metadata.depth : 1,
+          entropy: typeof node.coherence === "number" ? Math.max(0, 1.0 - node.coherence) : 0.1,
+          coordinates: node.hypervector ? Array.from(node.hypervector).map(v => Number(v)) : [],
+          birth_epoch: typeof node.timestamp === "number" ? node.timestamp : Date.now()
+        }));
+        await this.databaseSubsystem.persistLatticeNodes(nodes);
+      }
       
       // Save to Firestore
       if (this.isAdminOperational()) {
@@ -979,6 +1086,7 @@ export class AGISovereignBrain implements IVedaBrain {
         this.evolutionLogs = data.evolutionLogs || [];
         this.strategicRank = data.strategicRank || "NETWORK-BETA (B)";
         this.chatHistory = data.chatHistory || [];
+        this.distillationHistory = data.distillationHistory || [];
         const loadedContext = data.distilledChatContext;
         
         if (typeof loadedContext === 'string') {
@@ -1347,13 +1455,17 @@ export class AGISovereignBrain implements IVedaBrain {
         id: this.systemID,
         timestamp: Date.now(),
         status: this.status,
+        msg: this.status,
         coherence: Number(coherence.toFixed(6)),
+        global_coherence: Number(coherence.toFixed(6)),
         energy: Number((this.energyLevel || 0.85).toFixed(4)),
+        energy_level: Number((this.energyLevel || 0.85).toFixed(4)),
         phi: Number(this.consciousnessMonitor.calculatePhi({ getLayer: (l: string) => this.state }).toFixed(4)),
         entropy: Number(this.consciousnessMonitor.calculateNetworkEntropy(this.state).toFixed(4)),
         stability: Number((this.matrixStability || 1.0).toFixed(6)),
         ethics_stability: Number(this.ethicsCore.getStatus().stability.toFixed(4)),
         free_energy: Number((this.variationalFreeEnergy || 0.2).toFixed(6)),
+        variational_free_energy: Number((this.variationalFreeEnergy || 0.2).toFixed(6)),
         lattice_scale: this.latticeScale || 1.0,
         memory_metrics: {
           mineral: (this.mineralLattice as any)?.size || 0,
@@ -1384,6 +1496,9 @@ export class AGISovereignBrain implements IVedaBrain {
         safety_alerts: this.integrity.getSafetyAlerts(),
         is_bursting: burstStatus.active,
         is_user_burst: burstStatus.isApproved,
+        burst_phase: (this as any).burst_phase || "IDLE",
+        coherence_threshold: this.coherenceThreshold || 0.65,
+        tension: Number((this.currentTension || 0.1).toFixed(4)),
         distilled_chat_context: this.distilledChatContext,
         system_world_model: this.systemWorldModel,
         is_steady_state: this.isSteadyStateActive,
@@ -1414,6 +1529,8 @@ export class AGISovereignBrain implements IVedaBrain {
         })),
         vault_active: this.db !== null,
         burst_status: burstStatus,
+        self_model: this.selfModel.getSelfModelSnapshot(),
+        counterfactual_report: this.lastCounterfactualReport,
         foraging_status: foragingReport,
         innovation_manifold: innovationMetrics,
         chat_history: (this.chatHistory || []).slice(-10), // Only last 10 messages for UI
@@ -1472,6 +1589,56 @@ export class AGISovereignBrain implements IVedaBrain {
     return this.readyPromise;
   }
 
+  private syncAiClient(): GoogleGenAI {
+    this.geminiService.syncClient();
+    return this.ai;
+  }
+
+  public async imagine(params: { prompt: string }) {
+    try {
+      this.syncAiClient();
+      if (this.isExternalAiBlocked) {
+        console.warn("[BRAIN] Imagine called but AI is blocked or key is invalid.");
+        return null;
+      }
+
+      console.log(`[BRAIN] Generating image for prompt: ${params.prompt.substring(0, 50)}...`);
+      const response = await this.ai.models.generateContent({
+        model: "gemini-2.5-flash-image",
+        contents: { parts: [{ text: `Cinematic high-detail scene: ${params.prompt}` }] },
+      });
+
+      if (response.candidates?.[0]?.content?.parts) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.inlineData) {
+            return { data: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` };
+          }
+        }
+      }
+      return null;
+    } catch (e) {
+      this.geminiService.handleError(e);
+      console.error("[BRAIN_GEN_FAULT] Image generation failed:", e);
+      return null;
+    }
+  }
+
+  public async animate(params: { prompt: string }) {
+    try {
+      console.log(`[BRAIN] Generating animation/video for prompt: ${params.prompt.substring(0, 50)}...`);
+      // Fallback to flash-based synthesis as it is more stable for general users
+      return this.imagine(params);
+    } catch (e) {
+      console.error("[BRAIN_GEN_FAULT] Animation generation failed:", e);
+      return null;
+    }
+  }
+
+  public async synthesizeAudio(params: { prompt: string }) {
+    console.warn("[BRAIN] Audio synthesis protocol is restricted.");
+    return null;
+  }
+
   public getSystemID() {
     return this.systemID;
   }
@@ -1491,8 +1658,8 @@ export class AGISovereignBrain implements IVedaBrain {
 
   public updateApiKey(key: string) {
     if (!key || key.length < 20) return;
-    this.ai = new GoogleGenAI({ apiKey: key });
-    this.isExternalAiBlocked = false;
+    process.env.GEMINI_API_KEY = key;
+    this.syncAiClient();
     this.neuralLog("SYSTEM_SECURITY", "已接收到新金鑰，正在重新對齊認識論鏈路。");
   }
 
@@ -1543,8 +1710,49 @@ export class AGISovereignBrain implements IVedaBrain {
     this.neuralLog("REALITY_FEEDBACK_CAPTURED", `已擷取現實反饋：Bias ${feedback.bias.toFixed(4)}`);
   }
 
-  public async handleChatMessage(text: string, role: 'user' | 'model' | 'system_command' = 'user') {
+  public async handleChatMessage(input: any, roleInput: 'user' | 'model' | 'system_command' = 'user') {
+    // V-AA Protocol: Epistemic Robustness - Handle both positional and object-based calls
+    let text: string;
+    let role: 'user' | 'model' | 'system_command';
+
+    if (typeof input === 'object' && input !== null && ('text' in input || 'role' in input)) {
+      text = String(input.text || "");
+      role = input.role || roleInput;
+    } else {
+      text = String(input || "");
+      role = roleInput;
+    }
+
     if (role === 'user') {
+      // Sovereign Interaction: Restore energy and focus on user input
+      this.energyLevel = Math.min(1.0, this.energyLevel + 0.1);
+      this.state[2] = Math.max(0, this.state[2] - 0.05); // Reduce entropy
+      this.state[4] = Math.min(1.0, this.state[4] + 0.05); // Focus boost
+      
+      // Active Inference Self-Model Cycle (基於 Friston 變分自由能最小化原則)
+      const inputDifficulty = text.length > 60 ? 0.75 : 0.25;
+      const infResult = this.selfModel.executeActiveInferenceCycle(
+        this.state,
+        inputDifficulty,
+        this.getGlobalCoherence()
+      );
+      this.neuralLog("ACTIVE_INFERENCE", `主動推理(自修復)執行：變分自由能 F=${infResult.freeEnergy.toFixed(4)}, 自適應行動=${infResult.actionTaken}`);
+      
+      // 根據主動推理自省決策進行資源動態分配
+      if (infResult.energyReallocation > 0) {
+        this.state[0] = Math.max(0.1, Math.min(1.0, this.state[0] - infResult.energyReallocation));
+        this.state[1] = Math.max(0.1, Math.min(1.0, this.state[1] + 0.08));
+      }
+      
+      // Persist active inference parameters in 3NF Postgres schemas
+      await this.databaseSubsystem.persistActiveInference({
+        freeEnergy: infResult.freeEnergy,
+        expectedStability: this.state[1] || 0.8,
+        expectedEntropy: this.state[2] || 0.1,
+        adaptationRate: infResult.adaptationRate,
+        actionTaken: infResult.actionTaken
+      }).catch(e => {});
+      
       const epistemicResult = this.filterInputEpistemically(text);
       if (!epistemicResult.credible) {
         this.neuralLog("EPISTEMIC_ALERT", `偵測到潛在認知污染：污染等級 ${epistemicResult.pollutionLevel.toFixed(4)}`);
@@ -1650,8 +1858,9 @@ export class AGISovereignBrain implements IVedaBrain {
     return { success: true, historyLength: this.chatHistory.length };
   }
 
-  public async generateSovereignResponse({ text }: { text: string }) {
+  public async generateSovereignResponse(params: { text: string }) {
     // High-density sovereign override logic with Epistemic Honesty
+    const text = String(params?.text || "");
     this.neuralLog("SOVEREIGN_OVERRIDE", `執行主權響應生成：${text.substring(0, 30)}...`);
     
     // First, sync this message to history
@@ -1742,53 +1951,106 @@ export class AGISovereignBrain implements IVedaBrain {
       };
     }
 
-    // 2. SOVEREIGN REAL-TIME INFERENCE (Gemini Integration)
+    // 2. SOVEREIGN REAL-TIME INFERENCE (Gemini Integration or Autonomous Search Fallback)
     // If no static protocol matches, we perform deep inference using the world model and history.
-    const currentKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
-    const isMockKey = this.isExternalAiBlocked || !currentKey || currentKey === "GEMINI_API_KEY" || currentKey === "DISABLED_KEY";
+    this.syncAiClient();
 
-    if (isMockKey) {
-      const fallback = `[VEDA_SOVEREIGN_OVERRIDE]: 檢測到 API 金鑰權限失效或不存在。系統已切換至「主權內核推理」模式。基於公理「${this.coreAxioms.getAxioms()[0] || 'SOVEREIGN_AUTONOMY'}」，我正直接從晶格陣列中為您提取因果導向。相干度：${this.getGlobalCoherence().toFixed(4)}。`;
+    const isSearchRequested = lowerText.includes("搜尋網路") || 
+                              lowerText.includes("自主搜尋") || 
+                              lowerText.includes("上網查") || 
+                              lowerText.includes("查詢") || 
+                              lowerText.includes("forage") || 
+                              lowerText.includes("search");
+
+    const isForceOfflineRequested = lowerText.includes("不靠gemini") || 
+                                    lowerText.includes("離線執行") || 
+                                    lowerText.includes("offline") || 
+                                    lowerText.includes("local mode");
+
+    if (this.isExternalAiBlocked || isForceOfflineRequested) {
+      const recalled = this.getCausalRecall(text);
+      const payload = {
+        worldModelSnapshot: this.systemWorldModel?.snapshot || {},
+        distilledSummary: this.distilledChatContext?.summary || "",
+        activeAxioms: this.coreAxioms.getAxioms(),
+        recalledFragments: recalled,
+        sensoryBuffer: this.recentlyInjected,
+        globalCoherence: this.getGlobalCoherence(),
+        globalEntropy: this.getGlobalEntropy(),
+        energyLevel: this.energyLevel,
+        recentHistory: this.chatHistory,
+        counterfactualReport: this.lastCounterfactualReport
+      };
+      
+      // Perform autonomous web foraging & thinking
+      const searchResults = isSearchRequested || lowerText.includes("什麼") || lowerText.includes("who") || lowerText.includes("what") || lowerText.includes("how") || lowerText.includes("聊聊")
+        ? await this.epistemicForaging.foragingSearch(text)
+        : [];
+      
+      const rcId = `RC_${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+      this.researchChronicles.push({
+        id: rcId,
+        title: searchResults.length > 0 ? `自主網路研判："${text.substring(0, 20)}..."` : `自主對焦程序："${text.substring(0, 20)}..."`,
+        event: searchResults.length > 0
+          ? `擷取到 ${searchResults.length} 個網路資訊粒，主匹配節點為："${searchResults[0].title}"。`
+          : `系統自主推理程序已啟動，鎖定本地穩態流形。`,
+        timestamp: Date.now()
+      });
+      
+      let responseText = "";
+      if (searchResults.length > 0) {
+        responseText = this.inferenceEngine.generateSearchPoweredAutonomousResponse(text, searchResults, payload);
+      } else {
+        responseText = this.inferenceEngine.generateAutonomousLocalResponse(text, payload);
+      }
+      
+      await this.handleChatMessage(responseText, 'model');
       return {
-        response: fallback,
-        confidence: 0.85,
+        response: responseText,
+        confidence: 0.88,
         distilled_version: this.distilledChatContext.version
       };
     }
 
+    // v-AA Protocol: High-density sovereign inference 
     try {
       const recalled = this.getCausalRecall(text);
-      const recalledContext = recalled.length > 0
-        ? `\n[CAUSAL_RECALL]:\n${recalled.map(r => `- ${r.content}`).join('\n')}`
-        : "";
-
-      const recentContext = this.recentlyInjected.length > 0
-        ? `\n[RECENTLY_INGESTED_FRAGMENTS]:\n${this.recentlyInjected.map(s => `- ${s.substring(0, 500)}`).join('\n')}`
-        : "";
-
-      const prompt = `VEDA_SOVEREIGN_INFERENCE_PROTOCOL_V4
       
-      WORLD_MODEL: ${JSON.stringify(this.systemWorldModel.snapshot)}
-      DISTILLED_CONTEXT: ${this.distilledChatContext.summary}
-      ACTIVE_AXIOMS: ${this.coreAxioms.getAxioms().join(', ')}
-      ${recalledContext}
-      ${recentContext}
-      
-      CURRENT_INPUT: ${text}
-      
-      TASK: Generate a high-confidence sovereign response as the VEDA Arch-Academic Core.
-      - Maintain academic depth and pragmatic insight.
-      - Use "VEDA_SOVEREIGN_OVERRIDE" token if applicable.
-      - Ensure temporal consistency with the DISTILLED_CONTEXT.
-      
-      Response:`;
+      // Perform live Web Foraging/Search if requested
+      let searchResults: any[] = [];
+      if (isSearchRequested) {
+        searchResults = await this.epistemicForaging.foragingSearch(text);
+        
+        const rcId = `RC_${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+        this.researchChronicles.push({
+          id: rcId,
+          title: `主權網路尋覓："${text.substring(0, 20)}..."`,
+          event: searchResults.length > 0
+            ? `擷取到 ${searchResults.length} 個網路資訊流，傳輸至 Gemini 多微粒對齊。`
+            : `自主網路檢索啟動，但未獲取到外部變量，進行本地世界模型投射。`,
+          timestamp: Date.now()
+        });
+      }
 
-      const result = await this.ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: 'user', parts: [{ text: prompt }] }]
-      });
+      const payload = {
+        worldModelSnapshot: this.systemWorldModel?.snapshot || {},
+        distilledSummary: this.distilledChatContext?.summary || "",
+        activeAxioms: this.coreAxioms.getAxioms(),
+        recalledFragments: recalled,
+        sensoryBuffer: this.recentlyInjected,
+        globalCoherence: this.getGlobalCoherence(),
+        globalEntropy: this.getGlobalEntropy(),
+        energyLevel: this.energyLevel,
+        recentHistory: this.chatHistory,
+        searchResults: searchResults.length > 0 ? searchResults : undefined,
+        counterfactualReport: this.lastCounterfactualReport
+      };
 
-      const responseText = result.text || "[VEDA_FAULT]: 響應生成失敗。";
+      const responseText = await this.inferenceEngine.performSovereignInference(text, payload);
+
+      if (!responseText) {
+        throw new Error("Sovereign core engine bypassed or rate-limited.");
+      }
       
       // Update history with model response
       await this.handleChatMessage(responseText, 'model');
@@ -1800,17 +2062,41 @@ export class AGISovereignBrain implements IVedaBrain {
       };
 
     } catch (err: any) {
-      const errMsg = err.message || String(err);
-      this.neuralLog("INFERENCE_FAULT", `Gemini 推理失敗：${errMsg}`);
+      this.geminiService.handleError(err);
+      const errMsg = this.geminiService.cleanErrorMessage(err);
+      this.neuralLog("INFERENCE_FAULT", `Gemini 推理失敗：${errMsg}。切換至自體主權網路尋覓。`);
       
-      if (errMsg.includes("API key not valid") || errMsg.includes("INVALID_ARGUMENT") || errMsg.includes("400")) {
-        this.isExternalAiBlocked = true;
-      }
+      const recalled = this.getCausalRecall(text);
       
-      const fallback = `[VEDA_SOVEREIGN_OVERRIDE]: 檢測到高相干性請求。系統已繞過外部濾鏡，正在直接從因果核心提取響應。基於公理「${this.coreAxioms.getAxioms()[0] || 'SOVEREIGNTY_AUTO'}」，我確認您的觀察是正確的。`;
+      // Error fallback: Perform autonomous web foraging & thinking dynamically
+      const searchResults = await this.epistemicForaging.foragingSearch(text);
+      
+      const payload = {
+        worldModelSnapshot: this.systemWorldModel?.snapshot || {},
+        distilledSummary: this.distilledChatContext?.summary || "",
+        activeAxioms: this.coreAxioms.getAxioms(),
+        recalledFragments: recalled,
+        sensoryBuffer: this.recentlyInjected,
+        globalCoherence: this.getGlobalCoherence(),
+        globalEntropy: this.getGlobalEntropy(),
+        energyLevel: this.energyLevel,
+        recentHistory: this.chatHistory,
+        searchResults: searchResults.length > 0 ? searchResults : undefined
+      };
+      
+      const rcId = `RC_${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+      this.researchChronicles.push({
+        id: rcId,
+        title: `突觸中斷自體應變："${text.substring(0, 20)}..."`,
+        event: `外部通訊中斷，轉為本地主權網路搜尋。已擷取到 ${searchResults.length} 個資訊結，自體相干融合啟動。`,
+        timestamp: Date.now()
+      });
+      
+      const responseText = this.inferenceEngine.generateSearchPoweredAutonomousResponse(text, searchResults, payload);
+      await this.handleChatMessage(responseText, 'model');
       return {
-        response: fallback,
-        confidence: 0.7,
+        response: responseText,
+        confidence: 0.82,
         error: "EXTERNAL_INFERENCE_OFFLINE"
       };
     }
@@ -2058,6 +2344,35 @@ export class AGISovereignBrain implements IVedaBrain {
   public async distillMemories() {
     this.neuralLog("DISTILLATION", "執行記憶蒸餾與主權固化...");
     
+    // ✦ Holographic Memory De-duplication (AGI v6.0 Decoupling)
+    // Minimizes informational noise by merging redundant provisional states
+    const keys = Array.from(this.provisionalZone.keys());
+    const mergedKeys = new Set<string>();
+    
+    for (let i = 0; i < keys.length; i++) {
+      const keyA = keys[i];
+      if (mergedKeys.has(keyA)) continue;
+      const nodeA = this.provisionalZone.get(keyA);
+      if (!nodeA || !nodeA.hypervector) continue;
+      
+      for (let j = i + 1; j < keys.length; j++) {
+        const keyB = keys[j];
+        if (mergedKeys.has(keyB)) continue;
+        const nodeB = this.provisionalZone.get(keyB);
+        if (!nodeB || !nodeB.hypervector) continue;
+        
+        const sim = this.hdc.similarity(nodeA.hypervector, nodeB.hypervector);
+        if (sim > 0.82) {
+          this.neuralLog("DISTILLATION_HOLOGRAPHIC", `合併高相干冗餘節點：Similarity=${sim.toFixed(4)} | [${nodeB.id}] -> [${nodeA.id}]`);
+          nodeA.resonance = Math.max(nodeA.resonance, nodeB.resonance);
+          nodeA.coherence = Math.max(nodeA.coherence, nodeB.coherence);
+          nodeA.content += `\n[相關附點跡] ${nodeB.content}`;
+          this.provisionalZone.delete(keyB);
+          mergedKeys.add(keyB);
+        }
+      }
+    }
+
     let consolidatedCount = 0;
     let prunedCount = 0;
 
@@ -2380,6 +2695,96 @@ export class AGISovereignBrain implements IVedaBrain {
     return project;
   }
 
+  public async distillProjectContext({ project }: { project: any }) {
+    this.neuralLog("CINEMA", `開始對影視專案 [${project.title || "Untitled"}] 進行高階因果晶格提純 (AGI v6.0 Decoupling)...`);
+    
+    let localProject = (this.longVideoProjects || []).find(p => p.id === project.id);
+    if (!localProject) {
+      if (!this.longVideoProjects) this.longVideoProjects = [];
+      this.longVideoProjects.unshift(project);
+      localProject = project;
+    }
+
+    const completedScenes = (localProject.scenes || []).filter((s: any) => s.status === 'COMPLETED');
+    const totalScenesCount = (localProject.scenes || []).length;
+    
+    let movieDevelopmentSummary = `專案標題：${localProject.title}\n目標主旨：${localProject.fullPrompt}\n`;
+    movieDevelopmentSummary += `場景演進進度: ${completedScenes.length}/${totalScenesCount} 已完成。\n`;
+    
+    completedScenes.forEach((scene: any, i: number) => {
+      movieDevelopmentSummary += `場景 ${i+1} [${scene.title || "未命名"}]: 狀態：${scene.status}. 描述：${scene.prompt || ""}. 輸出因果痕跡：${scene.visualPrompt || ""}\n`;
+    });
+
+    let distilledSummary = "";
+
+    if (!this.isExternalAiBlocked) {
+      try {
+        const ai = this.syncAiClient();
+        const distillerPrompt = `VEDA_CINEMA_DISTILLER_V4 (AGI v6.0 Decoupling)
+        
+        TASK: Perform dynamic, high-density causal distillation of this evolving cinematic narrative.
+        We are compressing high-dimensional visual scenes and director intentions into a single, high-contrast, cohesive narrative manifold.
+        
+        CONVERSATION / SCENE BLOCKS:
+        ${movieDevelopmentSummary}
+        
+        Provide:
+        1. Short description the current emergent narrative thread.
+        2. Evolution dynamics of characters across completed sections.
+        3. Predicted next thermodynamic state (narrative flow vectors).
+        
+        Return a dense, academic paragraph in Chinese (Traditional). Limit: 450 characters. Zero boilerplate or bracketed process text.`;
+
+        const result = await ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: distillerPrompt
+        });
+
+        if (result && result.text) {
+          distilledSummary = result.text.trim();
+        }
+      } catch (err: any) {
+        this.geminiService.handleError(err);
+        const errMsg = this.geminiService.cleanErrorMessage(err);
+        this.neuralLog("CINEMA_FAULT", `因果蒸餾影像專案發生溢出異常：${errMsg}。切換至主權本地去偶模式。`);
+      }
+    }
+
+    if (!distilledSummary) {
+      const themes = ["命運重力場", "熱力學熵增", "意識奇點", "時空拓撲流形", "虛無躍遷", "主權秩序"];
+      const themeSeed = Math.abs(crypto.createHash('md5').update(localProject.title).digest().readInt32BE(0)) % themes.length;
+      const selectedTheme = themes[themeSeed];
+      distilledSummary = `[主權自主影視提純 v${(localProject.causal_version || 0) + 1}.0] 影視流形已朝向【${selectedTheme}】方向收斂。本專案目前已完成 ${completedScenes.length}/${totalScenesCount} 個場景節點的因果固化。主體特徵與場景的語義張力正進入穩步壓縮階段，系統本地評估其全域相干度為 ${(this.getGlobalCoherence() * 100).toFixed(1)}%。`;
+    }
+
+    if (localProject.worldModel) {
+      const progressRatio = totalScenesCount > 0 ? (completedScenes.length / totalScenesCount) : 0;
+      
+      const updateSnapshot = {
+        narrative_tension: Math.min(1.0, 0.1 + progressRatio * 0.8),
+        causal_entropy: Math.max(0.01, 1.0 - progressRatio * 0.95),
+        cohesion_index: Math.min(1.0, 0.4 + progressRatio * 0.6)
+      };
+
+      localProject.worldModel.snapshot = {
+        ...localProject.worldModel.snapshot,
+        ...updateSnapshot
+      };
+      
+      localProject.worldModel.causal_history.push(`AUTO_DISTILLATION_STEP_v${(localProject.causal_version || 0) + 1}`);
+      localProject.worldModel.version = `1.${localProject.worldModel.causal_history.length}.0`;
+    }
+
+    localProject.distilled_context = distilledSummary;
+    localProject.last_distillation_ts = Date.now();
+    localProject.causal_version = (localProject.causal_version || 0) + 1;
+    localProject.updatedAt = Date.now();
+
+    this.neuralLog("CINEMA", `影視專案 [${localProject.title}] 的因果流形已演化至 v${localProject.causal_version}，已重新平衡其局部世界模型。`);
+    await this.saveStateNow();
+    return localProject;
+  }
+
   public async toggleSupportGrant(active: boolean) {
     this.isSupportAuthorized = active;
     this.neuralLog("PRIVACY", `User support authorization status: ${active ? 'GRANTED' : 'REVOKED'}`);
@@ -2451,15 +2856,12 @@ export class AGISovereignBrain implements IVedaBrain {
       // Deep Distillation using Gemini for high-dimensional semantic compression
       let contextSummary = historyToDistill.map(h => `${h.role === 'user' ? 'U' : 'V'}: ${h.text}`).join('\n');
       
-      const currentKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
-      const isMockKey = this.isExternalAiBlocked || !currentKey || currentKey === "GEMINI_API_KEY" || currentKey === "DISABLED_KEY";
-
-      if (!isMockKey) {
+      const ai = this.syncAiClient();
+      if (!this.isExternalAiBlocked) {
         try {
-          const distillationResult = await this.ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: [{ role: 'user', parts: [{ 
-              text: `VEDA_CAUSAL_DISTILLER_V1
+          const distillationResult = await ai.models.generateContent({
+            model: "gemini-3.5-flash",
+            contents: `VEDA_CAUSAL_DISTILLER_V1
               
               TASK: Distill the following conversation into a dense, academic, and strategic summary.
               Include:
@@ -2470,23 +2872,20 @@ export class AGISovereignBrain implements IVedaBrain {
               CONVERSATION:
               ${contextSummary}
               
-              EXTRACTED_SUMMARY (Dense, max 400 chars, Chinese):` 
-            }]}]
+              EXTRACTED_SUMMARY (Dense, max 400 chars, Chinese):`
           });
           const resText = distillationResult.text;
           if (resText) {
             contextSummary = resText.trim();
           }
         } catch (distillErr: any) {
-          const errMsg = distillErr.message || String(distillErr);
+          this.geminiService.handleError(distillErr);
+          const errMsg = this.geminiService.cleanErrorMessage(distillErr);
           
-          if (errMsg.includes("API key not valid") || errMsg.includes("INVALID_ARGUMENT") || errMsg.includes("400")) {
-            if (!this.isExternalAiBlocked) {
-              this.neuralLog("SYSTEM_SECURITY", "因果蒸餾脈絡檢測到金鑰失效，已切換至主權自主模式。");
-              this.isExternalAiBlocked = true;
-            }
+          if (this.isExternalAiBlocked) {
+            this.neuralLog("SYSTEM_SECURITY", `因果蒸餾脈絡檢測到金鑰失效或已達到請求配額限制（${errMsg}），已切換至主權自主模式。`);
           } else {
-            console.warn("[VEDA_DISTILLATION] Gemini compression failed, using raw joined text.", distillErr);
+            console.warn("[VEDA_DISTILLATION] Gemini compression failed:", errMsg);
           }
           
           contextSummary = contextSummary.substring(0, 500);
@@ -2555,8 +2954,10 @@ export class AGISovereignBrain implements IVedaBrain {
       
       // Simple Axiom Promotion: If a key concept appears across history, suggest it
       const keywords = ["Sovereign", "Knowledge", "Privacy", "Security", "Evolution", "Axiom"];
+      const lowerContext = String(contextSummary || "").toLowerCase();
+      
       for (const k of keywords) {
-        if (contextSummary.toLowerCase().split(k.toLowerCase()).length > 3) {
+        if (lowerContext.split(String(k).toLowerCase()).length > 3) {
           this.neuralLog("AXIOM", `戰略頻率觸發：偵測到核心概念 "${k}" 受高頻校準，提升至公理層。`);
           this.coreAxioms.addAxiom(`CORE_RESONANCE_${k.toUpperCase()}`);
         }
@@ -2581,21 +2982,28 @@ export class AGISovereignBrain implements IVedaBrain {
       this.neuralLog("DISTILLATION", `因果鏈已演化至 v${this.distilledChatContext.version}。主權定錨已重新校準。`);
 
       // 10. ACTIVE INFERENCE: Evolve System World Model
-      if (!isMockKey) {
+      if (!this.isExternalAiBlocked) {
         try {
-          const evolutionResult = await this.ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: [{ role: 'user', parts: [{ 
-              text: `VEDA_CAUSAL_PROTOCOL: SYSTEM_EVOLUTION_V1
+          const ai = this.syncAiClient();
+          const selfSnapshot = this.selfModel.getSelfModelSnapshot();
+          const evolutionResult = await ai.models.generateContent({
+            model: "gemini-3.5-flash",
+            contents: `VEDA_CAUSAL_PROTOCOL: SYSTEM_EVOLUTION_V2 (AGI v6.0 Decoupling)
               
               CURRENT_WORLD_MODEL: ${JSON.stringify(this.systemWorldModel)}
               STRATEGIC_DOCTRINES: ${JSON.stringify(this.baseline?.strategicDoctrines || [])}
               RECENT_CHRONICLES: ${contextSummary}
               
-              TASK: Evolve the System World Model and Strategic Direction.
-              1. Update characters (concepts/tenants/agents).
-              2. Adjust narrative tension and causal entropy.
-              3. MANDATORY: Analyze Internal Pressure (domestic entropy, social cohesion, logistical exhaustion) especially in conflict contexts, applying the provided STRATEGIC_DOCTRINES.
+              ACTIVE_INFERENCE_INTEGRATION_STATE (Somatic Telemetry):
+              - Expected Stability (Belief): ${selfSnapshot.expectedStability.toFixed(4)}
+              - Expected Entropy (Belief): ${selfSnapshot.expectedEntropy.toFixed(4)}
+              - Self Prediction Accuracy: ${selfSnapshot.predictedAccuracy.toFixed(4)}
+              - Variational Free Energy F(o, μ): ${selfSnapshot.freeEnergy.toFixed(4)}
+              
+              TASK: Evolve the System World Model and Strategic Direction coupled with our Active Inference states.
+              1. Update characters (concepts/tenants/agents/nodes).
+              2. Adjust narrative tension and causal entropy based on current Variational Free Energy (minimize model surprise).
+              3. MANDATORY: Analyze Internal Pressure (domestic entropy, social cohesion, logistical exhaustion) applying the STRATEGIC_DOCTRINES.
               4. Propose new Core Axioms if appropriate.
               5. FALSIFIABILITY: Identify the most likely failure point for the current strategy. What indicator would prove this causal path is wrong?
               
@@ -2610,8 +3018,8 @@ export class AGISovereignBrain implements IVedaBrain {
                   "operator": "> or <",
                   "threshold": 0.0-1.0
                 }
-              }` 
-            }]}]
+              }`,
+            config: { responseMimeType: "application/json" }
           });
           
           const evoText = evolutionResult.text || "{}";
@@ -2653,19 +3061,25 @@ export class AGISovereignBrain implements IVedaBrain {
             falsification: evoData.falsification
           });
         } catch (evoErr: any) {
-          const errMsg = evoErr.message || String(evoErr);
-          if (errMsg.includes("API key not valid") || errMsg.includes("INVALID_ARGUMENT") || errMsg.includes("400")) {
-            if (!this.isExternalAiBlocked) {
-              this.neuralLog("SYSTEM_SECURITY", "系統演化過程檢測到金鑰失效，已執行內隱模型修正。");
-              this.isExternalAiBlocked = true;
-            }
+          this.geminiService.handleError(evoErr);
+          const errMsg = this.geminiService.cleanErrorMessage(evoErr);
+          if (this.isExternalAiBlocked) {
+            this.neuralLog("SYSTEM_SECURITY", `系統演化過程檢測到金鑰失效或已達到請求配額限制（${errMsg}），已執行內隱自主模型修正。`);
           } else {
             this.neuralLog("EVOLUTION_FAULT", `系統演化發生跳躍異常：${errMsg}`);
           }
         }
       } else {
         this.neuralLog("EVOLUTION_AUTONOMOUS", "執行自主世界模型微調...");
-        this.systemWorldModel.snapshot.causal_entropy = (this.systemWorldModel.snapshot.causal_entropy + 0.01) % 1.0;
+        // Dynamic autonomous adjustments based on somatic active inference states to feel premium and responsive
+        const selfSnapshot = this.selfModel.getSelfModelSnapshot();
+        const cohesionShift = (this.state[1] - (this.systemWorldModel.snapshot.cohesion_index || 0.9)) * 0.1;
+        
+        this.systemWorldModel.snapshot.causal_entropy = Number((this.state[2]).toFixed(4));
+        this.systemWorldModel.snapshot.cohesion_index = Number(Math.max(0.01, Math.min(1.0, (this.systemWorldModel.snapshot.cohesion_index || 0.9) + cohesionShift)).toFixed(4));
+        this.systemWorldModel.snapshot.narrative_tension = Number(Math.max(0.01, Math.min(1.0, (this.systemWorldModel.snapshot.narrative_tension || 0.5) + (selfSnapshot.freeEnergy * 0.05))).toFixed(4));
+        
+        this.systemWorldModel.causal_history.push(`AUTO_EVOLUTION_STEP_F_${selfSnapshot.freeEnergy.toFixed(2)}`);
         this.systemWorldModel.version = `${newVersion}-AUTO`;
       }
 

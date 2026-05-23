@@ -397,8 +397,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                   </h2>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  {data?.cortex_array?.map((shard: any) => (
-                    <div key={shard.id} className="bg-white/5 p-2 border border-white/5 space-y-1">
+                  {data?.cortex_array?.map((shard: any, sIdx: number) => (
+                    <div key={`shard-${shard.id || sIdx}`} className="bg-white/5 p-2 border border-white/5 space-y-1">
                       <div className="flex justify-between text-[6px]">
                         <span className="text-white/40 truncate">{shard.specialization}</span>
                         <span className="text-purple-400">{(shard.health || 0 * 100).toFixed(0)}%</span>
@@ -464,9 +464,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                   <span className="text-accent">EFE MINIMIZATION</span>
                 </div>
                 <div className="flex gap-2">
-                  {['EXPLORE', 'CONSOLIDATE', 'DIRECT_ANSWER'].map(mode => (
+                  {['EXPLORE', 'CONSOLIDATE', 'DIRECT_ANSWER'].map((mode, mIdx) => (
                     <div 
-                      key={mode}
+                      key={`inference-mode-${mode}-${mIdx}`}
                       className={cn(
                         "flex-1 py-1 text-center text-[8px] font-black tracking-widest transition-all",
                         data.last_sovereign_action === mode 
@@ -495,8 +495,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       animate={{ width: `${data.sovereign_index}%` }}
                       className="absolute inset-y-0 left-0 bg-gradient-to-r from-cyan-600 via-cyan-400 to-white shadow-[0_0_10px_rgba(34,211,238,0.5)]"
                     />
-                    {[25, 50, 75].map(tick => (
-                      <div key={tick} className="absolute inset-y-0 w-[1px] bg-white/20" style={{ left: `${tick}%` }} />
+                    {[25, 50, 75].map((tick, tIdx) => (
+                      <div key={`gauge-tick-${tick}-${tIdx}`} className="absolute inset-y-0 w-[1px] bg-white/20" style={{ left: `${tick}%` }} />
                     ))}
                   </div>
                   <div className="flex justify-between text-[5px] text-white/20 uppercase tracking-tighter">
@@ -540,7 +540,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                   <div className="flex gap-1 h-3 items-center overflow-hidden">
                     {data.jepa.latentState.map((val, i) => (
                       <div 
-                        key={i}
+                        key={`latent-${i}`}
                         className="flex-1 transition-all duration-300"
                         style={{ 
                           backgroundColor: val > 0 ? `rgba(34,211,238,${Math.abs(val)})` : `rgba(168,85,247,${Math.abs(val)})`,
@@ -660,8 +660,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 <div className="space-y-2">
                   <div className="text-[7px] text-white/30 uppercase tracking-widest font-black">Environmental Constants</div>
                   <div className="bg-black/20 p-3 border border-white/5 space-y-1">
-                    {Object.entries(data.system_world_model.snapshot.environment).map(([k, v]) => (
-                      <div key={k} className="flex justify-between text-[9px] font-mono">
+                    {Object.entries(data.system_world_model.snapshot.environment).map(([k, v], eIdx) => (
+                      <div key={`env-${k}-${eIdx}`} className="flex justify-between text-[9px] font-mono">
                         <span className="text-white/40">{k}:</span>
                         <span className="text-cyan-400">{v}</span>
                       </div>
@@ -678,7 +678,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       </div>
                     ) : (
                       data.system_world_model.snapshot.characters.map((c, i) => (
-                        <div key={i} className="bg-white/5 p-2 flex items-center justify-between border-l-2 border-cyan-500/30">
+                        <div key={`char-${c.id || i}`} className="bg-white/5 p-2 flex items-center justify-between border-l-2 border-cyan-500/30">
                           <div className="flex flex-col">
                             <span className="text-[10px] text-white/80 font-bold">{c.id}</span>
                             <span className="text-[7px] text-cyan-400/60">{c.state}</span>
@@ -780,7 +780,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                   </div>
                 ) : (
                   memories.map((memory) => (
-                    <div key={memory.id} className="bg-white/5 border border-white/5 p-4 space-y-2 hover:border-white/20 transition-colors group relative">
+                    <div key={`memory-${memory.id}`} className="bg-white/5 border border-white/5 p-4 space-y-2 hover:border-white/20 transition-colors group relative">
                       <div className="flex justify-between items-center">
                         <span className="text-[7px] text-cyan-400/60 font-bold uppercase tracking-[0.3em] ff-font-serif">{memory.type}</span>
                         <span className="text-[6px] opacity-20 font-sans tracking-widest">{new Date(memory.timestamp).toLocaleTimeString()}</span>

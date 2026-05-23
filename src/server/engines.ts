@@ -176,7 +176,8 @@ export class HDCEngine {
     return result;
   }
 
-  public encodeString(text: string): Float32Array {
+  public encodeString(input: string): Float32Array {
+    const text = String(input || "");
     const textClean = text.toLowerCase().trim();
     if (!textClean) return new Float32Array(this.dimension).fill(0.1);
 

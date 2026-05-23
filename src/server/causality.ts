@@ -267,7 +267,7 @@ export class LogicalConsistencyCheckerV5 {
 
   public check(fragment: string, existingAxioms: string[]): boolean {
     // V-AA Protocol: High-speed logical contradiction detection
-    const normalized = fragment.toLowerCase();
+    const normalized = String(fragment || "").toLowerCase();
     
     // Contradiction patterns
     const contradictions = [
@@ -277,7 +277,7 @@ export class LogicalConsistencyCheckerV5 {
     ];
 
     for (const axiom of existingAxioms) {
-      const normalizedAxiom = axiom.toLowerCase();
+      const normalizedAxiom = String(axiom || "").toLowerCase();
       
       // Simple contradiction heuristic
       for (const rule of contradictions) {

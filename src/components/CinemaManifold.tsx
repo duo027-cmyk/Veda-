@@ -243,8 +243,8 @@ export const CinemaManifold: React.FC<CinemaManifoldProps> = ({ data, onUpdate }
                     <div className="bg-white/5 border border-white/10 p-4 rounded-xl col-span-2">
                        <div className="text-[10px] text-white/30 uppercase mb-2 font-mono">Character Manifest</div>
                        <div className="flex gap-2 flex-wrap">
-                         {selectedProject.worldModel.snapshot.characters.map(c => (
-                           <div key={c.id} className="bg-white/5 border border-white/5 px-2 py-1 rounded text-[9px] flex items-center gap-2">
+                         {selectedProject.worldModel.snapshot.characters.map((c, i) => (
+                           <div key={`char-${c.id || i}`} className="bg-white/5 border border-white/5 px-2 py-1 rounded text-[9px] flex items-center gap-2">
                               <span className="text-white/40">{c.id}</span>
                               <span className="text-purple-400 font-bold">{c.state}</span>
                               <span className="text-[7px] text-white/20 italic">({c.emotion})</span>
@@ -282,7 +282,7 @@ export const CinemaManifold: React.FC<CinemaManifoldProps> = ({ data, onUpdate }
                          {selectedProject.worldAxioms.map((axiom, i) => {
                            const isBaseline = data.baseline?.axioms.includes(axiom);
                            return (
-                             <span key={i} className={cn(
+                             <span key={`axiom-${i}-${axiom.substring(0, 10)}`} className={cn(
                                "text-[10px] px-4 py-1.5 rounded-full border font-serif italic",
                                isBaseline ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" : "bg-white/5 text-white/60 border-white/10"
                              )}>
@@ -299,7 +299,7 @@ export const CinemaManifold: React.FC<CinemaManifoldProps> = ({ data, onUpdate }
                          {selectedProject.visualAnchors.map((anchor) => {
                            const isBaseline = data.baseline?.anchors.some(a => a.id === anchor.id);
                            return (
-                             <div key={anchor.id} className={cn(
+                             <div key={`anchor-${anchor.id}`} className={cn(
                                "group relative px-4 py-1.5 rounded-full border cursor-help transition-all",
                                isBaseline ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20 hover:bg-cyan-500/20" : "bg-purple-500/5 text-purple-300/60 border-purple-500/20 hover:bg-purple-500/10"
                              )}>

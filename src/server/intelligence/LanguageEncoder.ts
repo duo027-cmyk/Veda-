@@ -27,7 +27,8 @@ export class LanguageEncoder {
   /**
    * Encodes text into a normalized latent vector.
    */
-  public encode(text: string): number[] {
+  public encode(input: string): number[] {
+    const text = String(input || "");
     const tokens = text.toLowerCase().split(/\W+/);
     let vector = new Array(this.dim).fill(0);
     let matches = 0;

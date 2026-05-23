@@ -27,6 +27,7 @@ import { vedaService } from '../services/vedaService';
 import { auth } from '../firebase';
 import { CuriosityMonitor } from './CuriosityMonitor';
 import { EpistemicLog } from './EpistemicLog';
+import { CausalSimulator } from './CausalSimulator';
 import { twMerge } from 'tailwind-merge';
 import { clsx, type ClassValue } from 'clsx';
 
@@ -95,8 +96,8 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                 { label: t.phi_integration, value: (data?.phi || 0).toFixed(4), color: 'text-cyan-400', icon: Activity },
                 { label: t.free_energy_opt, value: (data?.free_energy !== undefined && data?.free_energy !== null && !isNaN(data.free_energy)) ? data.free_energy.toFixed(4) : '0.0000', color: 'text-zinc-100', icon: Database },
                 { label: t.lattice_scale_label, value: (data?.lattice_scale || 1).toFixed(3), color: 'text-purple-400', icon: Globe }
-              ].map((metric) => (
-                <div key={metric.label} className="clean-card p-8 flex flex-col gap-2 hover:border-accent/40 hover:bg-white/2 transition-all group">
+              ].map((metric, mIdx) => (
+                <div key={`metric-${metric.label}-${mIdx}`} className="clean-card p-8 flex flex-col gap-2 hover:border-accent/40 hover:bg-white/2 transition-all group">
                   <div className="flex items-center gap-3">
                     <metric.icon size={14} className={cn("opacity-40", metric.color)} />
                     <span className="data-label text-[10px]">{metric.label}</span>
@@ -104,6 +105,10 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                   <span className={cn("text-3xl font-display font-medium", metric.color)}>{metric.value}</span>
                 </div>
               ))}
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <CausalSimulator data={data} />
             </div>
 
             <div className="flex flex-col gap-4">
@@ -134,9 +139,9 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                       { id: 'COMPUTE', name: t.compute_upgrade, cost: 10, desc: 'Entropy Collapse' },
                       { id: 'RESONANCE', name: t.resonance_upgrade, desc: 'Neural Sync', cost: 10 },
                       { id: 'MEMORY', name: t.memory_upgrade, desc: 'Holographic Cache', cost: 10 },
-                    ].map(upgrade => (
+                    ].map((upgrade, uIdx) => (
                       <button
-                        key={upgrade.id}
+                        key={`upgrade-${upgrade.id}-${uIdx}`}
                         onClick={() => onAction('upgrade', { stat: upgrade.id })}
                         disabled={(data?.evolution_points || 0) < upgrade.cost}
                         className={cn(
@@ -164,10 +169,10 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                       <span className="text-[10px] font-mono text-red-400 tracking-widest">{data?.safety_alerts?.length || 0} EVENTS</span>
                    </div>
                 </div>
-                <div className="ghibli-glass p-6 flex flex-col gap-4 max-h-64 overflow-y-auto custom-scrollbar">
-                   {(data?.safety_alerts && data.safety_alerts.length > 0) ? (
-                      data.safety_alerts.map((alert: any) => (
-                         <div key={alert.id} className="flex flex-col gap-2 p-4 bg-red-400/5 border border-red-400/10 rounded group">
+                <div className="ghibli-glass p-6 gap-3 flex flex-col pt-2 overflow-y-auto max-h-64 custom-scrollbar">
+                    {(data?.safety_alerts && data.safety_alerts.length > 0) ? (
+                      data.safety_alerts.map((alert: any, aIdx: number) => (
+                         <div key={`alert-${alert.id || aIdx}`} className="flex flex-col gap-2 p-4 bg-red-400/5 border border-red-400/10 rounded group">
                             <div className="flex justify-between items-center">
                                <span className="text-[10px] font-mono text-red-400 font-bold tracking-tighter decoration-double">{alert.type}</span>
                                <span className="text-[8px] font-mono text-white/30">{new Date(alert.timestamp).toLocaleTimeString()}</span>
@@ -336,8 +341,8 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
-                         {data?.active_tenants?.map((tenant: string) => (
-                            <div key={tenant} className={cn(
+                         {data?.active_tenants?.map((tenant: string, tIdx: number) => (
+                            <div key={`tenant-${tenant}-${tIdx}`} className={cn(
                                "p-3 rounded border flex flex-col gap-1",
                                data?.current_tenant === tenant ? "border-accent/40 bg-accent/5" : "border-white/5 bg-white/5 opacity-40"
                             )}>
@@ -356,9 +361,9 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                    <Globe size={12} className="text-white/40" />
                 </div>
                 <div className="ghibli-glass p-2 flex gap-1">
-                   {['AUTO', 'ZH_TW', 'EN', 'JP', 'VI', 'KO'].map((m_lang) => (
+                   {['AUTO', 'ZH_TW', 'EN', 'JP', 'VI', 'KO'].map((m_lang, lIdx) => (
                       <button
-                        key={m_lang}
+                        key={`lang-${m_lang}-${lIdx}`}
                         onClick={() => vedaService.postAction({ action: 'setLanguageManifold', params: { lang: m_lang } })}
                         className={cn(
                            "flex-1 py-2 text-[8px] font-mono transition-all rounded",
@@ -434,8 +439,8 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                 <div className="ghibli-glass p-8 flex flex-col gap-6">
                    {(data?.governanceRules && Object.keys(data.governanceRules).length > 0) ? (
                       <div className="flex flex-col gap-4">
-                         {Object.values(data.governanceRules).map((rule: any) => (
-                           <div key={rule.targetSid} className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-lg group">
+                         {Object.values(data.governanceRules).map((rule: any, rIdx: number) => (
+                           <div key={`rule-${rule.targetSid || rIdx}`} className="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-lg group">
                               <div className="flex flex-col">
                                  <span className="text-xs font-mono text-white/80">{rule.targetSid}</span>
                                  <span className="text-[9px] font-mono text-accent uppercase">{rule.strategy} PROTOCOL</span>

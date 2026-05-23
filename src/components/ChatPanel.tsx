@@ -887,7 +887,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
                       </div>
                     ) : (
                       distillationHistory.map((h, idx) => (
-                        <div key={idx} className="p-4 bg-white/5 rounded-none border border-cyan-500/10 hover:border-cyan-500/40 transition-all group relative">
+                        <div key={`distill-${h.version || idx}`} className="p-4 bg-white/5 rounded-none border border-cyan-500/10 hover:border-cyan-500/40 transition-all group relative">
                           <div className="text-[8px] font-bold tracking-[0.3em] text-cyan-500/40 mb-2 flex justify-between ff-font">
                             <span>{t.recall_anchor}: v{h.version}</span>
                             <span>{new Date(h.timestamp).toLocaleString()}</span>
@@ -1322,7 +1322,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
                         <div className="flex flex-wrap gap-2">
                           {msg.suggestions.map((s, idx) => (
                             <button
-                              key={idx}
+                              key={`msg-suggest-${idx}-${s.substring(0, 10)}`}
                               onClick={() => handleSend(s)}
                               className="group/btn relative px-4 py-2 bg-white/5 border border-white/10 rounded-none text-[8px] text-white/60 hover:text-cyan-300 transition-all active:scale-95 ff-font overflow-hidden"
                             >
@@ -1343,7 +1343,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
                         <div className="flex flex-wrap gap-2">
                           {msg.sources.map((source, idx) => (
                             <a 
-                              key={idx}
+                              key={`source-${idx}-${source.web?.uri || idx}`}
                               href={source.web?.uri}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -1438,7 +1438,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
                   <div className="flex flex-wrap gap-2">
                     {suggestions.map((s, idx) => (
                       <button
-                        key={idx}
+                        key={`suggest-${idx}-${s.substring(0, 10)}`}
                         onClick={() => handleSend(s)}
                         className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-none text-[10px] text-white/80 hover:bg-white/20 hover:border-cyan-400/50 hover:text-cyan-300 transition-all active:scale-95 ff-font"
                       >
@@ -1542,7 +1542,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {auditResult.diagnostics.map((d: any, idx: number) => (
-                        <div key={idx} className="p-4 bg-white/5 border border-white/5 flex flex-col gap-2 group hover:border-accent/30 transition-all">
+                        <div key={`diag-${idx}-${d.component}`} className="p-4 bg-white/5 border border-white/5 flex flex-col gap-2 group hover:border-accent/30 transition-all">
                           <span className="text-[10px] font-mono text-accent/60 uppercase">{d.component}</span>
                           <div className="flex justify-between items-center">
                             <span className="text-xs text-white/90">{d.status || d.count}</span>

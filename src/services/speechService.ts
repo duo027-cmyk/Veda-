@@ -1,27 +1,9 @@
-import { GoogleGenAI, Modality } from "@google/genai";
-
 class SpeechService {
-  private ai: GoogleGenAI | null = null;
   private audioContext: AudioContext | null = null;
   private currentSource: AudioBufferSourceNode | null = null;
   private audioQueue: { text: string; forceNative: boolean }[] = [];
   private isPlaying: boolean = false;
   public isUsingFallback: boolean = false;
-
-  private getAI() {
-    const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not defined in the environment.");
-    }
-    return new GoogleGenAI({ 
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build',
-        }
-      }
-    });
-  }
 
   private getAudioContext() {
     if (!this.audioContext) {
@@ -32,6 +14,9 @@ class SpeechService {
 
   async speak(text: string, forceNative: boolean = false) {
     if (!text || !text.trim()) return;
+
+    // Check if we already know we need fallback
+    if (this.isUsingFallback) forceNative = true;
 
     this.audioQueue.push({ text, forceNative });
     this.processQueue();
@@ -68,28 +53,8 @@ class SpeechService {
             }
           }
         } catch (error: any) {
-          const errorStr = JSON.stringify(error);
-          const isQuotaError = 
-            error?.message?.includes('429') || 
-            error?.status === 'RESOURCE_EXHAUSTED' || 
-            errorStr.includes('429') ||
-            errorStr.includes('RESOURCE_EXHAUSTED') ||
-            (error?.error?.code === 429);
-
-          if (isQuotaError) {
-            if (!this.isUsingFallback) {
-              console.warn("VEDA_SPEECH: Gemini TTS quota exhausted. Activating Sovereign Native Voice Protocol (Fallback).");
-              this.isUsingFallback = true;
-              window.dispatchEvent(new CustomEvent('veda_speech_fallback', { 
-                detail: { reason: 'QUOTA_EXHAUSTED' } 
-              }));
-            }
-          } else if (errorStr.includes('Rpc failed') || errorStr.includes('xhr error')) {
-            console.warn("VEDA_SPEECH: Network RPC failure detected. Activating Sovereign Native Voice Protocol (Fallback).");
-            this.isUsingFallback = true;
-          } else {
-            console.error("VEDA_SPEECH: Neural synthesis error, activating fallback:", error);
-          }
+          console.warn("VEDA_SPEECH: Neural synthesis error, activating fallback:", error);
+          this.isUsingFallback = true;
           await this.useNativeFallback(item.text);
         }
       }
@@ -110,27 +75,24 @@ class SpeechService {
 
     const fetchPromise = (async () => {
       try {
-        const ai = this.getAI();
-        const response = await ai.models.generateContent({
-          model: "gemini-3.1-flash-tts-preview",
-          contents: [{ parts: [{ text: `Say: ${text}` }] }],
-          config: {
-            responseModalities: [Modality.AUDIO],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: 'Kore' },
-              },
-            },
+        const response = await fetch("/api/speech/tts", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
           },
+          body: JSON.stringify({ text })
         });
 
-        const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (base64Audio) {
-          return await this.decodeBase64ToBuffer(base64Audio);
+        if (!response.ok) {
+          throw new Error(`TTS server-side response error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        if (result && result.audio) {
+          return await this.decodeBase64ToBuffer(result.audio);
         }
         return null;
       } catch (e) {
-        // We throw the error to be handled by the queue processor
         throw e;
       }
     })();

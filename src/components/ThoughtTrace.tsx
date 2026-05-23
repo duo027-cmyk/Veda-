@@ -8,7 +8,7 @@ export const ThoughtTrace = ({ trace }: { trace: { step: string; axiom?: string;
     <div className="flex flex-col gap-4 mt-6 border-l border-accent/20 pl-6 py-2">
       {trace.map((item, idx) => (
         <motion.div 
-          key={idx}
+          key={`thought-${idx}-${item.step.substring(0, 5)}`}
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: idx * 0.2 }}

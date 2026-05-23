@@ -41,7 +41,7 @@ export const Terminal: React.FC<TerminalProps> = ({ logs, onCommand, isProcessin
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar ff-font-serif text-[11px]">
         {logs.map((log, i) => (
           <motion.div 
-            key={i}
+            key={`log-${i}-${log.type}`}
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             className={`flex gap-4 items-start border-l border-white/5 pl-4 py-2 transition-colors hover:bg-white/5 ${

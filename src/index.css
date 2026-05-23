@@ -127,28 +127,31 @@
   }
 
   .clean-card {
-    @apply bg-panel border border-border-subtle rounded-2xl backdrop-blur-sm p-6;
-    transition: all 0.3s ease-out;
+    @apply bg-panel border border-border-subtle rounded-3xl backdrop-blur-md p-6;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .clean-card:hover {
-    @apply border-accent/30 bg-accent-soft;
+    @apply border-accent/40 bg-accent-soft;
+    transform: translateY(-3px);
+    box-shadow: 0 20px 40px -20px var(--accent-soft);
   }
 
   .data-label {
-    @apply text-[10px] tracking-[0.2em] font-mono uppercase text-ink opacity-40 font-bold mb-1;
+    @apply text-[10px] tracking-[0.25em] font-mono uppercase text-ink opacity-40 font-bold mb-1;
   }
 
   .data-value {
-    @apply text-lg font-display text-ink tracking-wider;
+    @apply text-xl font-display text-ink tracking-wider;
   }
 
   .nav-rail-item {
-    @apply flex flex-col items-center gap-2 py-6 px-4 transition-all duration-700 opacity-20 hover:opacity-100 cursor-pointer;
+    @apply flex flex-col items-center gap-2 py-4 px-4 transition-all duration-500 opacity-30 hover:opacity-100 cursor-pointer rounded-2xl;
   }
   .nav-rail-item.active {
     @apply opacity-100;
     background: linear-gradient(90deg, var(--accent-soft) 0%, transparent 100%);
     border-right: 2px solid var(--accent);
+    box-shadow: inset 2px 0 10px rgba(139, 92, 246, 0.1);
   }
 
   .liquid-ink {
@@ -167,23 +170,29 @@
   }
 
   .message-bubble {
-    max-width: 85%;
+    max-width: 80%;
     padding: 1.25rem 1.75rem;
-    border-radius: 1.5rem;
+    border-radius: 2rem;
     position: relative;
-    animation: bubbleFadeIn 0.4s ease-out;
+    animation: bubbleFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
     line-height: 1.8;
   }
   .user-bubble {
-    @apply bg-accent text-white;
-    border-bottom-right-radius: 4px;
+    background: linear-gradient(135deg, var(--accent) 0%, #a78bfa 100%);
+    color: white;
+    border-bottom-right-radius: 6px;
     margin-left: auto;
-    box-shadow: 0 4px 20px var(--accent-soft);
+    box-shadow: 
+      0 10px 25px -5px rgba(139, 92, 246, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
     @apply font-sans font-normal text-[0.95rem];
   }
   .ai-bubble {
-    @apply bg-panel backdrop-blur-2xl border border-border-subtle text-ink;
-    border-bottom-left-radius: 4px;
+    @apply bg-panel backdrop-blur-3xl border border-border-subtle text-ink;
+    border-bottom-left-radius: 6px;
+    box-shadow: 
+      0 10px 30px -10px rgba(0, 0, 0, 0.15),
+      inset 0 1px 1px rgba(255, 255, 255, 0.05);
     @apply font-sans font-light text-[0.95rem];
   }
 
@@ -191,19 +200,19 @@
     @apply space-y-4;
   }
   .markdown-body h1, .markdown-body h2, .markdown-body h3 {
-    @apply font-display text-[0.7rem] tracking-[0.3em] uppercase opacity-40 mt-6 mb-2 border-none;
+    @apply font-display text-[0.75rem] tracking-[0.3em] uppercase opacity-50 mt-6 mb-2 border-none text-accent;
   }
   .markdown-body p {
-    @apply font-sans leading-relaxed text-inherit opacity-90;
+    @apply font-sans leading-relaxed text-inherit opacity-95;
   }
   .markdown-body ul, .markdown-body ol {
-    @apply space-y-2 ml-4 list-disc opacity-90;
+    @apply space-y-2 ml-4 list-disc opacity-95;
   }
   .markdown-body li {
     @apply pl-1;
   }
   .markdown-body strong {
-    @apply text-accent font-medium;
+    @apply text-accent font-semibold;
   }
   .markdown-body code {
     @apply font-mono text-[0.8rem] bg-accent-soft px-1.5 py-0.5 rounded opacity-80;

@@ -12,7 +12,7 @@ interface VedaState {
   isLoading: boolean;
   
   // Actions
-  setUserData: (data: BrainData | null) => void;
+  setUserData: (userData: BrainData | null | ((prev: BrainData | null) => BrainData | null)) => void;
   setApiError: (error: string | null) => void;
   setLastLog: (log: string | null) => void;
   setIsPulsing: (pulsing: boolean) => void;
@@ -29,7 +29,13 @@ export const useVedaStore = create<VedaState>((set, get) => ({
   isPulsing: false,
   isLoading: true,
 
-  setUserData: (userData) => set({ userData, isLoading: false }),
+  setUserData: (userData: BrainData | null | ((prev: BrainData | null) => BrainData | null)) => {
+    if (typeof userData === 'function') {
+      set((state) => ({ userData: userData(state.userData), isLoading: false }));
+    } else {
+      set({ userData, isLoading: false });
+    }
+  },
   setApiError: (apiError) => set({ apiError }),
   setLastLog: (lastLog) => set({ lastLog }),
   setIsPulsing: (isPulsing) => set({ isPulsing }),

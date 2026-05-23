@@ -287,6 +287,11 @@ export default function App() {
 
       <main className="pl-0 md:pl-24 h-screen relative z-30 transition-all duration-500">
         <AnimatePresence mode="wait">
+          {!userData && !apiError ? (
+             <motion.div key="loader" className="h-full flex items-center justify-center">
+               <Loader2 className="w-8 h-8 text-accent animate-spin opacity-20" />
+             </motion.div>
+          ) : (
           <motion.div
             key={view}
             initial={{ opacity: 0, x: 10, filter: 'blur(15px)' }}
@@ -367,9 +372,9 @@ export default function App() {
                 }} 
               />
             )}
-            {view === 'CINEMA' && (
+            {view === 'CINEMA' && userData && (
               <CinemaManifold 
-                data={userData!} 
+                data={userData} 
                 onUpdate={() => fetchVedaData()} 
               />
             )}
@@ -378,6 +383,7 @@ export default function App() {
                <CoreConfig data={userData} onUpdate={() => fetchVedaData()} />
             )}
           </motion.div>
+          )}
         </AnimatePresence>
       </main>
 

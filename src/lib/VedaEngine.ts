@@ -46,9 +46,10 @@ export class VedaEngine {
     return m;
   }
 
-  private selectMemory(query: string): MemoryFragment | null {
+  private selectMemory(input: string): MemoryFragment | null {
     if (this.network.memories.size === 0) return null;
     
+    const query = String(input || "");
     const lower = query.toLowerCase();
     const candidates = Array.from(this.network.memories.values());
     

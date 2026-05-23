@@ -48,6 +48,8 @@ class KNBService {
   constructor() {
     this.db = new KnowledgeDatabase();
     this.initOrama();
+    // Pre-initialize embedding engine to prevent first-load hangs
+    this.init().catch(e => console.warn("[KNB] Pre-init failed, will retry on use:", e));
   }
 
   private async initOrama() {

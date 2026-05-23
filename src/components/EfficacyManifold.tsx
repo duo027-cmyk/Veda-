@@ -63,9 +63,9 @@ export const EfficacyManifold = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-             {tiers.map((tier) => (
+             {tiers.map((tier, tIdx) => (
                 <motion.div
-                  key={tier.id}
+                  key={`tier-${tier.id}-${tIdx}`}
                   whileHover={{ y: -5 }}
                   className={cn(
                     "ghibli-glass p-8 border flex flex-col gap-6 transition-all duration-500",
@@ -87,8 +87,8 @@ export const EfficacyManifold = ({
                    </div>
 
                    <div className="flex flex-col gap-3 py-6 border-y border-white/5">
-                      {tier.features.map(f => (
-                        <div key={f} className="flex items-center gap-2">
+                      {tier.features.map((f, fIdx) => (
+                        <div key={`feature-${tier.id}-${fIdx}`} className="flex items-center gap-2">
                            <div className="w-1 h-1 bg-accent rounded-full" />
                            <span className="text-[9px] font-mono text-white/60 tracking-wider font-bold">{f}</span>
                         </div>
@@ -127,8 +127,8 @@ export const EfficacyManifold = ({
                       { label: 'Causal Depth', key: 'causal_depth' },
                       { label: 'Market Foresight', key: 'market_foresight' },
                       { label: 'Security Clearance', key: 'security_clearance', isLevel: true }
-                   ].map(metric => (
-                      <div key={metric.key} className="flex flex-col gap-3">
+                   ].map((metric, mIdx) => (
+                      <div key={`efficacy-metric-${metric.key}-${mIdx}`} className="flex flex-col gap-3">
                          <span className="text-[9px] font-mono text-white/40 uppercase tracking-widest">{metric.label}</span>
                          <div className="flex items-end gap-2">
                             <span className="text-3xl font-mono text-white">

@@ -20,12 +20,20 @@ export const LatticeCruncher: React.FC<{ brain: BrainData | null }> = ({ brain }
   const [showVitals, setShowVitals] = useState(false);
   const [errorCount, setErrorCount] = useState(0);
   const isCrunched = useRef<Set<string>>(new Set());
+  const brainRef = useRef<BrainData | null>(brain);
+
+  // Maintain chronological precision of incoming brain state vector (AGI v6.0 Decoupling)
+  brainRef.current = brain;
 
   useEffect(() => {
-    if (!brain || !brain.lattice_jobs) return;
+    const latestBrain = brainRef.current;
+    if (!latestBrain || !latestBrain.lattice_jobs) return;
 
     const crunchJobs = async () => {
-      const jobs = brain.lattice_jobs || []; 
+      const activeBrain = brainRef.current;
+      if (!activeBrain || !activeBrain.lattice_jobs) return;
+      
+      const jobs = activeBrain.lattice_jobs || []; 
       // V-AA Protocol: Robust filtering for compute-ready jobs
       const pendingJobs = jobs.filter(j => 
         (j.status === 'PENDING' || j.status === 'PROCESSING' || j.status === 'SYNTHESIZING') && 
@@ -74,102 +82,37 @@ export const LatticeCruncher: React.FC<{ brain: BrainData | null }> = ({ brain }
   }, [brain, activeJobId]);
 
   const executeJob = async (job: LatticeJob) => {
-    const { ai } = vedaService.getAI();
-
-    if (job.type === "STRATEGIC_OUTLINE") {
-      const { prompt } = job.payload;
-      const result = await ai.models.generateContent({ 
-        model: "gemini-3.1-pro-preview",
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: {
-          responseMimeType: "application/json",
-          temperature: 0.7,
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              axioms: { type: Type.ARRAY, items: { type: Type.STRING } },
-              outline: { 
-                type: Type.ARRAY, 
-                items: { 
-                  type: Type.OBJECT, 
-                  properties: {
-                    title: { type: Type.STRING },
-                    guideline: { type: Type.STRING }
-                  },
-                  required: ["title", "guideline"]
-                } 
-              }
-            },
-            required: ["axioms", "outline"]
-          }
-        }
-      });
-
-      return JSON.parse(result.text);
-    } 
+    // V-AA Protocol: Divert all Gemini compute to the Sovereign Server Core 
+    // to prevent memory leaks and API key exposure in the browser. 
+    // The server LatticeExecutionManager is already processing these jobs.
+    console.log(`[LATTICE_CRUNCHER] Awaiting server solidification for: ${job.type} | ID: ${job.id}`);
     
-    if (job.type === "REPORT_SECTION_SYNTHESIS") {
-      const { prompt } = job.payload;
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: { temperature: 1.0 }
-      });
-      const rawContent = response.text;
-
-      // V-AA Protocol: Recursive Refinement (Self-Audit)
-      const auditPrompt = `VEDA_AUDIT_PROTOCOL: 評估以下戰略報告章節內容。
-要求：
-1. 內容是否具備教授級認知深度？ (Epistemic Depth)
-2. 是否存在邏輯脫相或幻覺？ (Causal Integrity)
-3. 請提供一份「精煉修正建議」，或回傳 "APPROVED"。
-
-內容：
-${rawContent.substring(0, 3000)}`;
-
-      const auditResponse = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: 'user', parts: [{ text: auditPrompt }] }]
-      });
-      const auditText = auditResponse.text;
+    // We remain in this loop until the server updates the job status to SOLIDIFIED or FAILED
+    // This provides a visual indicator in the HUD.
+    return new Promise((resolve, reject) => {
+      const checkInterval = setInterval(() => {
+        const latestBrain = brainRef.current;
+        if (!latestBrain?.lattice_jobs) {
+          clearInterval(checkInterval);
+          reject("Brain data lost");
+          return;
+        }
+        const currentJob = latestBrain.lattice_jobs.find(j => j.id === job.id);
+        if (currentJob?.status === 'SOLIDIFIED') {
+          clearInterval(checkInterval);
+          resolve(currentJob.result);
+        } else if (currentJob?.status === 'FAILED') {
+          clearInterval(checkInterval);
+          reject("Server-side execution failed");
+        }
+      }, 2000);
       
-      if (auditText.toUpperCase().includes("APPROVED")) {
-        return rawContent;
-      } else {
-        return rawContent + "\n\n--- [VEDA_AUDIT_REFINEMENT] ---\n" + auditText;
-      }
-    }
-
-    if (job.type === "CAUSAL_EVOLUTION_REPORT") {
-      const { event, version, snapshot, falsification } = job.payload;
-      const researchPrompt = `VEDA_CAUSAL_SYNTHESIS:
-      因果演化事件: ${event}
-      認識論版本: v${version}
-      系統快照: ${JSON.stringify(snapshot)}
-      當前證偽假設: ${falsification?.description || "NONE"}
-      
-      任務：請為 VEDA 生成一份高密度的「戰略研判紀實簡報」。
-      風格：教授級認知、冷靜、具體。
-      字數：約 200 字。`;
-
-      const result = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: [{ role: 'user', parts: [{ text: researchPrompt }] }]
-      });
-      return result.text;
-    }
-
-    if (job.type === "STRATEGIC_PREDICTION") {
-      const prompt = `VEDA_CAUSAL_PROTOCOL: 戰略預測運算負載：${JSON.stringify(job.payload)}`;
-      const result = await ai.models.generateContent({
-        model: "gemini-3.1-pro-preview",
-        contents: [{ role: 'user', parts: [{ text: prompt }] }]
-      });
-      return result.text;
-    }
-
-    await new Promise(r => setTimeout(r, 1000));
-    return `CRUNCHED_RESULT_FOR_${job.id}`;
+      // Safety timeout after 2 minutes
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        reject("Lattice compute timeout");
+      }, 120000);
+    });
   };
 
   const epistemic = brain?.epistemic_state;
@@ -182,6 +125,7 @@ ${rawContent.substring(0, 3000)}`;
       <AnimatePresence>
         {showVitals && (
           <motion.div 
+            key="lattice-vitals-overlay"
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
@@ -356,7 +300,7 @@ ${rawContent.substring(0, 3000)}`;
                   </span>
                   <div className="max-h-24 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                     {brain.research_chronicles.slice(-3).reverse().map((rc, i) => (
-                      <div key={rc.id || i} className="text-[9px] text-slate-400 bg-cyan-500/5 p-1.5 rounded border border-cyan-500/10">
+                      <div key={`rc-${rc.id || `chron-${i}`}`} className="text-[9px] text-slate-400 bg-cyan-500/5 p-1.5 rounded border border-cyan-500/10">
                         <div className="text-cyan-300 font-bold truncate">{rc.title}</div>
                         <div className="line-clamp-2 mt-1 italic text-slate-300">"{rc.event}"</div>
                       </div>

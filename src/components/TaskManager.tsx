@@ -306,9 +306,9 @@ export const TaskManager: React.FC = () => {
                       {/* Display Tags */}
                       {task.tags && task.tags.length > 0 && (
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {task.tags.map(tag => (
+                          {task.tags.map((tag, tIdx) => (
                             <button
-                              key={tag}
+                              key={`task-${task.id}-tag-${tag}-${tIdx}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedTag(tag);

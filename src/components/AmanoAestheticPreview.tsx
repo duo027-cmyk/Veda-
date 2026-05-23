@@ -82,7 +82,7 @@ export const AmanoAestheticPreview = ({ user, memories }: any) => {
         <div className="flex justify-between items-end w-full">
           <nav className="flex flex-col gap-16 items-start pointer-events-auto">
             {['LOGS', 'ARCHIVE', 'CORE'].map((txt, i) => (
-              <button key={i} className="nav-rail-text hover:text-white transition-opacity text-white/30">
+              <button key={`nav-${txt}-${i}`} className="nav-rail-text hover:text-white transition-opacity text-white/30">
                 {txt}
               </button>
             ))}

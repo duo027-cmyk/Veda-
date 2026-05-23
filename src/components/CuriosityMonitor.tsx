@@ -64,7 +64,7 @@ export const CuriosityMonitor = ({ data }: { data: BrainData | null }) => {
             <motion.div 
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
-              key={idx} 
+              key={`log-${idx}-${log.substring(0, 10)}`} 
               className="flex items-start gap-3 text-[10px] font-mono text-white/60 leading-tight group/log"
             >
               <div className="mt-1 w-1 h-1 rounded-full bg-accent group-hover/log:scale-150 transition-transform" />

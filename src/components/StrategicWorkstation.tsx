@@ -133,9 +133,9 @@ export const StrategicWorkstation: React.FC<StrategicWorkstationProps> = ({ data
         <aside className="flex flex-col gap-6 overflow-hidden">
           <div className="flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
             <h3 className="text-[10px] font-mono tracking-[0.4em] opacity-40 uppercase mb-2">History / 歷史存檔</h3>
-            {reports.map(r => (
+            {reports.map((r, rIdx) => (
               <button
-                key={r.id}
+                key={`report-${r.id}-${rIdx}`}
                 onClick={() => setSelectedReportId(r.id)}
                 className={`p-4 text-left border transition-all relative overflow-hidden group ${
                   selectedReportId === r.id 
@@ -192,7 +192,7 @@ export const StrategicWorkstation: React.FC<StrategicWorkstationProps> = ({ data
               )}
               {selectedReport?.outline.map((sec, i) => (
                 <div 
-                  key={sec.id}
+                  key={`outline-sec-${sec.id}-${i}`}
                   className={`flex items-center justify-between p-3 border ${
                     sec.status === 'DONE' ? 'border-accent/20 bg-accent/5' : 'border-white/5 bg-white/5'
                   }`}
@@ -250,7 +250,7 @@ export const StrategicWorkstation: React.FC<StrategicWorkstationProps> = ({ data
               <div className="flex-1 overflow-y-auto custom-scrollbar p-12 lg:p-20">
                 <div className="max-w-3xl mx-auto space-y-24">
                   {selectedReport.outline.map((sec, i) => (
-                    <div key={sec.id} className="relative group/sec">
+                    <div key={`content-sec-${sec.id}-${i}`} className="relative group/sec">
                       <div className="absolute -left-12 top-0 opacity-10 group-hover/sec:opacity-30 transition-opacity">
                          <span className="text-[40px] font-display">0{i+1}</span>
                       </div>

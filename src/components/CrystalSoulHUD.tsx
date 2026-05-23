@@ -63,7 +63,7 @@ export const CrystalSoulHUD: React.FC<CrystalSoulHUDProps> = ({ crystal }) => {
           <div className="jobs-label border-b border-black/5 pb-2">Mineral_Harmonics</div>
           <div className="grid grid-cols-1 gap-5">
             {crystal.ratios.map((ratio, idx) => (
-              <div key={idx} className="flex items-center justify-between group">
+              <div key={`mineral-${idx}-${mineralNames[idx]}`} className="flex items-center justify-between group">
                 <div className="flex flex-col">
                   <span className="text-[10px] text-black/60 ff-font-serif italic">{mineralNames[idx]}</span>
                   <div className={`h-[1px] w-24 mt-1 bg-black/5 relative overflow-hidden`}>

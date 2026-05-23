@@ -1,6 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Cpu, Zap, Activity, Info } from 'lucide-react';
+import { Cpu, Zap, Activity, Info, ShieldAlert } from 'lucide-react';
+
+function cn(...inputs: any[]) {
+  return inputs.filter(Boolean).join(' ');
+}
 
 interface LogEntry {
   id: string;
@@ -57,9 +61,9 @@ export const EpistemicLog: React.FC<EpistemicLogProps> = ({ logs }) => {
       
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
         <AnimatePresence initial={false}>
-          {logs.map((log) => (
+          {logs.map((log, lIdx) => (
             <motion.div 
-              key={log.id}
+              key={`log-${log.id || lIdx}-${lIdx}`}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               className="group flex gap-3 items-start py-1.5 px-2 hover:bg-white/5 transition-colors rounded-lg border-l border-transparent hover:border-white/10"
@@ -99,9 +103,3 @@ export const EpistemicLog: React.FC<EpistemicLogProps> = ({ logs }) => {
     </div>
   );
 };
-
-import { ShieldAlert } from 'lucide-react';
-
-function cn(...inputs: any[]) {
-  return inputs.filter(Boolean).join(' ');
-}

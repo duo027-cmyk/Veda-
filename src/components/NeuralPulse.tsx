@@ -34,7 +34,7 @@ export const NeuralPulse: React.FC<NeuralPulseProps> = ({ coherence, rejectionCo
       <div className="relative w-full h-full flex items-center justify-center">
         {Array.from({ length: pulseCount }).map((_, i) => (
           <motion.div
-            key={i}
+            key={`pulse-${i}`}
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ 
               scale: [0.8, 1.8], 

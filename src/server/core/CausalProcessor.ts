@@ -13,6 +13,9 @@ export class CausalProcessor {
 
   public filterInputEpistemically(text: string): { credible: boolean; entropy: number; pollutionLevel: number } {
     // VEDA v7.0: Epistemic Filtering Layer
+    if (typeof text !== 'string') {
+      return { credible: true, entropy: 0.1, pollutionLevel: 0 };
+    }
     const suspiciousKeywords = ["hallucination", "mock", "simulated", "fake data", "placeholder"];
     const pollutionCount = suspiciousKeywords.filter(k => text.toLowerCase().includes(k)).length;
     const entropy = 0.1 + (pollutionCount * 0.2) + (Math.random() * 0.05);
@@ -29,8 +32,9 @@ export class CausalProcessor {
     return result;
   }
 
-  public constructCausalLattice(thought: string) {
+  public constructCausalLattice(input: string) {
     // VEDA v7.0: Causal Lattice Layer
+    const thought = String(input || "");
     const id = crypto.randomBytes(4).toString('hex');
     const nodes = thought.split(/[。\n]/).filter(s => s.length > 5).slice(0, 5);
     

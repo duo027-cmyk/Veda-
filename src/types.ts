@@ -223,6 +223,8 @@ export interface BrainData extends BrainMetrics, BrainStatus {
     alignmentIndex: number;
     uncertaintyVariance?: number;
     protocol: string;
+    latency_ns?: number;
+    throughput_teraops?: number;
   };
   burst_status?: {
     active: boolean;

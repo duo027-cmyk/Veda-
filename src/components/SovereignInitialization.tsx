@@ -11,7 +11,7 @@ export const SovereignInitialization: React.FC = () => {
           <div className="flex gap-2 justify-center">
              {[0, 1, 2].map(i => (
                 <motion.div 
-                  key={i}
+                  key={`dot-${i}`}
                   animate={{ opacity: [0, 1, 0] }}
                   transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.4 }}
                   className="w-1.5 h-1.5 bg-accent rounded-full"

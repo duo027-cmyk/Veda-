@@ -1,6 +1,7 @@
 export class SemanticParser {
-  parse(text: string, lastResult: number | null): string | null {
-    if (!text) return null;
+  parse(input: string, lastResult: number | null): string | null {
+    if (!input) return null;
+    const text = String(input);
     const lower = text.toLowerCase().trim();
     
     // 1. Direct math expression extraction

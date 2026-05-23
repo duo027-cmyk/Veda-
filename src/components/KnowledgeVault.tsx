@@ -135,7 +135,7 @@ export const KnowledgeVault = ({ data }: { data: BrainData | null }) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {fragments.map((f, i) => (
               <motion.div 
-                key={f.id}
+                key={`fragment-${f.id || i}`}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: i * 0.05 }}
