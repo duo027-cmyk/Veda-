@@ -39,6 +39,30 @@ export class AGI_JEPA_Arch {
     return prediction;
   }
 
+  /**
+   * Yann LeCun's Masked Latent State Estimator (MLSE) - Meta I-JEPA Representation Pattern
+   * Masking certain latent slots forces the predictor to leverage spatio-temporal context 
+   * and intent vectors to form coherent predictions, preventing trivial autoencoder shortcuts.
+   */
+  public predictMasked(latentS: number[], action: number[], maskIndices: number[]): number[] {
+    const combined = [...latentS, ...action];
+    const prediction = this.predictorWeights.map((row, i) => {
+      if (maskIndices.includes(i)) {
+        // Enforce contextual inference over direct reconstruction by masking self-feedback coefficients
+        const sum = row.reduce((acc, w, idx) => {
+          const isMaskedFeedback = idx < this.latentDim && maskIndices.includes(idx);
+          return acc + w * (isMaskedFeedback ? 0 : combined[idx] || 0);
+        }, 0);
+        return Math.tanh(sum * 1.3); // Scale contextual prediction gain
+      } else {
+        const sum = row.reduce((acc, w, idx) => acc + w * (combined[idx] || 0), 0);
+        return Math.tanh(sum);
+      }
+    });
+    this.lastLatentPrediction = prediction;
+    return prediction;
+  }
+
   public computeEnergy(predictedLatent: number[], actualLatent: number[]): number {
     const energy = predictedLatent.reduce((acc, p, i) => acc + Math.pow(p - actualLatent[i], 2), 0);
     this.energyHistory.push(energy);
@@ -49,43 +73,56 @@ export class AGI_JEPA_Arch {
   public step(state: number[], action: number[], nextState: number[]) {
     const s_t = this.encode(state);
     const s_next = this.encode(nextState);
-    const s_hat = this.predict(s_t, action);
+    
+    // Simulate Meta's I-JEPA/V-JEPA patch-wise masking (masking 2 arbitrary dimensions out of the 8-dim latent space)
+    const maskIndices = [Math.floor(Math.random() * this.latentDim), (Math.floor(Math.random() * this.latentDim) + 3) % this.latentDim];
+    const s_hat = this.predictMasked(s_t, action, maskIndices);
     const energy = this.computeEnergy(s_hat, s_next);
     
-    // Adaptive Learning Rate based on surprise gradient
-    const adaptiveLR = this.learningRate * (1 + energy * 2);
+    // Adaptive Learning Rate governed by surprise gradient & environmental entropy
+    // High surprise or instability triggers localized higher learning precision, while baseline coherence enforces stable, long-term weights.
+    const entropyFactor = Math.max(0.1, 1.0 - (energy * 0.5));
+    const adaptiveLR = this.learningRate * (1.0 + energy * 2.8) * entropyFactor;
     const combined = [...s_t, ...action];
 
-    // Predictor Optimization: Minimize L2 Energy between s_hat and s_next
+    // Predictor Optimization: Minimize L2 Energy between s_hat and s_next with momentum
     for (let i = 0; i < this.latentDim; i++) {
       const error = s_next[i] - s_hat[i];
-      const gradient = error * (1 - Math.pow(s_hat[i], 2)); // Tanh derivative
+      // Robust error clipping to prevent gradient explosion
+      const stableError = Math.max(-0.95, Math.min(0.95, error));
+      const gradient = stableError * (1 - Math.pow(s_hat[i], 2)); // Tanh derivative
+      
       for (let j = 0; j < combined.length; j++) {
-        // Momentum-based update
         const delta = adaptiveLR * gradient * combined[j];
-        this.predictorMomentum[i][j] = (this.predictorMomentum[i][j] * this.momentumFactor) + (delta * (1 - this.momentumFactor));
+        // Adaptive momentum friction
+        const dynamicMomentum = this.momentumFactor * (0.95 + 0.05 * Math.tanh(energy));
+        this.predictorMomentum[i][j] = (this.predictorMomentum[i][j] * dynamicMomentum) + (delta * (1 - dynamicMomentum));
         this.predictorWeights[i][j] += this.predictorMomentum[i][j];
       }
     }
 
-    // Encoder Optimization: Pull s_next towards a state that makes s_hat accurate
-    // (Dual-track optimization for world-model consistency)
-    if (energy > 0.1) {
+    // Encoder Optimization: Dynamic Predictive Pull with error-rejection thresholds
+    // This maintains world-model representation consistency of states over epochs
+    if (energy > 0.08) {
       for (let i = 0; i < this.latentDim; i++) {
           const error = s_hat[i] - s_next[i];
-          const gradient = error * (1 - Math.pow(s_next[i], 2));
+          const stableError = Math.max(-0.9, Math.min(0.9, error));
+          const gradient = stableError * (1 - Math.pow(s_next[i], 2));
           for (let j = 0; j < this.inputDim; j++) {
-              this.encoderWeights[i][j] -= adaptiveLR * 0.5 * gradient * nextState[j];
+              // Smooth representation alignment
+              this.encoderWeights[i][j] -= adaptiveLR * 0.45 * gradient * (nextState[j] || 0);
           }
       }
     }
 
-    // Optimization: Dynamic Manifold Pruning (L1 Regularization to enforce sparsity)
-    if (Math.random() > 0.99) {
+    // Dual regularized sparse manifold pruning (Ll/L2 decay check to optimize representation boundaries)
+    if (Math.random() > 0.95) {
       for (let i = 0; i < this.latentDim; i++) {
         for (let j = 0; j < this.predictorWeights[i].length; j++) {
-          this.predictorWeights[i][j] *= 0.999; // Weight decay
-          if (Math.abs(this.predictorWeights[i][j]) < 0.0001) this.predictorWeights[i][j] = 0;
+          this.predictorWeights[i][j] *= 0.9992; // L2 Weight Decay
+          if (Math.abs(this.predictorWeights[i][j]) < 0.00008) {
+            this.predictorWeights[i][j] = 0; // L1 Hard Threshold Sparsity
+          }
         }
       }
     }

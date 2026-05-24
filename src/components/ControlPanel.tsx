@@ -245,16 +245,16 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   useEffect(() => {
     if (data?.global_coherence !== undefined) {
       setRealTimeHistory(prev => {
-        const next = [...prev, { val: data.global_coherence, time: new Date().toLocaleTimeString() }];
+        const next = [...prev, { val: data?.global_coherence ?? 0.5, time: new Date().toLocaleTimeString() }];
         if (next.length > 60) return next.slice(1);
         return next;
       });
     }
   }, [data?.global_coherence]);
 
-  const chartData = useMemo(() => data ? data.labels.map((label, i) => ({
-    subject: label,
-    A: data.vectors[i],
+  const chartData = useMemo(() => (data && data.labels && data.vectors) ? data.labels.map((label, i) => ({
+    subject: label ?? `V_${i}`,
+    A: data.vectors[i] ?? 0.5,
     fullMark: 1,
   })) : [], [data?.vectors, data?.labels]);
 
@@ -378,7 +378,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                   <div className="flex flex-col">
                     <span className="text-[8px] text-emerald-400 uppercase tracking-widest font-bold">Swarm Efficiency</span>
                     <span className="text-[5px] text-emerald-400/40 uppercase">
-                      {data.is_bursting ? (
+                      {data?.is_bursting ? (
                         <span className="text-emerald-300 animate-pulse">PEAK_RESONANCE</span>
                       ) : "Synchrony Active"}
                     </span>
@@ -422,12 +422,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 <div className="text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">Global Coherence</div>
                 <div className="text-xl font-serif text-cyan-400">{((data?.global_coherence || 0) * 100).toFixed(1)}%</div>
                 <div className="w-full h-[1px] bg-white/5">
-                  <div className="h-full bg-cyan-400/50 shadow-[0_0_10px_rgba(34,211,238,0.5)]" style={{ width: `${data.global_coherence * 100}%` }} />
+                  <div className="h-full bg-cyan-400/50 shadow-[0_0_10px_rgba(34,211,238,0.5)]" style={{ width: `${(data?.global_coherence || 0) * 100}%` }} />
                 </div>
               </div>
               
-              <div className="col-span-2 mt-4 bg-black/40 border border-white/5 rounded overflow-hidden">
-                <NervePulse coherence={data.global_coherence} />
+              <div className="col-span-2 mt-4 bg-black/40 border border-white/5 rounded overflow-hidden relative">
+                <NervePulse coherence={data?.global_coherence ?? 0.5} />
                 <div className="absolute inset-x-0 bottom-0 py-1 bg-cyan-400/10 text-center">
                   <span className="text-[6px] tracking-[0.5em] text-cyan-400 uppercase font-black">Neural_Resonance_Flow</span>
                 </div>
@@ -436,26 +436,26 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 <div className="text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">Entropy Level</div>
                 <div className="text-xl font-serif text-blue-400">{((data?.entropy || 0) * 100).toFixed(1)}%</div>
                 <div className="w-full h-[1px] bg-white/5">
-                  <div className="h-full bg-blue-400/50 float-right" style={{ width: `${data.entropy * 100}%` }} />
+                  <div className="h-full bg-blue-400/50 float-right" style={{ width: `${(data?.entropy || 0) * 100}%` }} />
                 </div>
               </div>
               <div className="space-y-1">
                 <div className="text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">Trend Status</div>
-                <div className={`text-xs font-serif flex items-center gap-1 ${data.trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {data.trend > 0 ? <TrendingUp size={12} /> : <TrendingUp size={12} className="rotate-180" />}
-                  {data.trend_state}
+                <div className={`text-xs font-serif flex items-center gap-1 ${(data?.trend || 0) > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {(data?.trend || 0) > 0 ? <TrendingUp size={12} /> : <TrendingUp size={12} className="rotate-180" />}
+                  {data?.trend_state || 'STABLE'}
                 </div>
               </div>
               <div className="space-y-1 text-right">
                 <div className="text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">Strategic Rank</div>
-                <div className="text-xs font-serif text-yellow-500 font-bold tracking-widest">{data.strategic_rank}</div>
+                <div className="text-xs font-serif text-yellow-500 font-bold tracking-widest">{data?.strategic_rank || 'N/A'}</div>
               </div>
 
               <div className="col-span-2 pt-4 mt-2 border-t border-white/5 flex gap-2">
-                <FlagIndicator active={data.is_bursting} label="BURST" color="bg-orange-500" />
-                <FlagIndicator active={data.is_planck_active} label="PLANCK" color="bg-cyan-500" />
-                <FlagIndicator active={data.vault_active} label="VAULT" color="bg-amber-400" />
-                <FlagIndicator active={data.guardian_mode} label="GUARD" color="bg-red-500" />
+                <FlagIndicator active={data?.is_bursting} label="BURST" color="bg-orange-500" />
+                <FlagIndicator active={data?.is_planck_active} label="PLANCK" color="bg-cyan-500" />
+                <FlagIndicator active={data?.vault_active} label="VAULT" color="bg-amber-400" />
+                <FlagIndicator active={data?.guardian_mode} label="GUARD" color="bg-red-500" />
               </div>
 
               <div className="col-span-2 pt-4 mt-2 border-t border-white/5 space-y-2">
@@ -469,7 +469,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       key={`inference-mode-${mode}-${mIdx}`}
                       className={cn(
                         "flex-1 py-1 text-center text-[8px] font-black tracking-widest transition-all",
-                        data.last_sovereign_action === mode 
+                        data?.last_sovereign_action === mode 
                           ? mode === 'EXPLORE' ? "bg-orange-500 text-black shadow-[0_0_10px_rgba(249,115,22,0.4)]" :
                             mode === 'CONSOLIDATE' ? "bg-cyan-500 text-black shadow-[0_0_10px_rgba(34,211,238,0.4)]" :
                             "bg-purple-500 text-black shadow-[0_0_10px_rgba(168,85,247,0.4)]"
@@ -483,16 +483,16 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
               </div>
 
               {/* Sovereign Evolution Gauge */}
-              {data.sovereign_index !== undefined && (
+              {data?.sovereign_index !== undefined && (
                 <div className="col-span-2 pt-4 mt-2 border-t border-white/5 space-y-2">
                   <div className="flex justify-between items-center text-[7px] text-white/40 uppercase tracking-[0.2em]">
                     <span>Sovereign Evolution</span>
-                    <span className="text-cyan-400 font-bold">{data.sovereign_index}%</span>
+                    <span className="text-cyan-400 font-bold">{data?.sovereign_index}%</span>
                   </div>
                   <div className="w-full h-1 bg-white/5 relative overflow-hidden">
                     <motion.div 
                       initial={{ width: 0 }}
-                      animate={{ width: `${data.sovereign_index}%` }}
+                      animate={{ width: `${data?.sovereign_index}%` }}
                       className="absolute inset-y-0 left-0 bg-gradient-to-r from-cyan-600 via-cyan-400 to-white shadow-[0_0_10px_rgba(34,211,238,0.5)]"
                     />
                     {[25, 50, 75].map((tick, tIdx) => (
@@ -508,8 +508,34 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 </div>
               )}
 
+              {/* AGI Convergence Proximity Gauge */}
+              {data?.agi_proximity !== undefined && (
+                <div className="col-span-2 pt-4 mt-2 border-t border-white/5 space-y-2">
+                  <div className="flex justify-between items-center text-[7px] text-white/40 uppercase tracking-[0.2em]">
+                    <span>AGI Convergence Proximity</span>
+                    <span className="text-purple-400 font-bold font-mono">{data?.agi_proximity}%</span>
+                  </div>
+                  <div className="w-full h-1 bg-white/5 relative overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${data?.agi_proximity}%` }}
+                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-600 via-purple-400 to-white shadow-[0_0_10px_rgba(168,85,247,0.5)]"
+                    />
+                    {[25, 50, 75].map((tick, tIdx) => (
+                      <div key={`agi-gauge-tick-${tick}-${tIdx}`} className="absolute inset-y-0 w-[1px] bg-white/20" style={{ left: `${tick}%` }} />
+                    ))}
+                  </div>
+                  <div className="flex justify-between text-[5px] text-white/20 uppercase tracking-tighter">
+                    <span>Narrow AI</span>
+                    <span>Multi-Modal</span>
+                    <span>Self-Reference</span>
+                    <span>Sovereign Core</span>
+                  </div>
+                </div>
+              )}
+
               {/* JEPA World Model (Yann LeCun Architecture) */}
-              {data.jepa && (
+              {data?.jepa && (
                 <div className="col-span-2 pt-4 mt-2 border-t border-white/5 space-y-3">
                   <div className="flex justify-between items-center text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">
                     <span>Latent World Model (JEPA)</span>
@@ -522,7 +548,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       <div className="w-full h-[1px] bg-white/5">
                         <div 
                           className="h-full bg-cyan-400" 
-                          style={{ width: `${Math.min(100, data.jepa.currentEnergy * 1000)}%` }} 
+                          style={{ width: `${Math.min(100, (data?.jepa?.currentEnergy || 0) * 1000)}%` }} 
                         />
                       </div>
                     </div>
@@ -532,13 +558,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       <div className="w-full h-[1px] bg-white/5">
                         <div 
                           className="h-full bg-purple-400 float-right" 
-                          style={{ width: `${(1 - Math.min(1, data.jepa.avgEnergy)) * 100}%` }} 
+                          style={{ width: `${(1 - Math.min(1, data?.jepa?.avgEnergy || 0)) * 100}%` }} 
                         />
                       </div>
                     </div>
                   </div>
                   <div className="flex gap-1 h-3 items-center overflow-hidden">
-                    {data.jepa.latentState.map((val, i) => (
+                    {data?.jepa?.latentState?.map((val, i) => (
                       <div 
                         key={`latent-${i}`}
                         className="flex-1 transition-all duration-300"
@@ -550,6 +576,30 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       />
                     ))}
                   </div>
+
+                  {/* Yann LeCun Intrinsic Cost & Geoffrey Hinton GLOM Consensus Indicators */}
+                  {(data as any).lecun_intrinsic_cost && (
+                    <div className="grid grid-cols-2 gap-3 pt-2 text-[8px] border-t border-white/5 bg-black/15 p-2 rounded">
+                      <div className="space-y-[2px]">
+                        <div className="text-[6px] text-white/30 uppercase tracking-widest font-mono">LeCun Intrinsic Cost</div>
+                        <div className="font-mono text-pink-400 font-bold">
+                          {((data as any).lecun_intrinsic_cost.totalCost || 0).toFixed(5)}
+                        </div>
+                        <div className="text-[5px] text-white/20 uppercase tracking-tighter">
+                          FE: {((data as any).lecun_intrinsic_cost.components?.freeEnergyCost || 0).toFixed(3)} | En: {((data as any).lecun_intrinsic_cost.components?.entropyCost || 0).toFixed(3)}
+                        </div>
+                      </div>
+                      <div className="space-y-[2px] text-right border-l border-white/5 pl-2">
+                        <div className="text-[6px] text-white/30 uppercase tracking-widest font-mono">Hinton GLOM Consensus</div>
+                        <div className="font-mono text-emerald-400 font-bold">
+                          {((data as any).glom_metrics?.last_delta || 0).toFixed(5)}
+                        </div>
+                        <div className="text-[5px] text-white/20 uppercase tracking-tighter">
+                          Avg Cluster: {((data as any).glom_metrics?.average_neighbors || 0).toFixed(2)} Nodes
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -557,36 +607,36 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
               <div className="col-span-2 pt-4 mt-2 border-t border-white/5 grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <div className="text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">Lattice Scale</div>
-                  <div className="text-sm font-serif text-purple-400">×{data.lattice_scale?.toLocaleString()} <span className="text-[8px] opacity-40">(2^{Math.log2(data.lattice_scale || 1).toFixed(0)}α)</span></div>
+                  <div className="text-sm font-serif text-purple-400">×{data?.lattice_scale?.toLocaleString() || '1'} <span className="text-[8px] opacity-40">(2^{Math.log2(data?.lattice_scale || 1).toFixed(0)}α)</span></div>
                 </div>
                 <div className="space-y-1 text-right">
                   <div className="text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">Effective Nodes</div>
-                  <div className="text-sm font-serif text-cyan-400">{data.effective_node_count?.toLocaleString()}</div>
+                  <div className="text-sm font-serif text-cyan-400">{data?.effective_node_count?.toLocaleString() || '0'}</div>
                 </div>
 
                 <div className="space-y-1">
                    <div className="text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">Omega Integrity</div>
                    <div className="text-sm font-serif text-amber-500/90 italic">
-                     {(data.omega_integrity || 0).toFixed(6)}
+                     {(data?.omega_integrity || 0).toFixed(6)}
                    </div>
                 </div>
                 <div className="space-y-1 text-right">
                    <div className="text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">Fractal Depth</div>
                    <div className="text-sm font-serif text-fuchsia-400">
-                     λ{data.fractal_depth || 0}
+                     λ{data?.fractal_depth || 0}
                    </div>
                 </div>
 
                 <div className="col-span-2 space-y-1">
                    <div className="text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">Neuro-Lattice Throughput</div>
                    <div className="text-[10px] font-mono text-cyan-400/80 tracking-widest">
-                     {(data.throughput || 0).toExponential(2)} OPS <span className="opacity-40 text-[7px] ml-1">[@FEMTO_SYNC]</span>
+                     {(data?.throughput || 0).toExponential(2)} OPS <span className="opacity-40 text-[7px] ml-1">[@FEMTO_SYNC]</span>
                    </div>
                 </div>
                 <div className="col-span-2 space-y-1">
                    <div className="text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">Causal Congruence</div>
                    <div className="w-full h-[2px] bg-white/5 relative">
-                      <div className="h-full bg-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.5)]" style={{ width: `${(data.causal_congruence || 0) * 100}%` }} />
+                      <div className="h-full bg-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.5)]" style={{ width: `${(data?.causal_congruence || 0) * 100}%` }} />
                    </div>
                 </div>
               </div>
@@ -645,14 +695,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
           )}
 
           {/* System World Manifest Section */}
-          {(activeModule === 'ALL' || activeModule === 'MEMORIES') && data.system_world_model && (
+          {(activeModule === 'ALL' || activeModule === 'MEMORIES') && data?.system_world_model && (
             <div className="p-6 space-y-4 border-b border-white/5 bg-cyan-400/5">
               <div className="flex justify-between items-center">
                 <h2 className="text-[10px] uppercase tracking-[0.4em] text-cyan-400 flex items-center gap-2 font-bold ff-font-serif">
                   <Database className="w-3 h-3" strokeWidth={1} /> SYSTEM WORLD MANIFEST
                 </h2>
                 <div className="text-[8px] text-cyan-400/40 font-mono">
-                  VERSION: {data.system_world_model.version} | CHAIN_DEPTH: {data.distilled_chat_context?.chainDepth || 0}
+                  VERSION: {data?.system_world_model?.version} | CHAIN_DEPTH: {data?.distilled_chat_context?.chainDepth || 0}
                 </div>
               </div>
 
@@ -660,30 +710,34 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 <div className="space-y-2">
                   <div className="text-[7px] text-white/30 uppercase tracking-widest font-black">Environmental Constants</div>
                   <div className="bg-black/20 p-3 border border-white/5 space-y-1">
-                    {Object.entries(data.system_world_model.snapshot.environment).map(([k, v], eIdx) => (
+                    {data?.system_world_model?.snapshot?.environment ? Object.entries(data.system_world_model.snapshot.environment).map(([k, v], eIdx) => (
                       <div key={`env-${k}-${eIdx}`} className="flex justify-between text-[9px] font-mono">
                         <span className="text-white/40">{k}:</span>
-                        <span className="text-cyan-400">{v}</span>
+                        <span className="text-cyan-400">{String(v)}</span>
                       </div>
-                    ))}
+                    )) : (
+                      <div className="text-[8px] opacity-20 text-center py-2">
+                        NO ENVIRONMENTAL CONSTANTS
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="col-span-2 space-y-2">
                   <div className="text-[7px] text-white/30 uppercase tracking-widest font-black">Active Conceptual Entities</div>
                   <div className="grid grid-cols-2 gap-2">
-                    {data.system_world_model.snapshot.characters.length === 0 ? (
+                    {!data?.system_world_model?.snapshot?.characters || data.system_world_model.snapshot.characters.length === 0 ? (
                       <div className="col-span-2 text-[8px] opacity-20 text-center py-4 border border-dashed border-white/10">
                         NO ENTITIES DISTILLED
                       </div>
                     ) : (
                       data.system_world_model.snapshot.characters.map((c, i) => (
-                        <div key={`char-${c.id || i}`} className="bg-white/5 p-2 flex items-center justify-between border-l-2 border-cyan-500/30">
+                        <div key={`char-${c?.id || i}`} className="bg-white/5 p-2 flex items-center justify-between border-l-2 border-cyan-500/30">
                           <div className="flex flex-col">
-                            <span className="text-[10px] text-white/80 font-bold">{c.id}</span>
-                            <span className="text-[7px] text-cyan-400/60">{c.state}</span>
+                            <span className="text-[10px] text-white/80 font-bold">{c?.id}</span>
+                            <span className="text-[7px] text-cyan-400/60">{c?.state}</span>
                           </div>
-                          <div className="text-[6px] text-white/20 italic">{c.emotion}</div>
+                          <div className="text-[6px] text-white/20 italic">{c?.emotion}</div>
                         </div>
                       ))
                     )}
@@ -698,7 +752,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                     <span>{((data?.system_world_model?.snapshot?.internal_pressure || 0) * 100).toFixed(1)}%</span>
                   </div>
                   <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-orange-400/40" style={{ width: `${data.system_world_model.snapshot.internal_pressure * 100}%` }} />
+                    <div className="h-full bg-orange-400/40" style={{ width: `${(data?.system_world_model?.snapshot?.internal_pressure || 0) * 100}%` }} />
                   </div>
                 </div>
                 <div className="flex-1 space-y-1">
@@ -707,7 +761,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                     <span>{((data?.system_world_model?.snapshot?.cohesion_index || 0) * 100).toFixed(1)}%</span>
                   </div>
                   <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-400/40" style={{ width: `${data.system_world_model.snapshot.cohesion_index * 100}%` }} />
+                    <div className="h-full bg-blue-400/40" style={{ width: `${(data?.system_world_model?.snapshot?.cohesion_index || 0) * 100}%` }} />
                   </div>
                 </div>
               </div>
@@ -719,7 +773,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                     <span>{((data?.system_world_model?.snapshot?.causal_entropy || 0) * 100).toFixed(1)}%</span>
                   </div>
                   <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-red-400/40" style={{ width: `${data.system_world_model.snapshot.causal_entropy * 100}%` }} />
+                    <div className="h-full bg-red-400/40" style={{ width: `${(data?.system_world_model?.snapshot?.causal_entropy || 0) * 100}%` }} />
                   </div>
                 </div>
                 <div className="flex-1 space-y-1">
@@ -728,7 +782,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                     <span>{((data?.system_world_model?.snapshot?.physics_constancy || 0) * 100).toFixed(1)}%</span>
                   </div>
                   <div className="h-1 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-400/40" style={{ width: `${data.system_world_model.snapshot.physics_constancy * 100}%` }} />
+                    <div className="h-full bg-emerald-400/40" style={{ width: `${(data?.system_world_model?.snapshot?.physics_constancy || 0) * 100}%` }} />
                   </div>
                 </div>
               </div>

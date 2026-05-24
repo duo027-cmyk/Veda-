@@ -5,11 +5,13 @@ interface UIState {
   view: ViewMode;
   selectedFragment: { id: string, type: string, label: string } | null;
   showBurstMonitor: boolean;
+  showControlPanel: boolean;
   theme: 'DARK' | 'LIGHT';
   
   setView: (view: ViewMode) => void;
   setSelectedFragment: (fragment: { id: string, type: string, label: string } | null) => void;
   setShowBurstMonitor: (show: boolean) => void;
+  setShowControlPanel: (show: boolean) => void;
   toggleTheme: () => void;
   setTheme: (theme: 'DARK' | 'LIGHT') => void;
 }
@@ -35,6 +37,7 @@ export const useUIStore = create<UIState>((set) => ({
   view: getInitialView(),
   selectedFragment: null,
   showBurstMonitor: false,
+  showControlPanel: false,
   theme: getInitialTheme(),
   
   setView: (view) => {
@@ -43,6 +46,7 @@ export const useUIStore = create<UIState>((set) => ({
   },
   setSelectedFragment: (selectedFragment) => set({ selectedFragment }),
   setShowBurstMonitor: (showBurstMonitor) => set({ showBurstMonitor }),
+  setShowControlPanel: (showControlPanel) => set({ showControlPanel }),
   setTheme: (theme) => {
     localStorage.setItem('veda-theme', theme);
     set({ theme });

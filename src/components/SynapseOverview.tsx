@@ -57,7 +57,7 @@ export const SynapseOverview = ({
   ];
 
   return (
-    <div className="h-full pt-32 md:pt-56 px-4 md:px-12 lg:px-32 max-w-7xl mx-auto flex flex-col gap-6 md:gap-10 pb-24 relative overflow-y-auto scrollbar-none">
+    <div className="h-full pt-32 md:pt-40 px-4 md:px-12 lg:px-32 max-w-7xl mx-auto flex flex-col gap-6 md:gap-10 pb-24 relative overflow-y-auto scrollbar-none">
       <AnimatePresence>
         {selectedFragment && (
           <motion.div 

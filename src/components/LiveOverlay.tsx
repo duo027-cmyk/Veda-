@@ -4,12 +4,15 @@ import { Mic, MicOff, Video, VideoOff, Activity, Zap, Shield, Globe } from 'luci
 import { liveService } from '../services/liveService';
 import { resonanceService } from '../services/resonanceService';
 
+import { useVedaStore } from '../store/vedaStore';
+
 interface LiveOverlayProps {
   apiKey: string;
   systemInstruction: string;
 }
 
 export const LiveOverlay: React.FC<LiveOverlayProps> = ({ apiKey, systemInstruction }) => {
+  const { setLastLog } = useVedaStore();
   const [isActive, setIsActive] = useState(false);
   const [status, setStatus] = useState("神經連結離線 / LINK OFFLINE");
   const [transcription, setTranscription] = useState("");
@@ -62,7 +65,7 @@ export const LiveOverlay: React.FC<LiveOverlayProps> = ({ apiKey, systemInstruct
       setStatus("神經連結離線 / LINK OFFLINE");
     } else {
       if (!apiKey) {
-        alert("請先設置 API Key");
+        setLastLog("請先設置 API Key (Please configure the API Key in the upper right Settings icon first)");
         return;
       }
       setIsActive(true);

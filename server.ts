@@ -199,6 +199,29 @@ async function startServer() {
     app.get("/_veda_pulse", (req, res) => res.send("SOVEREIGN_PULSE_OK"));
     app.get("/api/health", healthHandler);
 
+    // Direct registration for strategic telemetry to bypass routing exceptions and Vite SPA fallbacks
+    app.get("/api/strategic", (req, res) => {
+      try {
+        console.log(`[VEDA_OS] Serving unified strategic metrics (immediate-high-priority)...`);
+        const report = brain.generateStrategicReport();
+        if (!report) {
+          return res.status(200).json({ 
+            status: "STBY", 
+            message: "EPIMETIC_CRYSTALLIZATION",
+            metrics: { stability: 0.8, coherence: 1.0 }
+          });
+        }
+        res.json(report);
+      } catch (err) {
+        console.error("[VEDA_STRATEGIC_FAULT_IMMEDIATE]", err);
+        res.status(500).json({
+          error: "STRATEGIC_REPORT_ERROR",
+          status: "STANDBY_DEGRADED",
+          details: err instanceof Error ? err.message : String(err)
+        });
+      }
+    });
+
     // Global Logger (Balanced)
     app.use((req, res, next) => {
       const urlPath = req.url.split('?')[0];
@@ -527,12 +550,6 @@ async function startServer() {
         res.status(500).json({ error: "RESET_ERROR" });
       }
     });
-    // Direct fallback for strategic
-    app.get("/api/strategic", async (req, res) => {
-      const report = brain.generateStrategicReport();
-      res.json(report || { status: "STBY" });
-    });
-
     api.get("/persistence", async (req, res) => {
       const PERSISTENCE_PATH = path.join(process.cwd(), "veda_persistence.json");
       try {

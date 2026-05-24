@@ -25,6 +25,7 @@ import { useI18n } from '../i18n';
 import { BrainData, GovernanceStrategy } from '../types';
 import { vedaService } from '../services/vedaService';
 import { auth } from '../firebase';
+import { useVedaStore } from '../store/vedaStore';
 import { CuriosityMonitor } from './CuriosityMonitor';
 import { EpistemicLog } from './EpistemicLog';
 import { CausalSimulator } from './CausalSimulator';
@@ -37,6 +38,7 @@ function cn(...inputs: ClassValue[]) {
 
 export const SovereignManagement = ({ data, onAction }: { data: BrainData | null, onAction: (action: string, params?: any) => void }) => {
   const { t } = useI18n();
+  const { setLastLog } = useVedaStore();
   const [targetId, setTargetId] = useState("");
   const [strategy, setStrategy] = useState(GovernanceStrategy.MIRROR);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -78,13 +80,14 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                       </span>
                       <p className="data-label opacity-40 uppercase tracking-[0.5em]">{t.system_archive.split('|')[1]?.trim() || "System Causal Identifier"}</p>
                     </div>
-                    <button 
-                      onClick={() => window.open('/api/v1/export', '_blank')}
-                      className="p-3 bg-white/5 border border-white/10 rounded-full hover:bg-accent/20 hover:border-accent/40 transition-all group/btn"
+                    <a 
+                      href="/api/v1/export"
+                      download="veda_research_export.json"
+                      className="p-3 bg-white/5 border border-white/10 rounded-full hover:bg-accent/20 hover:border-accent/40 transition-all group/btn flex items-center justify-center align-middle"
                       title="Download Research Data"
                     >
                       <Download size={18} className="text-white/60 group-hover/btn:text-accent transition-colors" />
-                    </button>
+                    </a>
                   </div>
                 </div>
               </div>
@@ -417,10 +420,10 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                                      vedaService.postAction({ action: 'verifyAuditKeys', params: { keys: val } })
                                         .then(res => {
                                            if (res.verified) {
-                                              alert(t.audit_unlocked);
+                                              setLastLog(t.audit_unlocked);
                                               e.currentTarget.value = "";
                                            } else {
-                                              alert(t.access_denied);
+                                              setLastLog(t.access_denied);
                                            }
                                         });
                                   }

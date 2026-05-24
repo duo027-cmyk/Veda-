@@ -28,6 +28,7 @@ import { VedaCrystalLogo } from './components/VedaCrystalLogo';
 import { HoneycombHUD } from './components/HoneycombHUD';
 import { LatticeCruncher } from './components/LatticeCruncher';
 import { TaskManager } from './components/TaskManager';
+import { ControlPanel } from './components/ControlPanel';
 
 // --- Stores ---
 import { useAuthStore } from './store/authStore';
@@ -67,6 +68,8 @@ export default function App() {
     setSelectedFragment, 
     showBurstMonitor, 
     setShowBurstMonitor,
+    showControlPanel,
+    setShowControlPanel,
     theme
   } = useUIStore();
 
@@ -357,11 +360,7 @@ export default function App() {
             {view === 'KNOWLEDGE' && <KnowledgeVault data={userData} />}
             {view === 'SYNTHESIS' && <StrategicWorkstation data={userData} onRefresh={() => fetchVedaData()} />}
             {view === 'TASKS' && <TaskManager />}
-          {view === 'SOVEREIGN' && (
-            <div className="h-full pt-32 md:pt-48 px-4 md:px-12 lg:px-32 max-w-7xl mx-auto pb-24 overflow-y-auto custom-scrollbar">
-              <SovereignManagement data={userData} onAction={handleAction} />
-            </div>
-          )}
+          {view === 'SOVEREIGN' && <SovereignManagement data={userData} onAction={handleAction} />}
             {view === 'VISUAL' && (
               <VisualManifold 
                 data={userData} 
@@ -404,6 +403,53 @@ export default function App() {
       />
 
       <LatticeCruncher brain={userData} />
+
+      <ControlPanel 
+        data={userData}
+        intent={userData?.settings?.vector_intent || [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]}
+        loading={isPulsing}
+        logs={userData?.logs || []}
+        showControls={showControlPanel}
+        memories={userData?.memories || []}
+        onIntentChange={async (idx, val) => {
+          const newIntent = [...(userData?.settings?.vector_intent || [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])];
+          newIntent[idx] = val;
+          await vedaService.updatePersistence({ settings: { vector_intent: newIntent } });
+          await fetchVedaData();
+        }}
+        onResetIntent={async () => {
+          await vedaService.updatePersistence({ settings: { vector_intent: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5] } });
+          await fetchVedaData();
+        }}
+        onEvolve={async () => {
+          await handleAction('evolve');
+          await fetchVedaData();
+        }}
+        onSynthesize={async () => {
+          await handleAction('synthesize');
+          await fetchVedaData();
+        }}
+        onDistill={async () => {
+          await handleAction('distill');
+          await fetchVedaData();
+        }}
+        onDream={async () => {
+          await handleAction('dream');
+          await fetchVedaData();
+        }}
+        isDreaming={userData?.isDreaming}
+        onToggleNetwork={async () => {
+          await handleAction('toggleNetwork');
+          await fetchVedaData();
+        }}
+        onToggleNetworkDisplay={async () => {
+          await handleAction('toggleNetworkDisplay');
+          await fetchVedaData();
+        }}
+        showNetworkDisplay={userData?.settings?.showNetworkDisplay}
+        onClose={() => setShowControlPanel(false)}
+        axioms={userData?.axioms || []}
+      />
 
       {/* Persistent SVG Filters */}
       <svg className="hidden">

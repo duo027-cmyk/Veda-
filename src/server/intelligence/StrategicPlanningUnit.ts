@@ -179,16 +179,22 @@ export class StrategicPlanningUnit extends BaseSubsystem {
   }
 
   /**
-   * Plan optimal action using Model Predictive Control (MPC).
+   * Plan optimal action using Karl Friston's Expected Free Energy (EFE) minimization principles
+   * integrated into a multi-step Model Predictive Control (MPC) rollout.
    */
   public plan(currentState: number[], candidates: number[][], depth: number = 3): number[] {
     let bestAction = candidates[0];
-    let bestRolloutValue = -Infinity;
+    let bestFreeEnergyEstimate = -Infinity; // We maximize the negative expected free energy (maximizing utility + information gain)
+
+    // Dynamic exploration balance based on current system entropy (currentState[2])
+    const systemEntropy = currentState[2] || 0.1;
+    // Higher entropy/instability triggers stronger epistemic foraging behavior
+    const epistemicWeight = Math.min(0.65, Math.max(0.15, systemEntropy * 0.8));
 
     for (const action of candidates) {
-      const value = this.performRollout(currentState, action, depth);
-      if (value > bestRolloutValue) {
-        bestRolloutValue = value;
+      const efeValue = this.performEFERollout(currentState, action, depth, epistemicWeight);
+      if (efeValue > bestFreeEnergyEstimate) {
+        bestFreeEnergyEstimate = efeValue;
         bestAction = action;
       }
     }
@@ -197,11 +203,12 @@ export class StrategicPlanningUnit extends BaseSubsystem {
   }
 
   /**
-   * Multi-step lookahead rollout.
+   * Multi-step Expected Free Energy (EFE) lookahead rollout.
+   * Formalizes: G = (1 - ω) * Pragmatic_Utility + ω * Epistemic_Utility - Risk_Penalty
    */
-  private performRollout(startState: number[], action: number[], depth: number): number {
+  private performEFERollout(startState: number[], action: number[], depth: number, epistemicWeight: number): number {
     let current = [...startState];
-    let accumulatedValue = 0;
+    let expectedFreeEnergySum = 0;
 
     for (let i = 1; i <= depth; i++) {
       const key = `${this.serializeState(current)}|${this.serializeAction(action)}`;
@@ -220,15 +227,34 @@ export class StrategicPlanningUnit extends BaseSubsystem {
       // Gradually trust linear/LWM more depending on depth or state confidence
       const next = lwmPrediction.map((v, idx) => v * 0.7 + linearProjection[idx] * 0.3);
 
-      const stepValue = this.evaluateState(next);
-      const discount = Math.pow(0.9, i); // Temporal discounting
+      // 1. Pragmatic Utility (Instrumental Value): Preference alignment toward high coherence & stability
+      const pragmaticUtility = this.evaluateState(next);
+
+      // 2. Epistemic Utility (Information Gain exploring sparse transitions):
+      // Shannon Entropy of the discrete empirical transitions or inverse lookup density
+      // Shifting to actions with lower visit counts resolves predictive uncertainty (intrinsic foraging)
+      const noveltyBonus = 1.0 / (Math.sqrt(keyAttempts + 1.0));
+      const transitionMap = this.transitions.get(key);
+      const transitionEntropy = transitionMap 
+        ? -Array.from(transitionMap.values()).reduce((acc, count) => {
+            const p = count / keyAttempts;
+            return acc + p * Math.log2(p);
+          }, 0)
+        : 1.0; // Max uncertainty for novel transitions
       
-      // Penalize risk and state uncertainty
-      accumulatedValue += (stepValue - risk * 1.5) * discount;
+      const epistemicUtility = noveltyBonus * 0.6 + transitionEntropy * 0.4;
+
+      const discount = Math.pow(0.88, i); // Temporal discounting factor for MPC horizon
+
+      // Expected Free Energy (EFE) synthesis
+      const stepEFE = (1.0 - epistemicWeight) * pragmaticUtility + epistemicWeight * epistemicUtility;
+      
+      // Apply risk penalization & accumulate
+      expectedFreeEnergySum += (stepEFE - risk * 1.6) * discount;
       current = next;
     }
 
-    return accumulatedValue;
+    return expectedFreeEnergySum;
   }
 
   public getStatus(): any {

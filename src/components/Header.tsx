@@ -1,13 +1,13 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Zap, Sun, Moon } from 'lucide-react';
+import { Zap, Sun, Moon, Sliders } from 'lucide-react';
 import { VedaCrystalLogo } from './VedaCrystalLogo';
 import { useVedaStore } from '../store/vedaStore';
 import { useUIStore } from '../store/uiStore';
 
 export const Header = () => {
   const { userData } = useVedaStore();
-  const { setShowBurstMonitor, showBurstMonitor, theme, toggleTheme } = useUIStore();
+  const { setShowBurstMonitor, showBurstMonitor, theme, toggleTheme, showControlPanel, setShowControlPanel } = useUIStore();
 
   return (
     <header className="fixed top-0 left-0 md:left-24 right-0 h-24 md:h-40 flex items-center justify-between pointer-events-none z-[100] px-6 md:px-12 pt-4 md:pt-12">
@@ -50,7 +50,21 @@ export const Header = () => {
         <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-10 scale-100 md:scale-150 blur-2xl md:blur-3xl w-48 md:w-64 h-48 md:h-64 bg-accent/10 rounded-full animate-float pointer-events-none" />
       </div>
 
-      <div className="flex-1 flex justify-end">
+      <div className="flex-1 flex justify-end gap-3">
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setShowControlPanel(!showControlPanel)}
+          className={`pointer-events-auto p-2.5 rounded-full border shadow-xl flex items-center justify-center transition-all group ${
+            showControlPanel 
+              ? 'border-accent text-accent bg-accent/10' 
+              : 'border-border-subtle bg-panel text-ink hover:border-accent hover:text-accent'
+          }`}
+          title="Cortex Config Sliders"
+        >
+          <Sliders size={18} className="group-hover:scale-110 transition-transform duration-300" />
+        </motion.button>
+
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}

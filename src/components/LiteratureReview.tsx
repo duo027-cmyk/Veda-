@@ -22,7 +22,7 @@ function cn(...inputs: ClassValue[]) {
 export const LiteratureReview = ({ data, onToggleBurst }: { data: BrainData | null, onToggleBurst: () => void }) => {
   const { t } = useI18n();
   return (
-    <div className="h-full pt-32 md:pt-56 px-4 md:px-12 lg:px-32 max-w-5xl mx-auto flex flex-col gap-12 pb-24 overflow-y-auto custom-scrollbar">
+    <div className="h-full pt-32 md:pt-40 px-4 md:px-12 lg:px-32 max-w-5xl mx-auto flex flex-col gap-12 pb-24 overflow-y-auto custom-scrollbar">
        <div className="flex flex-col gap-6">
           <div className="flex items-center gap-4">
              <div className="w-12 h-[1px] bg-accent" />

@@ -9,9 +9,17 @@ import {
   User as UserIcon,
   ChevronRight,
   Upload,
-  BookOpen
+  BookOpen,
+  Copy,
+  Check,
+  Code
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import remarkGfm from 'remark-gfm';
+import rehypeKatex from 'rehype-katex';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useI18n } from '../i18n';
 import { vedaService } from '../services/vedaService';
 import { VedaCrystalLogo } from './VedaCrystalLogo';
@@ -28,6 +36,53 @@ import { useAuthStore } from '../store/authStore';
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+const CodeBlock = ({ language, value }: { language: string; value: string }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="relative group my-4 w-full">
+      <div className="absolute right-2 top-2 z-10 flex gap-2">
+        <button
+          onClick={handleCopy}
+          className={`flex items-center gap-1.5 px-2 py-1 bg-white/10 hover:bg-white/20 rounded-none border transition-all text-[10px] font-bold ${
+            copied ? 'border-green-500/50 text-green-400' : 'border-white/20 text-white/50 hover:text-white'
+          }`}
+        >
+          {copied ? (
+            <>
+              <Check className="w-3 h-3" />
+              <span>COPIED</span>
+            </>
+          ) : (
+            <>
+              <Copy className="w-3 h-3" />
+              <span>COPY</span>
+            </>
+          )}
+        </button>
+      </div>
+      <div className="absolute left-4 top-2 z-10 flex items-center gap-2 opacity-40">
+        <Code className="w-3 h-3 text-cyan-400" />
+        <span className="text-[10px] uppercase tracking-widest font-mono text-cyan-400">{language || 'code'}</span>
+      </div>
+      <SyntaxHighlighter
+        style={atomDark}
+        language={language || 'text'}
+        PreTag="div"
+        className="rounded-none border border-white/10 !bg-black/40 !pt-10 !pb-4 !px-4 overflow-auto scrollbar-veda max-w-full text-xs"
+      >
+        {value}
+      </SyntaxHighlighter>
+    </div>
+  );
+};
 
 interface Message {
   id?: string;
@@ -293,7 +348,27 @@ export const ChatInterface = () => {
                  msg.role === 'user' ? "user-bubble" : "ai-bubble"
                )}>
                   <div className="markdown-body">
-                    <ReactMarkdown>{msg.text}</ReactMarkdown>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkMath, remarkGfm]}
+                      rehypePlugins={[rehypeKatex]}
+                      components={{
+                        code({ node, inline, className, children, ...props }: any) {
+                          const match = /language-(\w+)/.exec(className || '');
+                          return !inline ? (
+                            <CodeBlock 
+                              language={match ? match[1] : ''} 
+                              value={String(children).replace(/\n$/, '')} 
+                            />
+                          ) : (
+                            <code className={`${className} bg-white/10 px-1.5 py-0.5 rounded-none text-cyan-300 border border-white/5 font-mono text-[11px]`} {...props}>
+                              {children}
+                            </code>
+                          );
+                        }
+                      }}
+                    >
+                      {msg.text || ""}
+                    </ReactMarkdown>
                     {msg.role === 'veda' && isTyping && idx === messages.length -1 && !msg.text && (
                        <motion.span 
                          animate={{ opacity: [0, 1, 0] }}

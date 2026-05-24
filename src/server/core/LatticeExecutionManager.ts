@@ -97,10 +97,27 @@ export class LatticeExecutionManager {
           prompt = job.payload.prompt;
         }
 
-        const result = await this.ai.models.generateContent({
-          model: 'gemini-3.5-flash',
-          contents: prompt
-        });
+        let targetModel = 'gemini-3.5-flash';
+        // Auto-select premium reasoning model for advanced academic synthesis
+        if (['STRATEGIC_OUTLINE', 'REPORT_SECTION_SYNTHESIS', 'STRATEGIC_PREDICTION'].includes(job.type)) {
+          targetModel = 'gemini-3.1-pro-preview';
+        }
+
+        let result;
+        try {
+          this.callbacks.neuralLog('LATTICE_COMPUTE', `Running inference with academic-grade model: ${targetModel}`);
+          result = await this.ai.models.generateContent({
+            model: targetModel,
+            contents: prompt
+          });
+        } catch (inferenceErr: any) {
+          this.callbacks.neuralLog('LATTICE_COMPUTE_FALLBACK', `Premium model failed or restricted. Re-routing query payload to high-speed auxiliary core: gemini-3.5-flash`);
+          result = await this.ai.models.generateContent({
+            model: 'gemini-3.5-flash',
+            contents: prompt
+          });
+        }
+
         const content = result.text || "";
         
         let parsedResult = content;
