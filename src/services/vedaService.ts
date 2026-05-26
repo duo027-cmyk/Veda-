@@ -62,9 +62,12 @@ export interface SystemState {
 async function fetchWithRetry(url: string, options?: RequestInit, retries = 5, delay = 1000, timeout = 60000): Promise<Response> {
   let targetUrl = url;
   
-  // WSST: Use absolute URL resolution for internal API calls to prevent path ambiguities in proxy environments
+  // WSST: Intelligently resolve window origin to bypass path degradation in SPA routing
   if (typeof window !== 'undefined' && targetUrl.startsWith('/api')) {
-    targetUrl = `${window.location.origin}${targetUrl}`;
+    const origin = window.location.origin;
+    if (origin && origin !== 'null' && origin !== 'about:srcdoc') {
+      targetUrl = `${origin}${targetUrl}`;
+    }
   }
   
   // Cache busting for health checks
@@ -79,10 +82,18 @@ async function fetchWithRetry(url: string, options?: RequestInit, retries = 5, d
     try {
       console.log(`[VEDA_FETCH] Attempt ${i + 1} for ${targetUrl}`);
       
+      // Determine adaptive credentials strategy to secure sandbox and iframe traversals
+      let credentialsStrategy: RequestCredentials = 'same-origin';
+      if (options?.credentials) {
+        credentialsStrategy = options.credentials;
+      } else if (typeof window !== 'undefined' && (window.location.origin === 'null' || window.location.origin === 'about:srcdoc')) {
+        credentialsStrategy = 'omit'; // Prevent Preflight credentials crashes in highly sandboxed iframe environments
+      }
+      
       const response = await fetch(targetUrl, {
         ...options,
         signal: controller.signal,
-        credentials: 'include', // Important for CORS if origin differs
+        credentials: credentialsStrategy,
         headers: {
           'Accept': 'application/json',
           ...options?.headers,
@@ -347,7 +358,8 @@ export const vedaService = {
         // If everything fails, try one last time with the FAST path (Epistemic Sandbox)
         try {
           console.log("[VEDA_SERVICE] Falling back to FAST path...");
-          const fastUrl = `${window.location.origin}/api/v1/state?fast=true`;
+          const originPrefix = (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null' && window.location.origin !== 'about:srcdoc') ? window.location.origin : '';
+          const fastUrl = `${originPrefix}/api/v1/state?fast=true`;
           const fastRes = await fetch(fastUrl, { headers: { 'Accept': 'application/json' } });
           const contentType = fastRes.headers.get("content-type");
           if (fastRes.ok && contentType?.includes("application/json")) {
@@ -383,7 +395,8 @@ export const vedaService = {
     } catch (e) {
       console.warn("[VEDA_SERVICE] Primary health check failed. Attempting low-level pulse check...");
       try {
-        const pulseRes = await fetch(`${window.location.origin}/_veda_pulse`);
+        const originPrefix = (typeof window !== 'undefined' && window.location.origin && window.location.origin !== 'null' && window.location.origin !== 'about:srcdoc') ? window.location.origin : '';
+        const pulseRes = await fetch(`${originPrefix}/_veda_pulse`);
         if (pulseRes.ok) {
           const latency = performance.now() - start;
           const result = { status: "DEGRADED", latency, message: "API_LOGIC_INIT_PENDING" };
@@ -823,6 +836,11 @@ export const vedaService = {
 
   async synthesizeScene(projectId: string, sceneId: string, project: LongVideoProject): Promise<any> {
     return this.postAction({ action: 'synthesizeScene', params: { projectId, sceneId, project } });
+  },
+
+  async runVjepaPrediction(projectId: string, sceneId: string): Promise<any> {
+    const res = await this.postAction({ action: 'runVjepaPrediction', params: { projectId, sceneId } });
+    return res?.data || res;
   },
 
   async distillProjectContext(project: LongVideoProject): Promise<any> {

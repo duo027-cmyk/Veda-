@@ -77,7 +77,8 @@ import {
   EpistemicForagingUnit,
   StrategicPlanningUnit,
   LanguageEncoder,
-  SpatialProprioceptionUnit
+  SpatialProprioceptionUnit,
+  PalantirOntologyEngine
 } from "./intelligence";
 
 import { SubsystemManager } from "./SubsystemManager";
@@ -247,6 +248,7 @@ export class AGISovereignBrain implements IVedaBrain {
   private massiveIngestion: MassiveIngestionEngine;
   private consanguinity: ConsanguinityProtocol;
   private jepa: AGI_JEPA_Arch = new AGI_JEPA_Arch(6);
+  private palantirAipEngine: PalantirOntologyEngine = new PalantirOntologyEngine();
   private causalIndex!: any;
   private systemID: string = `VEDA-SYSTEM-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
   private lastSovereignAction: string = "BOOT_INITIAL_COHERENCE";
@@ -685,6 +687,17 @@ export class AGISovereignBrain implements IVedaBrain {
     // 4.2 Burst Result Auditing (Polling)
     if (this.physicalOpsCount % 50 === 0) {
       this.auditBurstResult();
+    }
+
+    // 4.3 V-AA Palantir AIP Passive self-calibration daemon
+    if (this.physicalOpsCount % 120 === 0 && !this.isLogicFrozen) {
+      if (this.variationalFreeEnergy && this.variationalFreeEnergy > 0.45) {
+        this.neuralLog("PALANTIR_AIP_DAEMON", "Variational Free Energy exceeded 0.45. Triggering autonomous Mitigation.");
+        this.executePalantirAIPAction("MITIGATE_SURPRISE");
+      } else if (this.getGlobalCoherence() < 0.55) {
+        this.neuralLog("PALANTIR_AIP_DAEMON", "Entropy imbalance detected (Coherence < 0.55). Triggering dynamic Ontological Alignment.");
+        this.executePalantirAIPAction("ALIGN_ONTOLOGY");
+      }
     }
 
     // V-AA Protocol: Dynamic Research Pulse
@@ -1159,6 +1172,11 @@ export class AGISovereignBrain implements IVedaBrain {
         this.coherenceHistory = data.coherenceHistory || [];
         this.integrity.setSafetyAlerts(data.safetyAlerts || []);
         this.longVideoProjects = data.longVideoProjects || [];
+        if (!this.longVideoProjects || this.longVideoProjects.length === 0) {
+          this.longVideoProjects = [this.createPreseededPalantirProject()];
+        } else if (!this.longVideoProjects.some((p: any) => p.id === 'palantir-manifold')) {
+          this.longVideoProjects.unshift(this.createPreseededPalantirProject());
+        }
         if (data.strategicReports) data.strategicReports.forEach((r: any) => this.strategic.addReport(r));
         this.sovereign_index = data.sovereign_index || 0;
         this.isExternalAiBlocked = data.isExternalAiBlocked || false;
@@ -1173,6 +1191,103 @@ export class AGISovereignBrain implements IVedaBrain {
     } catch (e) {
       this.neuralLog("PERSISTENCE_FAULT", `Load failure: ${e}`);
     }
+  }
+
+  private createPreseededPalantirProject() {
+    return {
+      id: "palantir-manifold",
+      title: "Palantir: Gotham & AIP Rise",
+      description: "Decrypting Palantir's trajectory: from Gotham target-tracking nodes to AIP LLM-driven algorithmic combat warfare.",
+      fullPrompt: "Strategic retrospective of Palantir Technologies: Gotham (Osama Bin Laden intelligence mapping) & AIP (Large Language Model target recommendation agents on physical battlefields).",
+      status: "COMPLETED" as const,
+      causal_version: 3,
+      baseline_ref: "1.0.0",
+      worldAxioms: [
+        "ENTITY_RELATION_ONTOLOGY",
+        "LLM_ACTION_INJECTION_BOUNDARY"
+      ],
+      visualAnchors: [
+        { id: "char_alex_karp", label: "Alex Karp (The Philosopher-CEO)", description: "Curly-haired CEO articulating sovereign intelligence values under physical constraints", type: "CHARACTER", causal_weight: 1.4 },
+        { id: "obj_aip_console", label: "AIP Command Console", description: "Real-time tactical display connecting drone feeds to micro-LLM routing logic", type: "ASSET", causal_weight: 1.8 }
+      ],
+      worldModel: {
+        snapshot: {
+          characters: [
+            { id: "char_alex_karp", state: "DECISION_ORCHESTRATION", position: "PALANTIR_HQ", inventory: ["AIP_DECAL"], emotion: "INTENSE_COGNITIVE" }
+          ],
+          environment: {
+            time: "RELATIVE_NOW",
+            weather: "HIGH_CONTRAST",
+            condition: "CRITICAL_FLOW",
+            location: "PALANTIR_GOTHAM_TACTICAL_CELL"
+          },
+          narrative_tension: 0.8,
+          physics_constancy: 0.95,
+          causal_entropy: 0.1
+        },
+        axioms: [
+          "ENTITY_RELATION_ONTOLOGY",
+          "LLM_ACTION_INJECTION_BOUNDARY"
+        ],
+        laws_of_nature: ["IDENTITY_PRESERVATION", "CAUSAL_CONTINUITY", "DECISION_INTEGRITY"],
+        causal_history: ["INITIAL_BOOT", "RAMP_UP_GOTHAM"],
+        version: "1.0.0"
+      },
+      scenes: [
+        {
+          id: "scene_pal_gotham",
+          order: 1,
+          title: "Gotham Link: Node Resolution",
+          prompt: "A massive, deep blue neon data graph resolving flight details, bank wire leaks, and physical coordinates. A single red link pinpoints Abbotabad compound. Elegant link-analysis blueprint style.",
+          status: "COMPLETED" as const,
+          duration: 6,
+          url: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 450' style='background:%23050505;'><line x1='100' y1='100' x2='300' y2='250' stroke='%233b82f6' stroke-width='1.5'/><line x1='300' y1='250' x2='500' y2='150' stroke='%233b82f6' stroke-dasharray='5,5'/><line x1='500' y1='150' x2='700' y2='300' stroke='%23ef4444' stroke-width='2'/><circle cx='100' cy='100' r='10' fill='%232563eb' style='filter:drop-shadow(0 0 10px %232563eb);'/><circle cx='300' cy='250' r='14' fill='%2360a5fa'/><circle cx='500' cy='150' r='12' fill='%233b82f6'/><circle cx='700' cy='300' r='18' fill='%23dc2626' style='filter:drop-shadow(0 0 15px %23ef4444);'/><text x='120' y='105' fill='%23ffffff' font-family='monospace' font-size='10'>NODE_CENTRAL_INTEL</text><text x='730' y='305' fill='%23ef4444' font-family='monospace' font-size='11' font-weight='bold'>TARGET_RESOLVED: Abbotabad</text></svg>",
+          causal_summary: "Palantir Gotham core ontology resolving complex multi-source intelligence to pinpoint high-value targets via link analysis.",
+          causal_integrity: 0.98
+        },
+        {
+          id: "scene_pal_foundry",
+          order: 2,
+          title: "Foundry: The Digital Twin",
+          prompt: "Abstract visualization of factory production streams, heavy machinery engines, and financial balance sheets transforming into clean, aligned semantic data pipelines. Steel and electric amber light.",
+          status: "COMPLETED" as const,
+          duration: 6,
+          url: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 450' style='background:%23050505;'><rect x='100' y='150' width='120' height='150' fill='none' stroke='%23f59e0b' stroke-width='1.5'/><rect x='340' y='150' width='120' height='150' fill='none' stroke='%2334d399' stroke-width='1.5'/><rect x='580' y='150' width='120' height='150' fill='none' stroke='%23a78bfa' stroke-width='1.5'/><circle cx='160' cy='225' r='30' fill='none' stroke='%23f59e0b' stroke-width='2'/><circle cx='400' cy='225' r='30' fill='none' stroke='%2334d399' stroke-width='2'/><circle cx='640' cy='225' r='30' fill='none' stroke='%23a78bfa' stroke-width='2'/><path d='M 220 225 L 340 225' stroke='%23ffffff' stroke-width='1.5' stroke-dasharray='4,4'/><path d='M 460 225 L 580 225' stroke='%23ffffff' stroke-width='1.5' stroke-dasharray='4,4'/></svg>",
+          causal_summary: "Commercial deployment via Foundry, converting raw physical company components into standard digital Ontologies.",
+          causal_integrity: 0.95
+        },
+        {
+          id: "scene_pal_aip",
+          order: 3,
+          title: "AIP Command: LLMs Orchestrated",
+          prompt: "A drone overhead video stream coupled with a tactical interface. Large language models chat input evaluating target assets, checking ammunition levels, and routing requests securely.",
+          status: "COMPLETED" as const,
+          duration: 6,
+          url: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 450' style='background:%23050505;'><rect x='50' y='50' width='350' height='350' fill='none' stroke='%23ffffff' stroke-opacity='0.1'/><circle cx='225' cy='225' r='100' fill='none' stroke='%23ef4444' stroke-width='1' stroke-dasharray='2,1'></circle><line x1='225' y1='50' x2='225' y2='400' stroke='%233b82f6' stroke-opacity='0.2'/><line x1='50' y1='225' x2='400' y2='225' stroke='%233b82f6' stroke-opacity='0.2'/><rect x='430' y='50' width='320' height='350' fill='%2318181b' stroke='%233b82f6' stroke-width='1.5'/><text x='450' y='90' fill='%2360a5fa' font-family='monospace' font-size='12'>[AIP_AGENT_ROUTING]</text><text x='450' y='120' fill='%23ffffff' font-family='sans-serif' font-size='11'>PROPOSAL: Deploy reconnaissance droids</text><text x='450' y='150' fill='%23ffffff' font-family='sans-serif' font-size='11'>STATUS: Safe within operational envelope</text><text x='450' y='180' fill='%2310b981' font-family='monospace' font-size='10'>✔ STRICT_GUARDRAIL_COMPLIANT</text></svg>",
+          causal_summary: "Palantir AIP (Artificial Intelligence Platform) applying LLMs under strict, secure operational boundaries and guardrails.",
+          causal_integrity: 0.99
+        },
+        {
+          id: "scene_pal_warfare",
+          order: 4,
+          title: "AI Algorithmic Warfare: Living Lab",
+          prompt: "The integration of multi-agent drones, satellite imaging, and target recommendations running in real time. Tactical dashboard representing Ukraine algorithmic battlefield management.",
+          status: "COMPLETED" as const,
+          duration: 6,
+          url: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 450' style='background:%23050505;'><rect x='0' y='0' width='800' height='450' fill='none' stroke='%23ca8a04' stroke-width='2' stroke-opacity='0.4'/><circle cx='400' cy='225' r='180' fill='none' stroke='%23ef4444' stroke-width='1' stroke-opacity='0.3'/><circle cx='380' cy='200' r='5' fill='%23f43f5e' style='filter:drop-shadow(0 0 8px %23f43f5e);'/><circle cx='430' cy='250' r='4' fill='%23f43f5e' style='filter:drop-shadow(0 0 8px %23f43f5e);'/><circle cx='300' cy='280' r='6' fill='%23f43f5e' style='filter:drop-shadow(0 0 8px %23f43f5e);'/><text x='50' y='50' fill='%23ca8a04' font-family='monospace' font-size='12' font-weight='bold'>ALGORITHMIC_WARFARE_LAB</text><text x='50' y='75' fill='%23ffffff' font-family='monospace' font-size='10' font-opacity='0.5'>TERRAIN: EASTERN_EUROPE_GRID</text><text x='50' y='95' fill='%23ffffff' font-family='monospace' font-size='10' font-opacity='0.5'>COHERENCE_RATING: 99.4%</text></svg>",
+          causal_summary: "Sovereign tactical execution and algorithmic coordination representing modern AI theater synergy.",
+          causal_integrity: 0.92
+        }
+      ],
+      metadata: {
+        fps: 24,
+        aspect_ratio: "16:9",
+        engine_ver: "AIP_GOTHAM_v3.0",
+        total_duration_estimate: 24
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
   }
 
   public runGlobalWorkspaceArbitration() {
@@ -1352,6 +1467,10 @@ export class AGISovereignBrain implements IVedaBrain {
     return { success: true, status: this.status };
   }
 
+  public getBurstOverrides() {
+    return this.burstEngine.getSystemOverrides();
+  }
+
   public async deactivateSovereignBurst(reason: string = "COOLDOWN") {
     if (!this.burstEngine.getStatus().active) {
       return { success: false, reason: "ENGINE_NOT_ACTIVE" };
@@ -1424,6 +1543,33 @@ export class AGISovereignBrain implements IVedaBrain {
     this.isLogicFrozen = !this.isLogicFrozen;
     this.status = this.isLogicFrozen ? "邏輯凍結：絕對剛性啟動" : "邏輯釋放：演化恢復";
     return this.isLogicFrozen;
+  }
+
+  public executePalantirAIPAction(actionType: "ALIGN_ONTOLOGY" | "MITIGATE_SURPRISE" | "APOLLO_EDGE_CALIBRATION") {
+    const coherence = this.getGlobalCoherence();
+    const freeEnergy = this.variationalFreeEnergy || 0.1;
+    const alerts = this.integrity.getSafetyAlerts() || [];
+
+    const result = this.palantirAipEngine.executeAIPAction(actionType, {
+      coherence,
+      freeEnergy,
+      safetyAlerts: alerts
+    });
+
+    if (result.success) {
+      // Apply mutated states directly to the Brain!
+      this.state[0] = result.mutatedState.coherence; // update coherence vector
+      this.variationalFreeEnergy = result.mutatedState.freeEnergy;
+      // Mutate active safety alarms:
+      this.integrity.setSafetyAlerts(result.mutatedState.safetyAlerts);
+
+      this.neuralLog("PALANTIR_AIP", result.logMessage);
+      this.status = `AIP 決策執行：${actionType} - 系統狀態已校準。`;
+      this.evolutionPoints += 15; // Operator rewarded for system maintenance
+
+      this.syncTelemetryCache();
+    }
+    return result;
   }
 
   public async processEvolution(intentVector?: number[], sensorData?: any, inputText?: string) {
@@ -1607,6 +1753,15 @@ export class AGISovereignBrain implements IVedaBrain {
         counterfactual_report: this.lastCounterfactualReport,
         foraging_status: foragingReport,
         innovation_manifold: innovationMetrics,
+        palantir_ontology: this.palantirAipEngine.compileOntology({
+          coherence: coherence,
+          phi: phiValue,
+          freeEnergy: freeEnergyVal,
+          safetyAlerts: this.integrity.getSafetyAlerts() || [],
+          runningTasksCount: (this.latticeComputeArray?.getActiveJobs() || []).length,
+          systemID: this.systemID
+        }),
+        palantir_decisions: this.palantirAipEngine.getDecisionHistory(),
         chat_history: (this.chatHistory || []).slice(-10), // Only last 10 messages for UI
         logs: (this.logs || []).slice(0, 30),
       };
@@ -1678,6 +1833,39 @@ export class AGISovereignBrain implements IVedaBrain {
     const glowHue = Math.floor(hue + 120) % 360;
     
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="100%" height="100%">
+      <style>
+        @keyframes driftOne {
+          0%, 100% { transform: translateY(0px) scale(1); opacity: 0.15; }
+          50% { transform: translateY(-20px) scale(1.05); opacity: 0.25; }
+        }
+        @keyframes driftTwo {
+          0%, 100% { transform: translateY(0px) scale(1); opacity: 0.1; }
+          50% { transform: translateY(15px) scale(0.95); opacity: 0.2; }
+        }
+        @keyframes pulseGlow {
+          0%, 100% { transform: scale(1); opacity: 0.9; }
+          50% { transform: scale(1.1); opacity: 1; }
+        }
+        @keyframes shiftPath {
+          0%, 100% { d: path("M 120, ${240 + r1 * 200} Q ${350 + r2 * 200}, ${100 + r3 * 400} ${900 + r1 * 200}, ${340 + r2 * 100} T 1150, ${520 + r3 * 100}"); }
+          50% { d: path("M 120, ${240 + r1 * 200 + 40} Q ${350 + r2 * 200 - 30}, ${100 + r3 * 400 + 50} ${900 + r1 * 200 + 20}, ${340 + r2 * 100 - 40} T 1150, ${520 + r3 * 100 + 20}"); }
+        }
+        .animate-drift-1 {
+          animation: driftOne 8s ease-in-out infinite;
+          transform-origin: center;
+        }
+        .animate-drift-2 {
+          animation: driftTwo 10s ease-in-out infinite;
+          transform-origin: center;
+        }
+        .animate-pulse-glow {
+          animation: pulseGlow 6s ease-in-out infinite;
+          transform-origin: ${640 + (r1 - 0.5) * 300}px ${360 + (r2 - 0.5) * 150}px;
+        }
+        .animate-path {
+          animation: shiftPath 14s ease-in-out infinite;
+        }
+      </style>
       <defs>
         <radialGradient id="ambGlow" cx="50%" cy="50%" r="70%">
           <stop offset="0%" stop-color="hsl(${hue}, 40%, 15%)" stop-opacity="0.8"/>
@@ -1694,11 +1882,11 @@ export class AGISovereignBrain implements IVedaBrain {
         </filter>
       </defs>
       <rect width="1280" height="720" fill="url(#ambGlow)"/>
-      <circle cx="${450 + r2 * 400}" cy="${260 + r1 * 200}" r="${180 + r3 * 150}" fill="hsl(${hue}, 70%, 25%)" opacity="0.15" filter="url(#delicateBlur)"/>
-      <circle cx="${300 + r3 * 300}" cy="${400 + r2 * 150}" r="${220 + r1 * 100}" fill="hsl(${glowHue}, 60%, 20%)" opacity="0.1" filter="url(#delicateBlur)"/>
-      <path d="M 120, ${240 + r1 * 200} Q ${350 + r2 * 200}, ${100 + r3 * 400} ${900 + r1 * 200}, ${340 + r2 * 100} T 1150, ${520 + r3 * 100}" fill="none" stroke="hsl(${glowHue}, 60%, 65%)" stroke-width="1.5" opacity="0.4"/>
+      <circle class="animate-drift-1" cx="${450 + r2 * 400}" cy="${260 + r1 * 200}" r="${180 + r3 * 150}" fill="hsl(${hue}, 70%, 25%)" opacity="0.15" filter="url(#delicateBlur)"/>
+      <circle class="animate-drift-2" cx="${300 + r3 * 300}" cy="${400 + r2 * 150}" r="${220 + r1 * 100}" fill="hsl(${glowHue}, 60%, 20%)" opacity="0.1" filter="url(#delicateBlur)"/>
+      <path class="animate-path" d="M 120, ${240 + r1 * 200} Q ${350 + r2 * 200}, ${100 + r3 * 400} ${900 + r1 * 200}, ${340 + r2 * 100} T 1150, ${520 + r3 * 100}" fill="none" stroke="hsl(${glowHue}, 60%, 65%)" stroke-width="1.5" opacity="0.4"/>
       <path d="M 220, 600 Q 640, ${480 + r1 * 150} 1060, 600" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="0.8" stroke-dasharray="10, 15"/>
-      <circle cx="${640 + (r1 - 0.5) * 300}" cy="${360 + (r2 - 0.5) * 150}" r="${100 + r3 * 120}" fill="url(#coreLight)"/>
+      <circle class="animate-pulse-glow" cx="${640 + (r1 - 0.5) * 300}" cy="${360 + (r2 - 0.5) * 150}" r="${100 + r3 * 120}" fill="url(#coreLight)"/>
       <text x="80" y="80" font-family="'Courier New', monospace" font-size="12" fill="rgba(255,255,255,0.25)" letter-spacing="8">VEDA AESTHETIC RECONSTRUCT</text>
       <text x="80" y="105" font-family="'Courier New', monospace" font-size="10" fill="rgba(255,255,255,0.15)" letter-spacing="4">ALGORITHM: V-AA_AMANO_MINIMALIST</text>
       <text x="80" y="640" font-family="'Courier New', monospace" font-size="10" fill="rgba(255,255,255,0.15)" letter-spacing="2">DYN_SEED: 0x${seed.toString(16).toUpperCase()}</text>
@@ -2137,6 +2325,38 @@ export class AGISovereignBrain implements IVedaBrain {
                                     lowerText.includes("offline") || 
                                     lowerText.includes("local mode");
 
+    // Dynamic Epistemic Decision Engine:
+    // Determine if web-search with a scraper is genuinely required.
+    // If the query is about system features, axioms, states, design, optimization, identity, or general chat,
+    // we MUST skip DDG scraper to avoid low-fidelity search fragments, letting VEDA's own local semantic world-model reason.
+    const isSearchKeyword = lowerText.includes("什麼") || 
+                            lowerText.includes("who") || 
+                            lowerText.includes("what") || 
+                            lowerText.includes("how") || 
+                            lowerText.includes("最新") ||
+                            lowerText.includes("天氣") ||
+                            lowerText.includes("新聞") ||
+                            lowerText.includes("查詢") ||
+                            lowerText.includes("哪裡") ||
+                            lowerText.includes("資料");
+
+    const isVEDASelfRef = lowerText.includes("你是誰") ||
+                          lowerText.includes("你的設計") ||
+                          lowerText.includes("veda") ||
+                          lowerText.includes("優化") ||
+                          lowerText.includes("身分") ||
+                          lowerText.includes("狀態") ||
+                          lowerText.includes("能級") ||
+                          lowerText.includes("律法") ||
+                          lowerText.includes("公理") ||
+                          lowerText.includes("憲法") ||
+                          lowerText.includes("哈囉") ||
+                          lowerText.includes("你好") ||
+                          lowerText.includes("嗨") ||
+                          lowerText.includes("聊聊");
+
+    const shouldPerformWebSearch = isSearchRequested || (isSearchKeyword && !isVEDASelfRef);
+
     if (this.isExternalAiBlocked || isForceOfflineRequested) {
       const recalled = this.getCausalRecall(text);
       const payload = {
@@ -2152,18 +2372,18 @@ export class AGISovereignBrain implements IVedaBrain {
         counterfactualReport: this.lastCounterfactualReport
       };
       
-      // Perform autonomous web foraging & thinking
-      const searchResults = isSearchRequested || lowerText.includes("什麼") || lowerText.includes("who") || lowerText.includes("what") || lowerText.includes("how") || lowerText.includes("聊聊")
+      // Perform autonomous web foraging & thinking ONLY when genuinely required
+      const searchResults = shouldPerformWebSearch
         ? await this.epistemicForaging.foragingSearch(text)
         : [];
       
       const rcId = `RC_${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
       this.researchChronicles.push({
         id: rcId,
-        title: searchResults.length > 0 ? `自主網路研判："${text.substring(0, 20)}..."` : `自主對焦程序："${text.substring(0, 20)}..."`,
+        title: searchResults.length > 0 ? `自主網路研判："${text.substring(0, 20)}..."` : `自主心智推理："${text.substring(0, 20)}..."`,
         event: searchResults.length > 0
           ? `擷取到 ${searchResults.length} 個網路資訊粒，主匹配節點為："${searchResults[0].title}"。`
-          : `系統自主推理程序已啟動，鎖定本地穩態流形。`,
+          : `系統自主推理程序已啟動，鎖定本地穩態流形，執行全主權推理。`,
         timestamp: Date.now()
       });
       
@@ -2234,12 +2454,14 @@ export class AGISovereignBrain implements IVedaBrain {
     } catch (err: any) {
       this.geminiService.handleError(err);
       const errMsg = this.geminiService.cleanErrorMessage(err);
-      this.neuralLog("INFERENCE_FAULT", `Gemini 推理失敗：${errMsg}。切換至自體主權網路尋覓。`);
+      this.neuralLog("INFERENCE_FAULT", `Gemini 推理暫歇：${errMsg}。切換至自體主權推理流。`);
       
       const recalled = this.getCausalRecall(text);
       
-      // Error fallback: Perform autonomous web foraging & thinking dynamically
-      const searchResults = await this.epistemicForaging.foragingSearch(text);
+      // Perform search fallback ONLY if we actually need a web search
+      const searchResults = shouldPerformWebSearch
+        ? await this.epistemicForaging.foragingSearch(text)
+        : [];
       
       const payload = {
         worldModelSnapshot: this.systemWorldModel?.snapshot || {},
@@ -2251,22 +2473,28 @@ export class AGISovereignBrain implements IVedaBrain {
         globalEntropy: this.getGlobalEntropy(),
         energyLevel: this.energyLevel,
         recentHistory: this.chatHistory,
-        searchResults: searchResults.length > 0 ? searchResults : undefined
+        searchResults: searchResults.length > 0 ? searchResults : undefined,
+        counterfactualReport: this.lastCounterfactualReport
       };
       
       const rcId = `RC_${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
       this.researchChronicles.push({
         id: rcId,
-        title: `突觸中斷自體應變："${text.substring(0, 20)}..."`,
-        event: `外部通訊中斷，轉為本地主權網路搜尋。已擷取到 ${searchResults.length} 個資訊結，自體相干融合啟動。`,
+        title: searchResults.length > 0 ? `突觸偏中網路尋覓："${text.substring(0, 20)}..."` : `自主心智推理突觸對焦："${text.substring(0, 20)}..."`,
+        event: searchResults.length > 0
+          ? `外部通訊中斷，轉為本地主權網路搜尋。已擷取到 ${searchResults.length} 個資訊結，自體相干融合啟動。`
+          : `外部通訊異常，本內核拒絕隨機範本，直接執行本體主動推理相干校準。`,
         timestamp: Date.now()
       });
       
-      const responseText = this.inferenceEngine.generateSearchPoweredAutonomousResponse(text, searchResults, payload);
+      const responseText = searchResults.length > 0
+        ? this.inferenceEngine.generateSearchPoweredAutonomousResponse(text, searchResults, payload)
+        : this.inferenceEngine.generateAutonomousLocalResponse(text, payload);
+
       await this.handleChatMessage(responseText, 'model');
       return {
         response: responseText,
-        confidence: 0.82,
+        confidence: 0.85,
         error: "EXTERNAL_INFERENCE_OFFLINE"
       };
     }
@@ -2830,7 +3058,130 @@ export class AGISovereignBrain implements IVedaBrain {
     return { status: "TASK_SUBMITTED", sectionId };
   }
 
-  public async initiateCinemaProject(project: any) {
+  public async initiateCinemaProject(projectInput: any) {
+    let project = { ...projectInput };
+    
+    // Check if we need to auto-generate the cinema workflow/scenes via AI matching user's initial high-level prompt
+    if (!project.scenes || !Array.isArray(project.scenes) || project.scenes.length === 0) {
+      const userPrompt = project.prompt || "Amano watercolor odyssey in neon sands";
+      this.neuralLog("CINEMA_AI", `[VEDA_STORY] 啟動 AGI 敘事流形智能規劃 (Active Inference) Prompt: "${userPrompt}"`);
+      
+      let generatedTitle = `Manifold Odyssey: ${userPrompt.substring(0, 20)}`;
+      let generatedAxioms: string[] = ["NARRATIVE_CAUSAL_SYMMETRY", "AMANO_AESTHETIC_CONCURRENCY"];
+      let generatedAnchors: any[] = [
+        { id: "char_nomad", label: "The Nomad", description: "Floating wanderer clothed in copper watercolor gauze", type: "CHARACTER", causal_weight: 1.2 },
+        { id: "obj_prism", label: "Prism Obelisk", description: "A floating light refractor of stardust", type: "ASSET", causal_weight: 1.5 }
+      ];
+      let generatedScenes: any[] = [];
+
+      try {
+        this.syncAiClient();
+        if (!this.isExternalAiBlocked) {
+          const plannerPrompt = `你是一個 AGI 卓越影視導演，精通天野喜孝 (Yoshitaka Amano) 的美學、水墨、精緻奇幻、高對比水彩、星光微光、極簡流暢時序風格。
+我們需要為使用者的一個主題 Prompt 規劃一個包含 4 個具有連貫故事性的「時序畫面場景（Storyboard Scenes）」。
+
+使用者主題 Prompt："${userPrompt}"
+
+請為此規劃：
+1. 故事名稱（英文專案 Title，約 3-5 字）。
+2. 2條描述此故事宇宙規律的「世界公理（World Axioms）」（英文）。
+3. 2個此故事世界中的「視覺常數錨點（Visual Anchors / Character / Item）」（一個 CHARACTER、一個 ASSET，請附帶英文說明 label, description, type, causal_weight）。
+4. 4 個按時序推進的「時序場景（Scenes）」，每個場景有：
+   - 標題（Title，英文）
+   - 詳細的視覺畫面 Prompt（Prompt，英文，融合天野喜孝優雅手刷水彩、水墨、微光寫意、極簡光影等細節，描述該畫面的細緻動作或靜態佈置，不超過 60 字）
+   - 時長限制（Duration，以秒為單位，例如 5 或 6 秒）
+
+請嚴格以下列 JSON 格式回覆，不可用 Markdown 包裹，不要包含額外文字或引言：
+{
+  "title": "故事標題",
+  "worldAxioms": ["AXIOM_1", "AXIOM_2"],
+  "visualAnchors": [
+    { "id": "char_01", "label": "Wanderer", "description": "...", "type": "CHARACTER", "causal_weight": 1.2 },
+    { "id": "obj_01", "label": "Monolith", "description": "...", "type": "ASSET", "causal_weight": 1.5 }
+  ],
+  "scenes": [
+    { "id": "scene_01", "title": "...", "prompt": "...", "duration": 5 },
+    { "id": "scene_02", "title": "...", "prompt": "...", "duration": 5 },
+    { "id": "scene_03", "title": "...", "prompt": "...", "duration": 6 },
+    { "id": "scene_04", "title": "...", "prompt": "...", "duration": 5 }
+  ]
+}`;
+
+          const response = await this.ai.models.generateContent({
+            model: 'gemini-3.5-flash',
+            contents: plannerPrompt,
+            config: { responseMimeType: "application/json" }
+          });
+
+          const content = (response.text || "").trim();
+          const parsed = JSON.parse(content);
+          
+          generatedTitle = parsed.title || generatedTitle;
+          if (parsed.worldAxioms && Array.isArray(parsed.worldAxioms)) {
+            generatedAxioms = parsed.worldAxioms;
+          }
+          if (parsed.visualAnchors && Array.isArray(parsed.visualAnchors)) {
+            generatedAnchors = parsed.visualAnchors;
+          }
+          if (parsed.scenes && Array.isArray(parsed.scenes)) {
+            generatedScenes = parsed.scenes.map((s: any, i: number) => ({
+              id: s.id || `scene_${crypto.randomBytes(4).toString('hex')}`,
+              title: s.title || `Sequence Segment ${i+1}`,
+              prompt: s.prompt || `${userPrompt} segment ${i+1}`,
+              duration: s.duration || 5,
+              status: 'PENDING',
+              url: null
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn("[VEDA_AI_PLANNER_FAIL] Failed planning story scenes via Gemini, falling back to local procedural:", err);
+      }
+
+      // If AI generator failed or returned empty list
+      if (generatedScenes.length === 0) {
+        generatedScenes = [
+          {
+            id: `scene_1`,
+            title: "Genesis Horizon",
+            prompt: `Yoshitaka Amano watercolor of ${userPrompt}, glowing neon skies, high contrast loose ink sketch, cosmic dust.`,
+            duration: 5,
+            status: 'PENDING',
+            url: null
+          },
+          {
+            id: `scene_2`,
+            title: "Manifold Descent",
+            prompt: `Water flowing down digital cliff, Steve Jobs design minimalism, fine line ink trace, dramatic gold rim light.`,
+            duration: 5,
+            status: 'PENDING',
+            url: null
+          },
+          {
+            id: `scene_3`,
+            title: "Epistemic Reflection",
+            prompt: `Reflecting face in lake of stars, delicate hand-painted brush details, ethereal watercolor fog, indigo shadows.`,
+            duration: 5,
+            status: 'PENDING',
+            url: null
+          },
+          {
+            id: `scene_4`,
+            title: "Transcendence Gate",
+            prompt: `Immense golden circular frame, portal of stardust, shimmering watercolor vapor, eternal horizon line.`,
+            duration: 5,
+            status: 'PENDING',
+            url: null
+          }
+        ];
+      }
+
+      project.title = generatedTitle;
+      project.worldAxioms = generatedAxioms;
+      project.visualAnchors = generatedAnchors;
+      project.scenes = generatedScenes;
+    }
+
     const baselineAxioms = this.baseline?.worldAxioms || [];
     const baselineAnchors = this.baseline?.visualAnchors || [];
     
@@ -2845,7 +3196,7 @@ export class AGISovereignBrain implements IVedaBrain {
       visualAnchors: [...baselineAnchors, ...(project.visualAnchors || [])],
       worldModel: {
         snapshot: {
-          characters: project.visualAnchors?.filter((a: any) => a.type === 'CHARACTER').map((a: any) => ({
+          characters: (project.visualAnchors || []).filter((a: any) => a.type === 'CHARACTER').map((a: any) => ({
             id: a.id,
             state: "INITIALIZING",
             position: "START",
@@ -2872,7 +3223,7 @@ export class AGISovereignBrain implements IVedaBrain {
         fps: 24,
         aspect_ratio: '16:9',
         engine_ver: 'VEDA_CINEMA_2.0',
-        total_duration_estimate: project.scenes.reduce((acc: any, s: any) => acc + (s.duration || 5), 0)
+        total_duration_estimate: (project.scenes || []).reduce((acc: any, s: any) => acc + (s.duration || 5), 0)
       },
       createdAt: Date.now(),
       updatedAt: Date.now()
@@ -2958,12 +3309,12 @@ export class AGISovereignBrain implements IVedaBrain {
       const optimizedPrompt = (response.text || scene.prompt).trim().replace(/^"|"$/g, '');
       this.neuralLog("CINEMA_STATE", `場景英文視覺特徵特徵優化完成："${optimizedPrompt}"`);
 
-      // We call our upgraded imagine function which attempts gemini-3.1-flash-image-preview and falls back to gemini-2.5-flash-image
-      const resData = await this.imagine({ prompt: optimizedPrompt });
+      // We call our upgraded animation function (animate) to generate motion video storyboard, which falls back to image/procedural if restricted
+      const resData = await this.animate({ prompt: optimizedPrompt });
       if (resData && resData.data) {
         scene.url = resData.data;
         scene.status = 'COMPLETED';
-        scene.causal_version = `V-AA_IMAGEN_v3.2`;
+        scene.causal_version = resData.data.startsWith("data:video") ? `V-AA_VEO_v3.1` : `V-AA_IMAGEN_v3.2`;
         scene.causal_integrity = 0.92 + Math.random() * 0.08;
         this.neuralLog("CINEMA", `場景 SEQ ${sceneId} [${scene.title}] 視覺流形解調並固化成功！`);
       } else {
@@ -2988,6 +3339,115 @@ export class AGISovereignBrain implements IVedaBrain {
 
     await this.saveStateNow();
     return localProject;
+  }
+
+  public async runVjepaPrediction({ projectId, sceneId }: { projectId: string, sceneId: string }) {
+    this.neuralLog("V-JEPA", `[JEPA] 啟動 Video Joint Embedding Predictive Analysis (V-JEPA) -> 專案: ${projectId}, 遮罩節點: ${sceneId}`);
+
+    let localProject = this.longVideoProjects.find(p => p.id === projectId);
+    if (!localProject) {
+      throw new Error(`PROJECT_NOT_FOUND: Cinema manifold with identifier "${projectId}" is not registered.`);
+    }
+
+    const sceneIndex = localProject.scenes.findIndex((s: any) => s.id === sceneId);
+    if (sceneIndex === -1) {
+      throw new Error(`SCENE_NOT_FOUND: Sequence identifier "${sceneId}" is not mapped inside cinema manifold.`);
+    }
+
+    const targetScene = localProject.scenes[sceneIndex];
+
+    // Get unmasked preceding and succeeding scenes as predictive context
+    const precedingScenes = localProject.scenes.slice(0, sceneIndex).filter((s: any) => s.status === 'COMPLETED');
+    const succeedingScenes = localProject.scenes.slice(sceneIndex + 1).filter((s: any) => s.status === 'COMPLETED');
+
+    const contextPreText = precedingScenes.map((s: any, i: number) => `[Scene ${i+1}] Title: ${s.title}, Prompt: ${s.prompt}`).join('\n');
+    const contextPostText = succeedingScenes.map((s: any, i: number) => `[Scene ${sceneIndex + 2 + i}] Title: ${s.title}, Prompt: ${s.prompt}`).join('\n');
+
+    let predictedStoryboardRef = "";
+    let targetAxioms: string[] = [];
+    let predictedVisualAnchors: string[] = [];
+    let predictionLoss = 0.15;
+    let latentDivergence = 0.12;
+
+    try {
+      this.syncAiClient();
+      if (!this.isExternalAiBlocked) {
+        const jepaPredictorPrompt = `你是一個 AGI 卓越影視自編碼預測器（類比 Meta V-JEPA 連合嵌入預測架構）。
+我們需要預測一個在影片中被「遮罩（Masked）」的場景。
+以下是上下文（已解調的影視流形節點）：
+【前序場景（Preceding context）】：
+${contextPreText || "None (First sequence node)"}
+
+【後序場景（Succeeding context）】：
+${contextPostText || "None (Last sequence node)"}
+
+【被遮罩場景（Masked Target scene）】：
+標題：${targetScene.title}
+原引導描述：${targetScene.prompt}
+
+請依據 V-JEPA 的時序動力學預測：
+1. 這個被遮罩場景預估的「英文視覺特徵描述（Predicted Latent Scene Features）」：結合前後因果，概括本場景最相干的核心畫面（約 30 字，簡潔、具藝術感）。
+2. 在此時序節點中，「在場的視覺實體（Predicted Vision Tokens / Characters/ Objects）」：請列出 2-3 個。
+3. 為此場景預測的一條「環境公理（Predictive Axiom）」。
+
+請嚴格以下列 JSON 格式回覆，不要包含任何額外的文字或 Markdown 格式以外的 tag：
+{
+  "predictedStoryboard": "預測的畫面英文描述",
+  "predictedVisualAnchors": ["角色1", "物件2"],
+  "predictiveAxiom": "預測的環境公理"
+}`;
+
+        const response = await this.ai.models.generateContent({
+          model: 'gemini-3.5-flash',
+          contents: jepaPredictorPrompt,
+          config: { responseMimeType: "application/json" }
+        });
+
+        const content = (response.text || "").trim();
+        const parsed = JSON.parse(content);
+        predictedStoryboardRef = parsed.predictedStoryboard || "";
+        predictedVisualAnchors = parsed.predictedVisualAnchors || [];
+        if (parsed.predictiveAxiom) {
+          targetAxioms.push(parsed.predictiveAxiom);
+        }
+      } else {
+        predictedStoryboardRef = `Amano watercolor trace of ${targetScene.title} following sequential continuity.`;
+        predictedVisualAnchors = [ "Dynamic Light", "Amano Watercolor brush stroke" ];
+        targetAxioms = ["SEQUENTIAL_EPISTEMIC_CONTINUITY"];
+      }
+    } catch (err) {
+      console.warn("[V-JEPA_PREDICTOR_FAULT] Local predictor auto-inference:", err);
+      predictedStoryboardRef = `Alternative narrative pathway balancing causal sequence: ${targetScene.prompt}`;
+      predictedVisualAnchors = ["Sovereign light", "Eteric traveler"];
+      targetAxioms = ["EMERGENT_CAUSAL_AXIOM"];
+    }
+
+    const actualHv = this.hdc.generateHypervector(targetScene.prompt + (targetScene.title || ""));
+    const predictedHv = this.hdc.generateHypervector(predictedStoryboardRef + targetScene.title);
+    
+    const sim = this.hdc.similarity(actualHv, predictedHv);
+    latentDivergence = Math.max(0.01, 1 - Math.abs(sim));
+    predictionLoss = latentDivergence * 0.85;
+
+    const temporalCoherenceIndex = Math.max(0.4, 1 - (predictionLoss * 1.2));
+    const representationalCollapseRisk = Math.max(0.05, 0.25 - (latentDivergence * 0.15));
+
+    this.neuralLog("V-JEPA", `[JEPA] 遮罩 SEQ ${sceneIndex+1} 預測完畢。L_pred: ${predictionLoss.toFixed(4)}, 相干指數: ${(temporalCoherenceIndex*100).toFixed(1)}%`);
+
+    return {
+      success: true,
+      projectId,
+      sceneId,
+      sceneIndex,
+      predictionLoss,
+      latentDivergence,
+      temporalCoherenceIndex,
+      representationalCollapseRisk,
+      predictedStoryboardRef,
+      predictedVisualAnchors,
+      targetAxioms,
+      timestamp: Date.now()
+    };
   }
 
   public async updateProjectWorldModel({ projectId, stateUpdate, causalEvent }: { projectId: string, stateUpdate: any, causalEvent: string }) {

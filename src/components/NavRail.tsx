@@ -10,7 +10,8 @@ import {
   BookOpen,
   MonitorPlay,
   Film,
-  CheckSquare
+  CheckSquare,
+  Workflow
 } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { twMerge } from 'tailwind-merge';
@@ -32,11 +33,11 @@ export const NavRail = () => {
   const allItems: { id: ViewMode, icon: any, label: string, architectOnly?: boolean }[] = [
     { id: 'DIALOGUE', icon: MessageSquare, label: t.nav_dialogue },
     { id: 'SYNAPSE', icon: Activity, label: t.nav_synapse },
+    { id: 'PALANTIR_AIP', icon: Workflow, label: t.nav_palantir_aip, architectOnly: true },
     { id: 'TASKS', icon: CheckSquare, label: t.nav_tasks },
     { id: 'KNOWLEDGE', icon: Database, label: t.nav_vault, architectOnly: true },
     { id: 'SYNTHESIS', icon: BookOpen, label: t.nav_synthesis, architectOnly: true },
     { id: 'SOVEREIGN', icon: Cpu, label: t.nav_sovereign, architectOnly: true },
-    { id: 'VISUAL', icon: MonitorPlay, label: t.nav_visuals },
     { id: 'CINEMA', icon: Film, label: t.nav_cinema },
     { id: 'EFFICACY', icon: Zap, label: t.nav_tiers },
     { id: 'DREAM', icon: Moon, label: t.nav_dreamscape },

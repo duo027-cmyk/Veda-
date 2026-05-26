@@ -7,7 +7,6 @@ import {
   Moon,
   Loader2
 } from 'lucide-react';
-import { VisualManifold } from './components/VisualManifold';
 import { EfficacyManifold } from './components/EfficacyManifold';
 import { NeuralManifold } from './components/NeuralManifold';
 import { auth } from './firebase';
@@ -16,6 +15,7 @@ import { vedaService } from './services/vedaService';
 import { resonanceService } from './services/resonanceService';
 import { StrategicWorkstation } from './components/StrategicWorkstation';
 import { SovereignManagement } from './components/SovereignManagement';
+import { PalantirAIPDashboard } from './components/PalantirAIPDashboard';
 import { NavRail } from './components/NavRail';
 import { Header } from './components/Header';
 import { ChatInterface } from './components/ChatInterface';
@@ -360,17 +360,8 @@ export default function App() {
             {view === 'KNOWLEDGE' && <KnowledgeVault data={userData} />}
             {view === 'SYNTHESIS' && <StrategicWorkstation data={userData} onRefresh={() => fetchVedaData()} />}
             {view === 'TASKS' && <TaskManager />}
+            {view === 'PALANTIR_AIP' && <PalantirAIPDashboard data={userData} onAction={handleAction} onRefresh={() => fetchVedaData()} />}
           {view === 'SOVEREIGN' && <SovereignManagement data={userData} onAction={handleAction} />}
-            {view === 'VISUAL' && (
-              <VisualManifold 
-                data={userData} 
-                onGenerate={async (type, prompt) => {
-                  if (type === 'IMAGE') await handleAction('imagine', { prompt });
-                  else if (type === 'VIDEO') await handleAction('animate', { prompt });
-                  else if (type === 'AUDIO') await handleAction('synthesizeAudio', { prompt });
-                }} 
-              />
-            )}
             {view === 'CINEMA' && userData && (
               <CinemaManifold 
                 data={userData} 

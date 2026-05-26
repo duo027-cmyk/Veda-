@@ -23,3 +23,4 @@ export * from "./intelligence/EpistemicForagingUnit";
 export * from "./intelligence/StrategicPlanningUnit";
 export * from "./intelligence/LanguageEncoder";
 export * from "./intelligence/SpatialProprioceptionUnit";
+export * from "./intelligence/PalantirOntologyEngine";

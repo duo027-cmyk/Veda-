@@ -105,6 +105,7 @@ export interface Translations {
   external_entanglement: string;
   enter_remote_id: string;
   nav_dialogue: string;
+  nav_palantir_aip: string;
   nav_synapse: string;
   nav_vault: string;
   nav_synthesis: string;
@@ -115,6 +116,10 @@ export interface Translations {
   nav_dreamscape: string;
   nav_core_config: string;
   nav_tasks: string;
+  nav_epistemic_console: string;
+  nav_neural_matrix: string;
+  nav_sovereign_ops: string;
+  nav_core_engineering: string;
   sovereign_core_label: string;
   neural_manifold_isolated: string;
   whisper_to_core: string;
@@ -272,6 +277,7 @@ const translations: Record<Language, Translations> = {
     external_entanglement: '外部因果糾纏',
     enter_remote_id: '輸入遠端系統編號 (REMOTE_ID)...',
     nav_dialogue: '對話',
+    nav_palantir_aip: 'AIP 決策',
     nav_synapse: '突觸',
     nav_vault: '金庫',
     nav_synthesis: '綜合',
@@ -282,6 +288,10 @@ const translations: Record<Language, Translations> = {
     nav_dreamscape: '夢境',
     nav_core_config: '核心配置',
     nav_tasks: '任務',
+    nav_epistemic_console: '認識論主機',
+    nav_neural_matrix: '認知神經矩陣',
+    nav_sovereign_ops: '決策與本體決議',
+    nav_core_engineering: '核心工程與能效',
     sovereign_core_label: '主權核心',
     neural_manifold_isolated: '神經流形已隔離 / Neural Manifold Isolated',
     whisper_to_core: '向核心低語 / Whisper to the core...',
@@ -437,6 +447,7 @@ const translations: Record<Language, Translations> = {
     external_entanglement: 'External Causal Entanglement',
     enter_remote_id: 'ENTER_REMOTE_SYSTEM_ID',
     nav_dialogue: 'Dialogue',
+    nav_palantir_aip: 'Palantir AIP',
     nav_synapse: 'Synapse',
     nav_vault: 'Sovereign Vault',
     nav_synthesis: 'Epistemic Synthesis',
@@ -447,6 +458,10 @@ const translations: Record<Language, Translations> = {
     nav_dreamscape: 'Dreamscape',
     nav_core_config: 'Core Configuration',
     nav_tasks: 'Tasks',
+    nav_epistemic_console: 'Epistemic Console',
+    nav_neural_matrix: 'Neural Matrix',
+    nav_sovereign_ops: 'Sovereign Operations',
+    nav_core_engineering: 'Core Engineering',
     sovereign_core_label: 'Sovereign Core',
     neural_manifold_isolated: 'Neural Manifold Isolated',
     whisper_to_core: 'Whisper to the core...',

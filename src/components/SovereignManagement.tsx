@@ -29,6 +29,7 @@ import { useVedaStore } from '../store/vedaStore';
 import { CuriosityMonitor } from './CuriosityMonitor';
 import { EpistemicLog } from './EpistemicLog';
 import { CausalSimulator } from './CausalSimulator';
+import { PalantirAIPSimulator } from './PalantirAIPSimulator';
 import { twMerge } from 'tailwind-merge';
 import { clsx, type ClassValue } from 'clsx';
 
@@ -491,6 +492,10 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                 </div>
              </div>
           </div>
+        </div>
+
+        <div className="w-full">
+          <PalantirAIPSimulator data={data} onUpdate={() => onAction('fetchVedaData')} />
         </div>
       </motion.div>
     </div>

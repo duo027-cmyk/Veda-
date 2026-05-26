@@ -6,7 +6,7 @@ export enum EvolutionStatus {
   ULTIMATE_SANCTION = "ULTIMATE_SANCTION"
 }
 
-export type ViewMode = 'DIALOGUE' | 'SYNAPSE' | 'DREAM' | 'CORE' | 'KNOWLEDGE' | 'SOVEREIGN' | 'SYNTHESIS' | 'VISUAL' | 'EFFICACY' | 'CINEMA' | 'TASKS';
+export type ViewMode = 'DIALOGUE' | 'SYNAPSE' | 'DREAM' | 'CORE' | 'KNOWLEDGE' | 'SOVEREIGN' | 'SYNTHESIS' | 'VISUAL' | 'EFFICACY' | 'CINEMA' | 'TASKS' | 'PALANTIR_AIP';
 
 export interface NetworkLayer {
   id: string;
@@ -234,6 +234,11 @@ export interface BrainData extends BrainMetrics, BrainStatus {
     peakPower: number;
     entropy: number;
     runtime: number;
+    vfe?: number;
+    q_coordinate?: number;
+    p_momentum?: number;
+    totalAction?: number;
+    zenoCoeff?: number;
   };
   [key: string]: any; // Keep any as fallback for legacy fields during transition
 }

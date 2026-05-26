@@ -197,30 +197,6 @@ async function startServer() {
 
     // IMMEDIATE Debug Heartbeat & Health Check (Highest Priority block to bypass routing / Vite fallback)
     app.get("/_veda_pulse", (req, res) => res.send("SOVEREIGN_PULSE_OK"));
-    app.get("/api/health", healthHandler);
-
-    // Direct registration for strategic telemetry to bypass routing exceptions and Vite SPA fallbacks
-    app.get("/api/strategic", (req, res) => {
-      try {
-        console.log(`[VEDA_OS] Serving unified strategic metrics (immediate-high-priority)...`);
-        const report = brain.generateStrategicReport();
-        if (!report) {
-          return res.status(200).json({ 
-            status: "STBY", 
-            message: "EPIMETIC_CRYSTALLIZATION",
-            metrics: { stability: 0.8, coherence: 1.0 }
-          });
-        }
-        res.json(report);
-      } catch (err) {
-        console.error("[VEDA_STRATEGIC_FAULT_IMMEDIATE]", err);
-        res.status(500).json({
-          error: "STRATEGIC_REPORT_ERROR",
-          status: "STANDBY_DEGRADED",
-          details: err instanceof Error ? err.message : String(err)
-        });
-      }
-    });
 
     // Global Logger (Balanced)
     app.use((req, res, next) => {
@@ -368,8 +344,6 @@ async function startServer() {
     // --- Hardened API Endpoints ---
     api.get("/v1/state", stateHandler);
     api.get("/state", stateHandler); 
-    app.get("/api/v1/state", stateHandler); // Hardened fallback
-    app.get("/api/state", stateHandler);    // Hardened fallback
 
     api.get("/v1/export", (req, res) => {
       try {
@@ -473,6 +447,9 @@ async function startServer() {
             break;
           case "batchSynthesizeReport":
             result.data = await brain.batchSynthesizeReport(params.reportId);
+            break;
+          case "executePalantirAIPAction":
+            result.data = brain.executePalantirAIPAction(params.actionType);
             break;
           case "handleChatMessage":
             const chatText = String(params.text || "");

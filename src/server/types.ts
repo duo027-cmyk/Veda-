@@ -106,6 +106,14 @@ export interface IVedaBrain {
   activateSovereignBurst(target?: string, intensity?: number, manualApproval?: boolean, mode?: BurstMode): Promise<any>;
   approveSovereignBurst(): any;
   deactivateSovereignBurst(reason?: string): Promise<any>;
+  getBurstOverrides(): {
+    batchSizeMultiplier: number;
+    quantizationTarget: string;
+    latencyTargetNs: number;
+    threadPriority: string;
+    kvCacheCompression: number;
+    computationPrecision: string;
+  };
   triggerResonance(intensity: number): void;
   getGlobalCoherence(): number;
   neuralLog(type: string, msg: string, data?: any): void;
@@ -121,6 +129,7 @@ export interface IVedaBrain {
   createTemporalAnchor(label: string): Promise<TemporalAnchor>;
   timeTravel(anchorId: string): Promise<boolean>;
   batchSynthesizeReport(reportId: string): Promise<any>;
+  executePalantirAIPAction(actionType: "ALIGN_ONTOLOGY" | "MITIGATE_SURPRISE" | "APOLLO_EDGE_CALIBRATION"): any;
   getTelemetryBuffer(): string;
   tick(): void;
   syncTelemetryCache(): Promise<void>;

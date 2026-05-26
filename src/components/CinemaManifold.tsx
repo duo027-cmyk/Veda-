@@ -19,6 +19,34 @@ export const CinemaManifold: React.FC<CinemaManifoldProps> = ({ data, onUpdate }
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [hasApiKey, setHasApiKey] = useState(true);
 
+  // V-JEPA Core Integration State
+  const [vjepaSelectedSceneId, setVjepaSelectedSceneId] = useState<string | null>(null);
+  const [vjepaResult, setVjepaResult] = useState<any>(null);
+  const [isAnalyzingVjepa, setIsAnalyzingVjepa] = useState(false);
+  const [maskedSceneIds, setMaskedSceneIds] = useState<string[]>([]);
+
+  const handleToggleMask = (sceneId: string) => {
+    setMaskedSceneIds(prev => 
+      prev.includes(sceneId) ? prev.filter(id => id !== sceneId) : [...prev, sceneId]
+    );
+    // Clear prediction result when masks change
+    setVjepaResult(null);
+  };
+
+  const handleRunVjepaPredictor = async (sceneId: string) => {
+    if (!selectedProjectId) return;
+    setIsAnalyzingVjepa(true);
+    setVjepaSelectedSceneId(sceneId);
+    try {
+      const result = await vedaService.runVjepaPrediction(selectedProjectId, sceneId);
+      setVjepaResult(result);
+    } catch (error) {
+      console.error("V-JEPA prediction error:", error);
+    } finally {
+      setIsAnalyzingVjepa(false);
+    }
+  };
+
   React.useEffect(() => {
     const checkApiKey = async () => {
       if (window.aistudio && window.aistudio.hasSelectedApiKey) {
@@ -243,7 +271,7 @@ export const CinemaManifold: React.FC<CinemaManifoldProps> = ({ data, onUpdate }
                     <div className="bg-white/5 border border-white/10 p-4 rounded-xl col-span-2">
                        <div className="text-[10px] text-white/30 uppercase mb-2 font-mono">Character Manifest</div>
                        <div className="flex gap-2 flex-wrap">
-                         {selectedProject.worldModel.snapshot.characters.map((c, i) => (
+                         {(selectedProject.worldModel?.snapshot?.characters || []).map((c, i) => (
                            <div key={`char-${c.id || i}`} className="bg-white/5 border border-white/5 px-2 py-1 rounded text-[9px] flex items-center gap-2">
                               <span className="text-white/40">{c.id}</span>
                               <span className="text-purple-400 font-bold">{c.state}</span>
@@ -279,7 +307,7 @@ export const CinemaManifold: React.FC<CinemaManifoldProps> = ({ data, onUpdate }
                    <div className="flex flex-col gap-3">
                       <span className="text-[10px] uppercase tracking-[0.3em] text-blue-400 font-bold font-mono">World Axioms</span>
                       <div className="flex flex-wrap gap-2">
-                         {selectedProject.worldAxioms.map((axiom, i) => {
+                         {(selectedProject.worldAxioms || []).map((axiom, i) => {
                            const isBaseline = data.baseline?.axioms.includes(axiom);
                            return (
                              <span key={`axiom-${i}-${axiom.substring(0, 10)}`} className={cn(
@@ -296,7 +324,7 @@ export const CinemaManifold: React.FC<CinemaManifoldProps> = ({ data, onUpdate }
                    <div className="flex flex-col gap-3">
                       <span className="text-[10px] uppercase tracking-[0.3em] text-purple-400 font-bold font-mono">Visual Anchors</span>
                       <div className="flex flex-wrap gap-2">
-                         {selectedProject.visualAnchors.map((anchor) => {
+                         {(selectedProject.visualAnchors || []).map((anchor) => {
                            const isBaseline = data.baseline?.anchors.some(a => a.id === anchor.id);
                            return (
                              <div key={`anchor-${anchor.id}`} className={cn(
@@ -327,13 +355,172 @@ export const CinemaManifold: React.FC<CinemaManifoldProps> = ({ data, onUpdate }
                 </div>
               </div>
 
+              {/* V-JEPA Latent Predictive Analysis Section */}
+              <div className="mt-2 mb-8 p-6 bg-white/[0.01] border border-white/5 rounded-2xl">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                  <div className="flex items-center gap-3">
+                    <span className="p-1.5 bg-red-500/10 rounded-lg text-red-400 border border-red-500/20 font-mono text-[9px]">V-JEPA</span>
+                    <h4 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+                      Video Joint-Embedding Predictive Protocol
+                    </h4>
+                  </div>
+                  <span className="text-[9px] text-white/30 font-serif italic">Joint-Embedding Predictive Architecture (JEPA) for Latent Narrative Sequence Alignment</span>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Left Panel: Mask and Trigger Settings */}
+                  <div className="bg-black/30 border border-white/5 p-4 rounded-xl flex flex-col gap-4">
+                    <div className="text-[10px] uppercase font-mono tracking-widest text-white/40">1. 時序遮罩節點 (Mask Sequence Nodes)</div>
+                    <div className="flex flex-col gap-2 max-h-48 overflow-y-auto custom-scrollbar">
+                      {(selectedProject.scenes || []).map((s, idx) => {
+                        const isMasked = maskedSceneIds.includes(s.id);
+                        return (
+                          <div 
+                            key={`vjepa-select-${s.id}`}
+                            className={`flex items-center justify-between p-2.5 rounded-lg border transition-all ${
+                              isMasked 
+                                ? 'bg-red-500/10 border-red-500/30 text-red-300' 
+                                : 'bg-white/5 border-white/5 hover:bg-white/10 text-white/70'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 overflow-hidden mr-2">
+                              <span className="text-[9px] font-mono leading-none bg-white/5 px-1.5 py-1 rounded flex-shrink-0">SEQ_{String(idx + 1).padStart(2, '0')}</span>
+                              <span className="text-[10px] font-mono truncate">{s.title}</span>
+                            </div>
+                            <button 
+                              onClick={() => handleToggleMask(s.id)}
+                              className={`text-[9px] font-mono font-bold px-2 py-1 rounded border transition-all flex-shrink-0 ${
+                                isMasked 
+                                  ? 'bg-red-500/20 border-red-500/40 text-red-400' 
+                                  : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'
+                              }`}
+                            >
+                              {isMasked ? 'MASKED' : 'MASK'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-auto">
+                      <div className="text-[9px] text-white/20 italic font-mono mb-3">
+                        * 遮罩部分時序畫面，預測器依前後未遮罩主體所張成之高維嵌入流形進行自編碼比對。
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (maskedSceneIds.length > 0) {
+                            handleRunVjepaPredictor(maskedSceneIds[0]);
+                          }
+                        }}
+                        disabled={isAnalyzingVjepa || maskedSceneIds.length === 0}
+                        className="w-full bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:hover:bg-red-600 text-white font-mono text-[10px] font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2"
+                      >
+                        {isAnalyzingVjepa ? (
+                          <>
+                            <Loader2 size={12} className="animate-spin text-white" />
+                            EVALUATING_JOINT_EMBEDDING_LATENT...
+                          </>
+                        ) : (
+                          <>
+                            <Brain size={12} />
+                            RUN V-JEPA LATENT PREDICTOR
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Middle Panel: Mathematical Loss Analysis & Architecture Visualizer */}
+                  <div className="bg-black/30 border border-white/5 p-4 rounded-xl flex flex-col gap-3">
+                    <div className="text-[10px] uppercase font-mono tracking-widest text-white/40">2. 聯合嵌入空間表徵 (Joint Embedding Loss Index)</div>
+                    
+                    {vjepaResult ? (
+                      <div className="flex flex-col gap-3 h-full justify-between">
+                        <div className="bg-white/[0.02] border border-white/5 p-3 rounded-lg flex flex-col gap-2 font-mono">
+                          <div className="flex justify-between items-center text-[10px]">
+                            <span className="text-white/40">L_pred (Embedding Distance):</span>
+                            <span className="text-red-400 font-bold">{vjepaResult.predictionLoss.toFixed(5)}</span>
+                          </div>
+                          <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-red-400 h-full rounded-full" style={{ width: `${Math.min(100, vjepaResult.predictionLoss * 400)}%` }} />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                          <div className="bg-white/[0.02] p-2.5 rounded border border-white/5">
+                            <div className="text-white/30 text-[9px] uppercase">Temporal Coherence</div>
+                            <div className="text-white font-bold mt-1 text-xs">{(vjepaResult.temporalCoherenceIndex * 100).toFixed(1)}%</div>
+                          </div>
+                          <div className="bg-white/[0.02] p-2.5 rounded border border-white/5">
+                            <div className="text-white/30 text-[9px] uppercase">Collapse Regularization</div>
+                            <div className="text-emerald-400 font-bold mt-1 text-xs">{vjepaResult.representationalCollapseRisk < 0.15 ? 'GUARD_STABLE' : 'STABLE'}</div>
+                          </div>
+                          <div className="bg-white/[0.02] p-2.5 rounded border border-white/5 col-span-2">
+                            <div className="text-white/30 text-[9px] uppercase">HDC Latent Similarity (Online vs Target)</div>
+                            <div className="text-blue-400 font-bold mt-1 text-xs">Similarity Sim: {((1 - vjepaResult.latentDivergence) * 100).toFixed(1)}%</div>
+                          </div>
+                        </div>
+
+                        {/* Architecture Mathematical Notation */}
+                        <div className="mt-auto border-t border-white/5 pt-2 text-[8px] text-white/30 font-serif italic text-center">
+                          V-JEPA loss: L_pred = &Sigma; || z_y - s_y_pred ||_2 + &lambda; (R_online + R_target)
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-xl opacity-30 p-4 text-center">
+                        <Layers size={36} className="mb-2 text-white/50" />
+                        <span className="text-[9px] font-mono uppercase tracking-widest text-white/50">WAIT_FOR_LATENT_EVALUATION</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Panel: Predicted Storyboard & Vision Tokens */}
+                  <div className="bg-black/30 border border-white/5 p-4 rounded-xl flex flex-col justify-between">
+                    <div className="text-[10px] uppercase font-mono tracking-widest text-white/40 mb-3">3. 解碼預測視覺特徵 (Decoded Vision Tokens)</div>
+                    
+                    {vjepaResult ? (
+                      <div className="flex flex-col gap-3 h-full justify-between">
+                        <div className="bg-white/[0.02] border border-white/5 p-3 rounded-lg text-[10px] leading-relaxed custom-scrollbar overflow-y-auto max-h-24">
+                          <span className="text-[8px] font-mono text-red-400/80 block mb-1 uppercase tracking-widest flex-shrink-0">PREDICTED_STORYBOARD_REF:</span>
+                          <p className="text-white/70 italic font-serif">"{vjepaResult.predictedStoryboardRef}"</p>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[8px] font-mono text-red-400/80 uppercase tracking-widest">Estimated Visual Tokens:</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {vjepaResult.predictedVisualAnchors?.map((va: string, i: number) => (
+                              <span key={`pred-anchor-${i}`} className="text-[8px] font-mono px-2 py-0.5 bg-purple-500/10 text-purple-300 border border-purple-500/20 rounded">
+                                {va}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1 mt-2">
+                          <span className="text-[8px] font-mono text-red-400/80 uppercase tracking-widest">Estimated Causal Axiom:</span>
+                          <div className="text-[9px] font-serif italic text-white/60 bg-white/5 p-1.5 rounded border border-white/5">
+                            {vjepaResult.targetAxioms?.[0] || "None generated"}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-xl opacity-30 p-4 text-center">
+                        <Brain size={36} className="mb-2 text-white/50" />
+                        <span className="text-[9px] font-mono uppercase tracking-widest text-white/50">NO_LATENT_ENTITIES</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-24">
-                {selectedProject.scenes.map((scene, idx) => (
+                {(selectedProject.scenes || []).map((scene, idx) => (
                   <SceneCard 
                     key={scene.id} 
                     scene={scene} 
                     index={idx} 
                     onSynthesize={() => handleSynthesizeScene(selectedProject.id, scene)} 
+                    isMasked={maskedSceneIds.includes(scene.id)}
                   />
                 ))}
               </div>

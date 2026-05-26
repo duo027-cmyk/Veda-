@@ -13,15 +13,16 @@ export class BurstImpactEvaluator {
   } {
     // V-AA Core logic: Burst mode is a high-entropy injection.
     // Implementing Peak Power Formula: P_peak = E_pulse / tau
-    const energyPulse = intensity * 1000; // Arbitrary Energy (E_pulse)
-    const tau = 0.01 + (1 - intensity) * 0.1; // Simulated pulse width (tau) - narrower at higher intensities
+    const energyPulse = intensity * 1000; // Arbitrary Energy (E_pulse in Joules)
+    const tau = 0.01 + (1 - intensity) * 0.1; // Simulated pulse width (tau in ms/seconds) - narrower at higher intensities
     const peakPower = energyPulse / tau;
 
-    const baseSpeedPerTarget = 120; // seconds
-    const timeNeeded = (targets.length * baseSpeedPerTarget) / (intensity * 2);
+    // Time-complexity formula: T ~ (N * dt_base) / intensity
+    const baseSpeedPerTarget = 15; // milliseconds
+    const timeNeededMs = (targets.length * baseSpeedPerTarget) / (Math.max(0.1, intensity) * 2);
     
     return {
-      realTimeEstimate: `${(timeNeeded / 60).toFixed(3)} 毫秒級預期 (AGI-Optimized)`,
+      realTimeEstimate: `${timeNeededMs.toFixed(3)} 毫秒級極限推演預期 (AGI-Optimized)`,
       causalDamage: intensity * 0.98 * (1 + duration * 0.05),
       collateralRisk: intensity * duration * 0.15,
       peakPower: peakPower * 2.5,

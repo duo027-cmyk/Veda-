@@ -7,27 +7,46 @@ interface SceneCardProps {
   scene: Scene;
   index: number;
   onSynthesize: () => void;
+  isMasked?: boolean;
 }
 
-export const SceneCard: React.FC<SceneCardProps> = ({ scene, index, onSynthesize }) => {
+export const SceneCard: React.FC<SceneCardProps> = ({ scene, index, onSynthesize, isMasked }) => {
   return (
     <div 
       className={cn(
         "group bg-white/[0.02] border rounded-xl overflow-hidden flex flex-col h-64 transition-all duration-500",
-        scene.status === 'COMPLETED' ? "border-green-500/20" : "border-white/5 hover:border-white/10"
+        isMasked ? "border-red-500/30 ring-1 ring-red-500/10 shadow-[0_0_15px_rgba(239,68,68,0.1)]" : (scene.status === 'COMPLETED' ? "border-green-500/20" : "border-white/5 hover:border-white/10")
       )}
     >
       <div className="h-32 bg-black/40 relative flex items-center justify-center">
-        {scene.status === 'COMPLETED' && scene.url ? (
+        {isMasked ? (
+          <div className="relative w-full h-full bg-gradient-to-br from-red-950/40 via-black to-zinc-950 flex flex-col items-center justify-center border-b border-red-500/20">
+            {/* Visual Static Pattern Simulation */}
+            <div className="absolute inset-0 opacity-5 pointer-events-none bg-[radial-gradient(#f87171_1px,transparent_1px)] [background-size:16px_16px]" />
+            <div className="absolute inset-0 bg-gradient-to-t from-red-500/5 via-transparent" />
+            <div className="border border-red-500/30 bg-red-950/20 px-3 py-1.5 rounded text-center z-10 animate-pulse">
+               <span className="text-[10px] font-mono text-red-400 font-bold tracking-[0.2em]">MASKED_NODE</span>
+            </div>
+            <span className="text-[7px] font-mono text-white/20 mt-2 z-10">V-JEPA LATENT SPACE ACTIVE</span>
+          </div>
+        ) : scene.status === 'COMPLETED' && scene.url ? (
           <div className="relative w-full h-full">
-            <video 
-              src={scene.url} 
-              className="w-full h-full object-cover" 
-              autoPlay 
-              loop 
-              muted 
-              playsInline 
-            />
+            {scene.url.startsWith('data:image/') || scene.url.startsWith('data:image/svg+xml') || !scene.url.includes('video') && !scene.url.endsWith('.mp4') ? (
+              <img 
+                src={scene.url} 
+                className="w-full h-full object-cover" 
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <video 
+                src={scene.url} 
+                className="w-full h-full object-cover" 
+                autoPlay 
+                loop 
+                muted 
+                playsInline 
+              />
+            )}
             {/* VEDA Watermark */}
             <div className="absolute bottom-2 right-2 flex items-center gap-1 opacity-20 select-none pointer-events-none group-hover:opacity-50 transition-opacity duration-500">
                <div className="w-2.5 h-2.5 border-r border-b border-blue-400" />
