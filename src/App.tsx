@@ -22,8 +22,6 @@ import { ChatInterface } from './components/ChatInterface';
 import { SynapseOverview } from './components/SynapseOverview';
 import { CoreConfig } from './components/CoreConfig';
 import { KnowledgeVault } from './components/KnowledgeVault';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 import { VedaCrystalLogo } from './components/VedaCrystalLogo';
 import { HoneycombHUD } from './components/HoneycombHUD';
 import { LatticeCruncher } from './components/LatticeCruncher';
@@ -40,9 +38,7 @@ import { BurstMonitor } from './components/BurstMonitor';
 import { SovereignCircuitBreaker } from './components/SovereignCircuitBreaker';
 
 // --- Utils ---
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from './lib/utils';
 
 import { useI18n } from './i18n';
 
@@ -243,6 +239,61 @@ export default function App() {
 
       <NavRail />
       <Header />
+
+      {/* Responsive Consolidated Sub-Tabs Console */}
+      {userData && (() => {
+        const getActiveHub = (v: any) => {
+          if (['DIALOGUE', 'DREAM', 'TASKS'].includes(v)) return 'DIALOGUE';
+          if (['SYNAPSE', 'KNOWLEDGE'].includes(v)) return 'SYNAPSE';
+          if (['SOVEREIGN', 'PALANTIR_AIP', 'SYNTHESIS'].includes(v)) return 'SOVEREIGN';
+          return 'CORE';
+        };
+        const activeHub = getActiveHub(view);
+        const subTabsConfig = {
+          DIALOGUE: [
+            { id: 'DIALOGUE', label: t.nav_dialogue },
+            { id: 'DREAM', label: t.nav_dreamscape },
+            { id: 'TASKS', label: t.nav_tasks }
+          ],
+          SYNAPSE: [
+            { id: 'SYNAPSE', label: t.nav_synapse },
+            { id: 'KNOWLEDGE', label: t.nav_vault }
+          ],
+          SOVEREIGN: [
+            { id: 'SOVEREIGN', label: t.nav_sovereign },
+            { id: 'PALANTIR_AIP', label: t.nav_palantir_aip },
+            { id: 'SYNTHESIS', label: t.nav_synthesis }
+          ],
+          CORE: [
+            { id: 'CORE', label: t.nav_core_config },
+            { id: 'EFFICACY', label: t.nav_tiers },
+            { id: 'CINEMA', label: t.nav_cinema }
+          ]
+        };
+        const activeSubTabs = (subTabsConfig as any)[activeHub] || [];
+        return (
+          <div className="absolute md:fixed top-24 md:top-10 left-0 md:left-32 right-0 md:right-auto z-[101] flex justify-center md:justify-start px-4 md:px-0 pointer-events-auto">
+            <div className="flex gap-1 bg-black/65 border border-white/5 rounded-full ghibli-glass p-1 shadow-2xl">
+              {activeSubTabs.map((tab: any) => {
+                const isActive = view === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setView(tab.id as any)}
+                    className={`px-3.5 md:px-[18px] py-1.5 md:py-2 rounded-full text-[9px] md:text-[10px] font-display uppercase tracking-[0.2em] transition-all duration-300 ${
+                      isActive
+                        ? 'bg-accent/20 text-accent border border-accent/20 font-bold scale-100 shadow-md'
+                        : 'text-ink/40 hover:text-ink hover:bg-white/5 border border-transparent'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {!userData && !apiError && <SovereignInitialization />}
 

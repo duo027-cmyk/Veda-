@@ -1,14 +1,9 @@
 import React, { useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { X } from 'lucide-react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 import { BrainData } from '../types';
 import { useI18n } from '../i18n';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../lib/utils';
 
 interface BurstMonitorProps {
   userData: BrainData;

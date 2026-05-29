@@ -10,12 +10,7 @@ import {
 } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType, isFirestoreQuotaExceeded } from '../lib/firebase';
 import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
-import { twMerge } from 'tailwind-merge';
-import { clsx, type ClassValue } from 'clsx';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../lib/utils';
 
 interface ProfileManagerProps {
   isOpen: boolean;

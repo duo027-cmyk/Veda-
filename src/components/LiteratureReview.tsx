@@ -12,12 +12,7 @@ import {
 import { useI18n } from '../i18n';
 import { BrainData } from '../types';
 import { vedaService } from '../services/vedaService';
-import { twMerge } from 'tailwind-merge';
-import { clsx, type ClassValue } from 'clsx';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../lib/utils';
 
 export const LiteratureReview = ({ data, onToggleBurst }: { data: BrainData | null, onToggleBurst: () => void }) => {
   const { t } = useI18n();

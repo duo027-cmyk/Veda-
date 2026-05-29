@@ -16,12 +16,7 @@ import {
 } from 'lucide-react';
 import { taskService } from '../services/taskService';
 import { type Task } from '../lib/db';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../lib/utils';
 
 export const TaskManager: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);

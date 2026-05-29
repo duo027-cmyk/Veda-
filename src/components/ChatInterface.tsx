@@ -24,18 +24,13 @@ import { useI18n } from '../i18n';
 import { vedaService } from '../services/vedaService';
 import { VedaCrystalLogo } from './VedaCrystalLogo';
 import { ThoughtTrace } from './ThoughtTrace';
-import { twMerge } from 'tailwind-merge';
-import { clsx, type ClassValue } from 'clsx';
 import { exportReportToPDF } from '../lib/reportUtils';
 import { auth, db, isFirestoreQuotaExceeded, onQuotaChange } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { ProfileManager } from './ProfileManager';
 import { useVedaStore } from '../store/vedaStore';
 import { useAuthStore } from '../store/authStore';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../lib/utils';
 
 const CodeBlock = ({ language, value }: { language: string; value: string }) => {
   const [copied, setCopied] = useState(false);

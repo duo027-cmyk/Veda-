@@ -31,13 +31,8 @@ import { useI18n } from '../i18n';
 import { BrainData } from '../types';
 import { NeuralManifold } from './NeuralManifold';
 import { KnowledgeGraph } from './KnowledgeGraph';
-import { twMerge } from 'tailwind-merge';
-import { clsx, type ClassValue } from 'clsx';
 import { vedaService } from '../services/vedaService';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../lib/utils';
 
 export const KnowledgeVault = ({ data }: { data: BrainData | null }) => {
   const { t } = useI18n();

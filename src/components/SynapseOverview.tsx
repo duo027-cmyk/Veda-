@@ -6,12 +6,8 @@ import { BrainData } from '../types';
 import { NetworkDisplay } from './NetworkDisplay';
 import { VedaCore3D } from './VedaCore3D';
 import { QuantumWaveform } from './QuantumWaveform';
-import { twMerge } from 'tailwind-merge';
-import { clsx, type ClassValue } from 'clsx';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../lib/utils';
+import { PhysicsInformedNeuromorphicDashboard } from './PhysicsInformedNeuromorphicDashboard';
 
 export const SynapseOverview = ({ 
   data, 
@@ -130,6 +126,8 @@ export const SynapseOverview = ({
              />
           </div>
        </div>
+
+       <PhysicsInformedNeuromorphicDashboard data={data} />
 
        {data.quantum_waveform && (
         <div className="ghibli-glass mano-border p-4 md:p-8 flex flex-col gap-4 md:gap-6">

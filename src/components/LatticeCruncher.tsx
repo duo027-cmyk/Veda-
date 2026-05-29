@@ -3,7 +3,6 @@ import { vedaService } from '../services/vedaService';
 import { BrainData } from '../types';
 import { Activity, Cpu, Zap, ShieldCheck, Database, GitBranch, Terminal, AlertTriangle, CheckCircle2, RefreshCw, XCircle, TrendingUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Type } from '@google/genai';
 
 interface LatticeJob {
   id: string;

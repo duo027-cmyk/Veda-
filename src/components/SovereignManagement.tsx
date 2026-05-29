@@ -30,12 +30,7 @@ import { CuriosityMonitor } from './CuriosityMonitor';
 import { EpistemicLog } from './EpistemicLog';
 import { CausalSimulator } from './CausalSimulator';
 import { PalantirAIPSimulator } from './PalantirAIPSimulator';
-import { twMerge } from 'tailwind-merge';
-import { clsx, type ClassValue } from 'clsx';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+import { cn } from '../lib/utils';
 
 export const SovereignManagement = ({ data, onAction }: { data: BrainData | null, onAction: (action: string, params?: any) => void }) => {
   const { t } = useI18n();

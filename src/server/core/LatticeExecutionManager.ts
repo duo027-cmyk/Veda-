@@ -111,6 +111,23 @@ export class LatticeExecutionManager {
             contents: prompt
           });
         } catch (inferenceErr: any) {
+          const errMsg = inferenceErr?.message || String(inferenceErr);
+          const isRateLimit = errMsg.includes("429") || 
+                              errMsg.includes("RESOURCE_EXHAUSTED") || 
+                              errMsg.includes("quota") || 
+                              errMsg.includes("Quota") ||
+                              errMsg.includes("limit") ||
+                              errMsg.includes("Limit") ||
+                              errMsg.includes("Resource exhausted");
+          
+          if (isRateLimit) {
+            this.callbacks.neuralLog('LATTICE_FAULT_LIMIT', `Primary model hit quota limiting / resource exhaustion. Activating global rate cooldown and switching to autonomous local offline fallback.`);
+            if (this.callbacks.handleAiError) {
+              this.callbacks.handleAiError(inferenceErr);
+            }
+            return this.executeAutonomousFallback(job);
+          }
+
           this.callbacks.neuralLog('LATTICE_COMPUTE_FALLBACK', `Premium model failed or restricted. Re-routing query payload to high-speed auxiliary core: gemini-3.5-flash`);
           result = await this.ai.models.generateContent({
             model: 'gemini-3.5-flash',

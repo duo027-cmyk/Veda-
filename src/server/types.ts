@@ -86,6 +86,7 @@ export interface TemporalAnchor {
 export interface StrategicReport {
   id: string;
   title: string;
+  intent?: string;
   status: string;
   directive?: string;
   progress: number;
@@ -99,6 +100,7 @@ export interface StrategicReport {
   axioms: string[];
   createdAt: number;
   updatedAt: number;
+  expertiseAssessment?: any;
 }
 
 export interface IVedaBrain {
@@ -144,6 +146,8 @@ export interface IVedaBrain {
   submitLatticeTask(type: string, payload: any): string;
   solidifyLatticeJob(params: any): Promise<any>;
   initiateStrategicReport(params: any): Promise<any>;
+  appraiseStrategicReport(params: any): Promise<any>;
+  enrichReportToL4(params: any): Promise<any>;
   synthesizeReportSection(params: any): Promise<any>;
   performAudit(): Promise<any>;
   triggerCognitiveSymmetry(): Promise<any>;

@@ -121,6 +121,23 @@ export interface StrategicReport {
   axioms: string[];
   createdAt: number;
   updatedAt: number;
+  expertiseAssessment?: {
+    overallScore: number;
+    totalPoints: number;
+    grade: 'L1' | 'L2' | 'L3' | 'L4';
+    metrics: {
+      informationQuality: number;
+      causalModel: number;
+      counterfactual: number;
+      variableWeighting: number;
+      uncertainty: number;
+      actionability: number;
+    };
+    pros: string[];
+    cons: string[];
+    missingAbilities: string[];
+    recommendations: string[];
+  };
 }
 
 export interface LatticeJob {

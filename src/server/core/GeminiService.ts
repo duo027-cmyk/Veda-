@@ -159,8 +159,8 @@ export class GeminiService {
       errMsg.includes("Limit") ||
       errMsg.includes("Resource exhausted")
     ) {
-      this.logger("RATE_LIMIT", "Quota boundary hit. Imposing an adaptive 12-second cooldown to restore energy limits.");
-      this.rateLimitCooldownUntil = Date.now() + 12000; // 12-second adaptive cooldown for quick recovery
+      this.logger("RATE_LIMIT", "Quota boundary hit. Imposing an adaptive 30-second cooldown to restore energy limits.");
+      this.rateLimitCooldownUntil = Date.now() + 30000; // 30-second adaptive cooldown for quick recovery and back-off
       return true;
     }
 

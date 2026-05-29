@@ -1,10 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Cpu, Zap, Activity, Info, ShieldAlert } from 'lucide-react';
-
-function cn(...inputs: any[]) {
-  return inputs.filter(Boolean).join(' ');
-}
+import { cn } from '../lib/utils';
 
 interface LogEntry {
   id: string;

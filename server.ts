@@ -27,16 +27,15 @@ import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
 
 import { AGISovereignBrain } from "./src/server/brain";
 import { IVedaBrain } from "./src/server/types";
+import { ActionResolver } from "./src/server/core/ActionResolver";
 import { GoogleGenAI } from "@google/genai";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Initialize Sovereign Brain
 const brain: IVedaBrain = new AGISovereignBrain();
+const actionResolver = new ActionResolver(brain);
 
 // Load Firebase Config
-const firebaseConfigPath = path.join(__dirname, "firebase-applet-config.json");
+const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
 let db: any = null;
 
 // Initialize Firebase SDK
@@ -177,10 +176,46 @@ async function startServer() {
     const server = http.createServer(app);
     const wss = new WebSocketServer({ server });
 
-    app.use(cors({
-      origin: (origin, callback) => callback(null, true), // Fully permissive for debug
-      credentials: true
-    }));
+    // Filesystem diagnosis logger to understand routing behavior and catch any invisible interceptions
+    app.use((req, res, next) => {
+      const url = req.url;
+      const method = req.method;
+      try {
+        fs.appendFileSync(
+          "veda_log.txt",
+          `[${new Date().toISOString()}] TOP_LEVEL_BEGIN: ${method} ${url} (Headers: Accept=${req.headers.accept || ""}, Origin=${req.headers.origin || ""})\n`
+        );
+      } catch (e) {}
+      res.on("finish", () => {
+        try {
+          fs.appendFileSync(
+            "veda_log.txt",
+            `[${new Date().toISOString()}] TOP_LEVEL_END: ${method} ${url} -> ${res.statusCode} (ContentType: ${res.getHeader("content-type") || ""})\n`
+          );
+        } catch (e) {}
+      });
+      next();
+    });
+
+    // Hardened custom CORS middleware for iframe transitions and sandboxed opaque null origins
+    app.use((req, res, next) => {
+      const origin = req.headers.origin;
+      if (origin) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        if (origin !== "null") {
+          res.setHeader("Access-Control-Allow-Credentials", "true");
+        }
+      } else {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+      }
+      res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", req.headers["access-control-request-headers"] || "Content-Type, Authorization, Accept");
+      
+      if (req.method === "OPTIONS") {
+        return res.sendStatus(204);
+      }
+      next();
+    });
     app.use(express.json({ limit: "50mb" }));
 
     // Standard health check handler declared early for highest priority binding
@@ -223,9 +258,21 @@ async function startServer() {
     // v-AA Protocol: Middleware for router-level logging (mounted FIRST)
     api.use((req, res, next) => {
       const start = Date.now();
+      try {
+        fs.appendFileSync(
+          "veda_log.txt",
+          `[${new Date().toISOString()}] ROUTER_ENTRY: ${req.method} ${req.path} (OriginalUrl: ${req.originalUrl || ""})\n`
+        );
+      } catch (e) {}
       console.log(`[VEDA_ROUTER] ${req.method} ${req.path}`);
       res.on('finish', () => {
         const duration = Date.now() - start;
+        try {
+          fs.appendFileSync(
+            "veda_log.txt",
+            `[${new Date().toISOString()}] ROUTER_FINISH: ${req.method} ${req.path} -> Done in ${duration}ms\n`
+          );
+        } catch (e) {}
         if (duration > 1500) {
           console.warn(`[VEDA_PERF_ALERT] ${req.method} ${req.path} took ${duration}ms`);
         }
@@ -290,8 +337,6 @@ async function startServer() {
       }
     });
 
-    // Mount API
-    app.use("/api", api);
     app.get("/healthz", (req, res) => res.send("OK"));
 
     // v-AA Protocol: Unified state handler
@@ -359,128 +404,17 @@ async function startServer() {
     api.post("/action", async (req, res) => {
       try {
         const { action, params } = req.body;
-        console.log(`[VEDA_ACTION] Executing: ${action}`);
-        let result: any = { success: true, timestamp: Date.now() };
-
-        switch (action) {
-          case "evolve":
-            result.data = await brain.processEvolution(params.intent, null, params.text);
-            break;
-          case "activateBurst":
-            result.data = await brain.activateSovereignBurst(
-              params?.target || "Sovereign Optimization",
-              params?.intensity || 0.5,
-              params?.manualApproval || false,
-              params?.mode
-            );
-            break;
-          case "approveBurst":
-            result.data = brain.approveSovereignBurst();
-            break;
-          case "deactivateBurst":
-            result.data = await brain.deactivateSovereignBurst(params?.reason || "COOLDOWN");
-            break;
-          case "triggerResonance":
-            brain.triggerResonance(params?.intensity || 0.1);
-            break;
-          case "triggerCognitiveSymmetry":
-            result.data = await brain.triggerCognitiveSymmetry();
-            break;
-          case "toggleLogicFreeze":
-            result.isFrozen = brain.toggleLogicFreeze();
-            break;
-          case "synthesize":
-            const fragment = await brain.synthesizeMemory();
-            if (!fragment) throw new Error("SYNTHESIS_FAILED");
-            result.memory = fragment;
-            break;
-          case "injectSensoryData":
-            result.data = await brain.externalPrecisionInjection(params);
-            break;
-          case "initiateCinemaProject":
-            result.data = await brain.initiateCinemaProject(params);
-            break;
-          case "updateProjectWorldModel":
-            result.data = await brain.updateProjectWorldModel(params);
-            break;
-          case "updateSceneStatus":
-            result.data = await brain.updateSceneStatus(params);
-            break;
-          case "scanNetwork":
-            result.data = await brain.scanNetwork(params);
-            break;
-          case "submitLatticeTask":
-            result.data = brain.submitLatticeTask(params.type, params.payload);
-            break;
-          case "solidifyLatticeJob":
-            result.data = await brain.solidifyLatticeJob(params);
-            break;
-          case "digestKnowledge":
-            result.data = await brain.digestKnowledge(params.snippets, params.scope);
-            break;
-          case "registerVisualAsset":
-            result.data = await brain.registerVisualAsset(params);
-            break;
-          case "createTemporalAnchor":
-            result.data = await brain.createTemporalAnchor(params.label);
-            break;
-          case "timeTravel":
-            result.success = await brain.timeTravel(params.anchorId);
-            break;
-          case "distillMemories":
-            result.data = await brain.distillMemories();
-            break;
-          case "generateSovereignResponse":
-            result.data = await brain.generateSovereignResponse(params);
-            break;
-          case "updateSensorData":
-            result.data = await brain.updateSensorData(params);
-            break;
-          case "performAudit":
-            result.data = await brain.performAudit();
-            break;
-          case "initiateStrategicReport":
-            result.data = await brain.initiateStrategicReport(params);
-            break;
-          case "synthesizeReportSection":
-            result.data = await brain.synthesizeReportSection(params);
-            break;
-          case "batchSynthesizeReport":
-            result.data = await brain.batchSynthesizeReport(params.reportId);
-            break;
-          case "executePalantirAIPAction":
-            result.data = brain.executePalantirAIPAction(params.actionType);
-            break;
-          case "handleChatMessage":
-            const chatText = String(params.text || "");
-            const chatRole = params.role || 'user';
-            
-            if (chatText.startsWith("DELETE_MSG:")) {
-              const msgId = chatText.replace("DELETE_MSG:", "");
-              result.data = { success: true, deletedId: msgId };
-            } else if (chatText.trim().startsWith("AIzaSy")) {
-              brain.updateApiKey(chatText.trim());
-              result.data = await brain.handleChatMessage("金鑰已更新，正在重新連結外部認識論...", "model");
-            } else {
-              result.data = await brain.handleChatMessage(chatText, chatRole);
-            }
-            break;
-          case "clearChatHistory":
-            await brain.resetChatHistory();
-            result.message = "EPISTEMIC_PURGE_COMPLETE";
-            break;
-          default:
-            if (typeof (brain as any)[action] === "function") {
-              result.data = await (brain as any)[action](params);
-            } else {
-              console.warn(`[VEDA_ACTION] Unknown action: ${action}`);
-              return res.status(400).json({ error: "UNKNOWN_DIRECTIVE", action });
-            }
-        }
+        console.log(`[VEDA_ACTION] Executing decoupled resolution: ${action}`);
+        const result = await actionResolver.executeAction(action, params);
         res.json(result);
-      } catch (e) {
-        console.error(`[API_FAULT] Action ${req.body?.action} failed:`, e);
-        res.status(500).json({ error: "EXECUTION_ERROR", message: e instanceof Error ? e.message : String(e) });
+      } catch (e: any) {
+        console.error(`[API_FAULT] Decoupled resolution of ${req.body?.action} failed:`, e);
+        const errMessage = e instanceof Error ? e.message : String(e);
+        const isUnknown = errMessage.includes("UNKNOWN_DIRECTIVE");
+        res.status(isUnknown ? 400 : 500).json({ 
+          error: "EXECUTION_ERROR", 
+          message: errMessage 
+        });
       }
     });
 
@@ -677,6 +611,9 @@ async function startServer() {
       res.status(404).json({ error: "NOT_FOUND", path: req.originalUrl });
     });
 
+    // Mount API with completely populated routing stack to prevent routing bypasses
+    app.use("/api", api);
+
     console.log("[VEDA] Waiting for Sovereign Brain synchronization (non-blocking server)...");
     brain.isReady().then(() => {
       console.log("[VEDA] Sovereign Brain synchronized. Starting background tickers.");
@@ -831,6 +768,14 @@ async function startServer() {
     });
 
     // Start listening
+    server.on("error", (err: any) => {
+      console.error("[CRITICAL_SERVER_ERROR] Server event listener caught error:", err);
+      if (err.code === "EADDRINUSE") {
+        console.error(`[CRITICAL_SERVER_ERROR] Port ${PORT} is already in use by another process. Exiting to allow supervisor container recovery.`);
+        process.exit(1);
+      }
+    });
+
     server.listen(PORT, "0.0.0.0", () => {
       console.log(`[BOOT] VEDA_OS: Sovereign Interface online on port ${PORT}`);
     });

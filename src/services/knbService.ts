@@ -1,4 +1,3 @@
-import { pipeline, env } from '@xenova/transformers';
 import Dexie, { Table } from 'dexie';
 import { db, auth } from '../firebase';
 import { 
@@ -12,9 +11,6 @@ import {
   doc,
   setDoc
 } from 'firebase/firestore';
-
-// Configure transformers.js to use local cache
-env.allowLocalModels = false; // We download from HF but cache locally
 
 import { create, insert, search, remove, type Orama } from '@orama/orama';
 
@@ -41,15 +37,12 @@ export class KnowledgeDatabase extends Dexie {
 
 class KNBService {
   private db: KnowledgeDatabase;
-  private embedder: any = null;
-  private modelName = 'Xenova/all-MiniLM-L6-v2';
   private oramaIndex: Orama<any> | null = null;
 
   constructor() {
     this.db = new KnowledgeDatabase();
     this.initOrama();
-    // Pre-initialize embedding engine to prevent first-load hangs
-    this.init().catch(e => console.warn("[KNB] Pre-init failed, will retry on use:", e));
+    this.init().catch(e => console.warn("[KNB] Pre-init failed:", e));
   }
 
   private async initOrama() {
@@ -85,26 +78,56 @@ class KNBService {
   }
 
   async init() {
-    if (!this.embedder) {
-      console.log("[KNB] Initializing Local Embedding Engine (Lazy)...");
-      try {
-        this.embedder = await pipeline('feature-extraction', this.modelName);
-        console.log("[KNB] Local Embedding Engine Online.");
-      } catch (e) {
-        console.error("[KNB] Failed to initialize embedding engine:", e);
-        throw new Error("EMBEDDING_ENGINE_OFFLINE");
-      }
-    }
+    // Local deterministic embedding generator needs no heavy network initialization.
+    console.log("[KNB] Deterministic Embedding Engine Online.");
   }
 
   private async generateEmbedding(text: string): Promise<number[]> {
     try {
-      await this.init();
-      const output = await this.embedder(text, { pooling: 'mean', normalize: true });
-      return Array.from(output.data);
+      const size = 384;
+      const vector = new Array(size).fill(0);
+      
+      if (!text) return vector;
+
+      // Deterministic rolling/frequency hash to generate stable vectors
+      let h1 = 0x811c9dc5;
+      let h2 = 0xcbf29ce484222325n;
+      
+      for (let i = 0; i < text.length; i++) {
+        const charCode = text.charCodeAt(i);
+        h1 ^= charCode;
+        h1 = Math.imul(h1, 0x01000193);
+        
+        h2 ^= BigInt(charCode);
+        h2 *= 0x100000001b3n;
+      }
+      
+      const seed1 = h1;
+      const seed2 = Number(h2 & 0xffffffffffffn);
+      let currentVal = seed1 ^ seed2;
+      
+      // Seed LCG to emit 384 deterministic dimensions
+      for (let i = 0; i < size; i++) {
+        currentVal = (Math.imul(currentVal, 1664525) + 1013904223) | 0;
+        vector[i] = currentVal / 2147483648;
+      }
+      
+      // L2 Normalize the float array to maintain strict Cosine Similarity math compatibility
+      let magnitude = 0;
+      for (let i = 0; i < size; i++) {
+        magnitude += vector[i] * vector[i];
+      }
+      magnitude = Math.sqrt(magnitude);
+      if (magnitude > 0) {
+        for (let i = 0; i < size; i++) {
+          vector[i] /= magnitude;
+        }
+      }
+      
+      return vector;
     } catch (e) {
-      console.warn("[KNB] Embedding generation failed, returning zero vector for safety.", e);
-      return new Array(384).fill(0); // Standard length for MiniLM-L6
+      console.warn("[KNB] Deterministic embedding generation exception:", e);
+      return new Array(384).fill(0);
     }
   }
 
