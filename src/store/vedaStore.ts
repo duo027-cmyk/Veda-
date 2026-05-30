@@ -129,6 +129,15 @@ export const useVedaStore = create<VedaState>((set, get) => ({
           }
           break;
         }
+        case 'solidifyAnalogicalAxiom': {
+          await vedaService.postAction({ action: 'solidifyAnalogicalAxiom', params });
+          resultMsg = `卓越類比公理已融入律法，系統穩態相干性顯著提升。`;
+          break;
+        }
+        case 'refreshTele': {
+          resultMsg = `因果遥測流已重對位並刷新。`;
+          break;
+        }
       }
       
       // Refresh after action

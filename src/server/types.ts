@@ -162,6 +162,8 @@ export interface IVedaBrain {
   getCausalRecall(query: string): any[];
   getAllMemories(): any[];
   getGraphData(): { nodes: any[], links: any[] };
+  performAnalogicalMapping(params: { concept: string }): any;
+  solidifyAnalogicalAxiom(params: { axiom: string }): Promise<any>;
   verifyAuditKeys(keys: string[]): any;
   setSystemTier(tier: string): Promise<any>;
   runDreamCycle(wss: any): Promise<void>;
@@ -169,4 +171,7 @@ export interface IVedaBrain {
   getStrategicStatus(): any;
   generateStrategicReport(): any;
   autoEvolve(): Promise<{ log: string; adjustment: number[] }>;
+  joinFederationNode(nodeId: string, nodeUrl: string, coherence: number): Promise<{ success: boolean; result: any }>;
+  getFederationNodes(): any[];
+  toggleSystemDeblinded(params?: { active?: boolean }): Promise<{ success: boolean; is_deblinded: boolean }>;
 }

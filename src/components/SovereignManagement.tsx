@@ -30,6 +30,8 @@ import { CuriosityMonitor } from './CuriosityMonitor';
 import { EpistemicLog } from './EpistemicLog';
 import { CausalSimulator } from './CausalSimulator';
 import { PalantirAIPSimulator } from './PalantirAIPSimulator';
+import { AgiProximityEvaluator } from './AgiProximityEvaluator';
+import { AnalogicalThinkingWorkspace } from './AnalogicalThinkingWorkspace';
 import { cn } from '../lib/utils';
 
 export const SovereignManagement = ({ data, onAction }: { data: BrainData | null, onAction: (action: string, params?: any) => void }) => {
@@ -104,6 +106,14 @@ export const SovereignManagement = ({ data, onAction }: { data: BrainData | null
                   <span className={cn("text-3xl font-display font-medium", metric.color)}>{metric.value}</span>
                 </div>
               ))}
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <AgiProximityEvaluator data={data} onAction={onAction} />
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <AnalogicalThinkingWorkspace data={data} onAction={onAction} />
             </div>
 
             <div className="flex flex-col gap-4">

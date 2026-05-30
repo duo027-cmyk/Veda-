@@ -607,6 +607,20 @@ async function startServer() {
       }
     });
 
+    api.post("/v1/federation/join", async (req, res) => {
+      try {
+        const { nodeId, nodeUrl, coherence } = req.body;
+        if (!nodeId || !nodeUrl) {
+          return res.status(400).json({ error: "Missing required parameters: nodeId or nodeUrl" });
+        }
+        const result = await brain.joinFederationNode(nodeId, nodeUrl, Number(coherence || 0.9));
+        res.json(result);
+      } catch (e: any) {
+        console.error("[FEDERATION_JOIN_FAULT]", e);
+        res.status(500).json({ error: "FEDERATION_JOIN_ERROR", message: e.message || String(e) });
+      }
+    });
+
     api.all("/*", (req, res) => {
       res.status(404).json({ error: "NOT_FOUND", path: req.originalUrl });
     });

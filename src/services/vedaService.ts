@@ -333,6 +333,9 @@ export const vedaService = {
   },
 
   activeFetchPromise: null as Promise<BrainData> | null,
+  activeStrategicPromise: null as Promise<any> | null,
+  activeGraphPromise: null as Promise<any> | null,
+  activeMemoriesPromise: null as Promise<any> | null,
   async getData(forceRefresh = false): Promise<BrainData> {
     if (!forceRefresh) {
       const cached = getFromCache<BrainData>("SYSTEM_STATE", CACHE_TTLS.STATE);
@@ -658,18 +661,48 @@ export const vedaService = {
   },
 
   async getMemories(): Promise<any[]> {
-    const res = await fetchWithRetry("/api/memories");
-    return res.json();
+    if (this.activeMemoriesPromise) {
+      return this.activeMemoriesPromise;
+    }
+    this.activeMemoriesPromise = (async () => {
+      try {
+        const res = await fetchWithRetry("/api/memories", { method: "GET" }, 3, 1000, 15000);
+        return await res.json();
+      } finally {
+        this.activeMemoriesPromise = null;
+      }
+    })();
+    return this.activeMemoriesPromise;
   },
 
   async getGraphData(): Promise<{ nodes: any[], links: any[] }> {
-    const res = await fetchWithRetry("/api/graph");
-    return res.json();
+    if (this.activeGraphPromise) {
+      return this.activeGraphPromise;
+    }
+    this.activeGraphPromise = (async () => {
+      try {
+        const res = await fetchWithRetry("/api/graph", { method: "GET" }, 3, 1000, 15000);
+        return await res.json();
+      } finally {
+        this.activeGraphPromise = null;
+      }
+    })();
+    return this.activeGraphPromise;
   },
 
   async getStrategicMetrics(): Promise<any> {
-    const res = await fetchWithRetry("/api/strategic");
-    return res.json();
+    if (this.activeStrategicPromise) {
+      return this.activeStrategicPromise;
+    }
+    this.activeStrategicPromise = (async () => {
+      try {
+        const res = await fetchWithRetry("/api/strategic", { method: "GET" }, 3, 1000, 15000);
+        return await res.json();
+      } finally {
+        this.activeStrategicPromise = null;
+      }
+    })();
+    return this.activeStrategicPromise;
   },
 
   async submitFeedback(memoryId: string, score: number): Promise<any> {

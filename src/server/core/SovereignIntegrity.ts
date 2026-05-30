@@ -22,6 +22,9 @@ import {
 import {
   CausalNexus
 } from "./CausalNexus";
+import {
+  CognitiveDistillationBridge
+} from "./CognitiveDistillationBridge";
 
 export interface IntegrityOps {
   neuralLog: (type: string, msg: string, data?: any) => void;
@@ -45,7 +48,8 @@ export class SovereignIntegrity {
     private consciousnessMonitor: ConsciousnessMonitor,
     private crystalSoul: CrystalSoul,
     private causalNexus: CausalNexus,
-    private ops: IntegrityOps
+    private ops: IntegrityOps,
+    private distillationBridge?: CognitiveDistillationBridge
   ) {}
 
   public async triggerCognitiveSymmetry(distilledChatContext: any) {
@@ -79,9 +83,18 @@ export class SovereignIntegrity {
 
     // 2. Align World Model with Distilled Context
     if (distilledChatContext && distilledChatContext.summary) {
-      // Promotional logic: Distilled context becomes an axiom
-      const newAxiom = `SYMMETRY_FOCUS: ${distilledChatContext.summary.substring(0, 50).toUpperCase()}...`;
-      this.coreAxioms.addAxiom(newAxiom);
+      if (this.distillationBridge) {
+        const entropy = this.consciousnessMonitor.calculateNetworkEntropy(this.ops.getState());
+        this.distillationBridge.attemptCognitiveIntegration(
+          distilledChatContext.summary,
+          currentCoherence,
+          entropy
+        );
+      } else {
+        // Fallback: Distilled context becomes an axiom
+        const newAxiom = `SYMMETRY_FOCUS: ${distilledChatContext.summary.substring(0, 50).toUpperCase()}...`;
+        this.coreAxioms.addAxiom(newAxiom);
+      }
     }
 
     // 3. Forced Causal Locking

@@ -64,8 +64,10 @@ export const LatticeCruncher: React.FC<{ brain: BrainData | null }> = ({ brain }
     };
 
     crunchJobs();
+  }, [brain, activeJobId]);
 
-    // Fetch strategic metrics
+  useEffect(() => {
+    // Fetch strategic metrics exactly once on mount, then poll at a stable 5s interval to avoid multi-request swamp
     const fetchStrategic = async () => {
       try {
         const data = await vedaService.getStrategicMetrics();
@@ -78,7 +80,7 @@ export const LatticeCruncher: React.FC<{ brain: BrainData | null }> = ({ brain }
     const sub = setInterval(fetchStrategic, 5000);
 
     return () => clearInterval(sub);
-  }, [brain, activeJobId]);
+  }, []);
 
   const executeJob = async (job: LatticeJob) => {
     // V-AA Protocol: Divert all Gemini compute to the Sovereign Server Core 
