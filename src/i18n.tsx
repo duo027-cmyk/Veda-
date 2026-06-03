@@ -113,6 +113,7 @@ export interface Translations {
   nav_visuals: string;
   nav_cinema: string;
   nav_tiers: string;
+  nav_architecture: string;
   nav_dreamscape: string;
   nav_core_config: string;
   nav_tasks: string;
@@ -285,6 +286,7 @@ const translations: Record<Language, Translations> = {
     nav_visuals: '視覺流形',
     nav_cinema: '影院',
     nav_tiers: '層級',
+    nav_architecture: '認知架構',
     nav_dreamscape: '夢境',
     nav_core_config: '核心配置',
     nav_tasks: '任務',
@@ -455,6 +457,7 @@ const translations: Record<Language, Translations> = {
     nav_visuals: 'Visual Manifold',
     nav_cinema: 'Cinema',
     nav_tiers: 'Access Tiers',
+    nav_architecture: 'Cognitive Architecture',
     nav_dreamscape: 'Dreamscape',
     nav_core_config: 'Core Configuration',
     nav_tasks: 'Tasks',

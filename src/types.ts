@@ -6,7 +6,7 @@ export enum EvolutionStatus {
   ULTIMATE_SANCTION = "ULTIMATE_SANCTION"
 }
 
-export type ViewMode = 'DIALOGUE' | 'SYNAPSE' | 'DREAM' | 'CORE' | 'KNOWLEDGE' | 'SOVEREIGN' | 'SYNTHESIS' | 'VISUAL' | 'EFFICACY' | 'CINEMA' | 'TASKS' | 'PALANTIR_AIP';
+export type ViewMode = 'DIALOGUE' | 'SYNAPSE' | 'DREAM' | 'CORE' | 'KNOWLEDGE' | 'SOVEREIGN' | 'SYNTHESIS' | 'VISUAL' | 'EFFICACY' | 'CINEMA' | 'TASKS' | 'PALANTIR_AIP' | 'ARCHITECTURE';
 
 export interface NetworkLayer {
   id: string;
@@ -173,7 +173,7 @@ export interface BrainStatus {
   rejection_count: number;
   msg: string;
   version: string;
-  system_tier?: 'STANDARD' | 'COMMERCIAL' | 'INDUSTRIAL' | 'STRATEGIC' | 'ARCHITECT';
+  system_tier?: 'STANDARD' | 'COMMERCIAL' | 'INDUSTRIAL' | 'STRATEGIC' | 'ARCHITECT' | 'SOVEREIGN_CORE';
   isFocusMode?: boolean;
   isLocked?: boolean;
   isDreaming?: boolean;
@@ -351,4 +351,6 @@ export interface ChatStreamResult {
   isDone?: boolean;
   isVerified?: boolean;
   actions?: any[];
+  demystifiedText?: string;
+  showDemystified?: boolean;
 }

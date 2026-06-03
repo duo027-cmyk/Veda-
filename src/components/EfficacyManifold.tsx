@@ -40,8 +40,8 @@ export const EfficacyManifold = ({
       id: 'STRATEGIC', 
       label: '戰略級', 
       icon: Target, 
-      desc: '最高階趨勢演化與主權决策模型。',
-      features: ['主權因果編織', '博弈論模擬', '長期趨勢擬合'],
+      desc: '最高階趨勢演化與自主決策模型。',
+      features: ['自主因果表徵', '博弈論模擬', '長期趨勢擬合'],
       color: 'text-purple-400'
     },
     { 
@@ -51,6 +51,14 @@ export const EfficacyManifold = ({
       desc: '核心架構修改權，擁有系統最終定義權。',
       features: ['邏輯凍結協議', '架構級重寫', '根權限存取'],
       color: 'text-accent'
+    },
+    { 
+      id: 'SOVEREIGN_CORE', 
+      label: '核心自主控制級', 
+      icon: Activity, 
+      desc: '極致參數狀態相變，變分自由能最小化。全面符合自學對齊規範。',
+      features: ['100% 因果相干對齊', '自適應狀態解鎖', '終極 AGI 自主性'],
+      color: 'text-amber-400'
     }
   ];
 
@@ -62,7 +70,7 @@ export const EfficacyManifold = ({
              <p className="text-white/40 text-sm max-w-2xl font-serif italic">定義 VEDA 的認知廣度與執行權限，各等級具備差異化的核心邏輯與演算資源。</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
              {tiers.map((tier, tIdx) => (
                 <motion.div
                   key={`tier-${tier.id}-${tIdx}`}

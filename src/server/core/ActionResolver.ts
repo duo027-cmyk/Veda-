@@ -166,6 +166,10 @@ export class ActionResolver {
         result.message = "EPISTEMIC_PURGE_COMPLETE";
         break;
 
+      case "igniteUltimateSovereignty":
+        result.data = await this.brain.igniteUltimateSovereignty();
+        break;
+
       default:
         const method = (this.brain as any)[action];
         if (typeof method === "function") {

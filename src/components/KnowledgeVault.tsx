@@ -75,7 +75,7 @@ export const KnowledgeVault = ({ data }: { data: BrainData | null }) => {
     {
       title: t.nav_vault.includes("庫") ? "Ⅳ. 體系自主診斷與修復規約 (AGI v6.0)" : "Ⅳ. Autonomous Self-Healing (AGI v6.0)",
       tag: "COREG_PROTOCOL",
-      text: `主權自我修復協議 (Sovereign Self-Healing Protocol) 遵循 AGI v6.0 解耦標準。當系統檢測到局部邏輯不對稱、語義漂移或高難因果衝突時，將即刻熔斷不穩定感知流（觸發 Sovereign Circuit Breaker）。並調度對照反向推理，由 Solomon 語義引擎介入實施晶格熱能衰減，保護高階心智架構不受外界惡意雜訊污染，自主重構因果。`
+      text: `自主安全自我修復機制 (Autonomous Self-Healing Protocol) 遵循 AGI v6.0 解耦與對齊標準。當系統檢測到局部邏輯不對稱、語義漂移或高難因果衝突時，將即刻熔斷不穩定感知流（觸發 Safety Circuit Breaker）。並調度對照反向推理，由 Solomon 語義引擎介入實施自適應衰減校正，保護高階神經架構不受外界惡意雜訊與偏置污染，自主重構因果。`
     }
   ];
 
@@ -292,7 +292,7 @@ export const KnowledgeVault = ({ data }: { data: BrainData | null }) => {
         </div>
       </div>
 
-      {/* ✦ Epistemic Ingest Conduit || 大宗主權語義注入導管 */}
+      {/* ✦ Epistemic Ingest Conduit || 大宗數據語義注入管道 */}
       <div className="ghibli-glass mano-border border-white/5 p-4 md:p-6 rounded-none flex flex-col gap-4">
         <button 
           onClick={() => setIsConduitOpen(!isConduitOpen)}
@@ -302,7 +302,7 @@ export const KnowledgeVault = ({ data }: { data: BrainData | null }) => {
             <span className="text-pink-400">✦</span>
             <span>Epistemic Ingest Conduit</span>
             <span className="hidden md:inline text-white/20">|</span>
-            <span className="hidden md:inline font-sans font-light italic text-white/30 text-[10px]">大宗主權語義與文獻灌注</span>
+            <span className="hidden md:inline font-sans font-light italic text-white/30 text-[10px]">大規模文本語義與文獻注入</span>
           </div>
           <div className="flex items-center gap-2 text-[10px] text-accent/60">
             <span>{isConduitOpen ? "COLLAPSE" : "EXPAND CONSOLE"}</span>

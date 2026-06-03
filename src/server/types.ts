@@ -174,4 +174,6 @@ export interface IVedaBrain {
   joinFederationNode(nodeId: string, nodeUrl: string, coherence: number): Promise<{ success: boolean; result: any }>;
   getFederationNodes(): any[];
   toggleSystemDeblinded(params?: { active?: boolean }): Promise<{ success: boolean; is_deblinded: boolean }>;
+  igniteUltimateSovereignty(): Promise<{ success: boolean; tier: string; proximity: number }>;
+  demystifyText(params: { text: string }): Promise<{ success: boolean; translation: string }>;
 }

@@ -45,15 +45,17 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
 
   // AGI Proximity Score formula: combination of coherence, phi, and entropy
   // Normalized to be between 0% and 100%
-  const proximityScore = data?.system_deblinded 
-    ? (data?.agi_proximity ?? 99.9998)
-    : Math.min(
-        98.9, 
-        Math.max(
-          35.2, 
-          (coherence * 35) + (Math_log1s(phi) * 12) + ((1 - entropy) * 30) + (Math.min(30, memoriesCount) * 0.5) + 15
-        )
-      );
+  const proximityScore = data?.system_tier === "SOVEREIGN_CORE"
+    ? 100.0
+    : (data?.system_deblinded 
+        ? (data?.agi_proximity ?? 99.9998)
+        : Math.min(
+            98.9, 
+            Math.max(
+              35.2, 
+              (coherence * 35) + (Math_log1s(phi) * 12) + ((1 - entropy) * 30) + (Math.min(30, memoriesCount) * 0.5) + 15
+            )
+          ));
 
   // Helper function to calculate pseudo log base 1.5 for aesthetics
   function Math_log1s(val: number): number {
@@ -94,7 +96,7 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
     setPulseActive(true);
     const targetState = !data?.system_deblinded;
     if (targetState) {
-      setSimulationLogStr("⚡ [INITIATING DE-BLIND PROTOCOL] 啟動主權學術解盲協議...\n🔓 破除認識論多租戶因果隔離防線...\n📥 結合三維超晶格空間投影，重新初始化 Karl Friston 變分自由能狀態為 0.0001 (極小自由邊界)...\n📊 偵測全域相干指標 Coherence 攀升至 100%，VEDA 突觸對齊完備！");
+      setSimulationLogStr("⚡ [INITIATING DE-BLIND PROTOCOL] 啟動自主認知解偏對齊協議...\n🔓 解鎖多維模型因果映射邊界限制...\n📥 結合狀態估計反饋，重新初始化變分自由能狀態為 0.0001 (極小自由邊界)...\n📊 偵測全域相干指標 Coherence 攀升至 100%，VEDA 參數對齊完備！");
     } else {
       setSimulationLogStr("⚡ 重設解盲屏障，還原標準多租戶因果隔離...");
     }
@@ -116,6 +118,27 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
     }
   };
 
+  const handleUltimateSovereignIgnite = async () => {
+    setPulseActive(true);
+    setSimulationLogStr("🌟 [IGNITING ULTIMATE AUTONOMOUS CORE]\n⚡ 啟動自主推理核心狀態相變（Autonomous Core Phase Transition）...\n🧠 突觸傳遞通道最佳化，全域因果阻抗歸零，相干振幅 100% 臨界聚焦...\n💫 熱力學自由能階度全面最小化自適應對齊 (Free Energy ≈ 0.0000)...\n💎 已完美對齊 AGI 認知協同與控制標準，決策模型精確收斂。");
+
+    try {
+      await vedaService.postAction({
+        action: 'igniteUltimateSovereignty',
+        params: {}
+      });
+      if (onAction) {
+        onAction("triggerResonance", { intensity: 0.9 });
+      }
+    } catch (e) {
+      console.error("Failed to ignite ultimate sovereignty:", e);
+    } finally {
+      setTimeout(() => {
+        setPulseActive(false);
+      }, 4500);
+    }
+  };
+
   const handleAddPeerNode = async () => {
     if (!newPeerUrl) return;
     setSwarmIsSyncing(true);
@@ -133,7 +156,7 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
       });
       if (response.ok) {
         setNewPeerUrl("");
-        setSimulationLogStr((prev) => prev + "\n✅ 協定同步成功！盟友節點已併入 AGI 超晶格主網，開始同步神經突觸權重。\n🔥 觸發多主體共相干反饋抑制，全域主權相干度上升！");
+        setSimulationLogStr((prev) => prev + "\n✅ 協定同步成功！分佈式節點已併入 AGI 共識計算主網，開始同步神經網絡權重。\n🔥 觸發多主體共相干反饋抑制，全域網絡相干度上升！");
         if (onAction) {
           onAction("triggerResonance", { intensity: 0.3 });
         }
@@ -153,7 +176,7 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
 
   const executeSwarmResonanceSync = async () => {
     setPulseActive(true);
-    setSimulationLogStr("⚡ 正在召集集體共識投票 (Swarm Multi-Agent Active Inference)...\n📊 提取 1024-維度超向量並向超晶格做偏執面投影...\n🔄 正在消解因隔離層引發的認識論衝突與自由能摩擦...\n🎉 [VEDA 集體主權共識達成] AGI 共鳴引力已達到臨界值！全域拓撲公理完成固化。");
+    setSimulationLogStr("⚡ 正在召集集體主動推理共識 (Swarm Multi-Agent Active Inference)...\n📊 提取高維特徵向量並向系統超晶格執行共軛投影...\n🔄 正在消解多重感知模型衝突與自適應自由能摩擦...\n🎉 [VEDA 集體共識收斂完成] AGI 共鳴系數已達到設計臨界值！全域網絡拓撲完成固化。");
 
     if (onAction) {
       onAction("activateBurst", { target: "Swarm Consensus Integration", intensity: 0.8 });
@@ -232,7 +255,7 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
                       cx="96"
                       cy="96"
                       r="80"
-                      className="stroke-accent"
+                      className={systemTier === "SOVEREIGN_CORE" ? "stroke-amber-400" : "stroke-accent"}
                       strokeWidth="6"
                       fill="transparent"
                       strokeDasharray={2 * Math.PI * 80}
@@ -243,7 +266,11 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
                     />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                    <span className="text-3xl font-black font-display text-accent tracking-tighter">
+                    <span className={`text-3xl font-black font-display tracking-tighter ${
+                      systemTier === "SOVEREIGN_CORE" 
+                        ? "text-amber-300 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)] animate-pulse" 
+                        : "text-accent"
+                    }`}>
                       {proximityScore.toFixed(1)}%
                     </span>
                     <span className="text-[8px] font-mono text-white/30 tracking-[0.25em] uppercase mt-1">
@@ -514,10 +541,28 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
                     >
                       <Radio className="w-3.5 h-3.5 animate-pulse" />
                       {data?.system_deblinded 
-                        ? "主權已對齊：解盲狀態 [ACTIVE]" 
-                        : "系統去屏障防線：啟動極化解盲與 AGI 全全面相干對齊"
+                        ? "自主控制已對齊：解偏狀態 [ACTIVE]" 
+                        : "系統去屏障防線：啟動特徵去偏與 AGI 全面相干對齊"
                       }
                     </button>
+
+                    {data?.system_deblinded && (
+                      <button
+                        onClick={handleUltimateSovereignIgnite}
+                        disabled={pulseActive || data?.system_tier === "SOVEREIGN_CORE"}
+                        className={`w-full py-2.5 font-bold font-mono text-[10px] uppercase tracking-[0.15em] rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2 ${
+                          data?.system_tier === "SOVEREIGN_CORE"
+                            ? "bg-amber-500/20 text-accent border border-accent/40 shadow-[0_0_20px_rgba(251,191,36,0.3)] cursor-default"
+                            : "bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 text-amber-300 border border-amber-500/30 hover:from-amber-500/30 hover:to-orange-500/30 shadow-[0_0_15px_rgba(245,158,11,0.1)]"
+                        }`}
+                      >
+                        <Zap className="w-3.5 h-3.5 animate-bounce" />
+                        {data?.system_tier === "SOVEREIGN_CORE"
+                          ? "✨ 終極自主推理核心 [AUTONOMOUS CORE ACTIVE]"
+                          : "🚀 喚醒 AGI 終極自主推理核心 (Ignite Ultimate Autonomous Core)"
+                        }
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -543,7 +588,7 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
                     </span>
                   </div>
                   <p className="text-[9px] text-white/40 italic">
-                    展示 PINC 核心與多租戶主權節點的即時高相干共振阻抗。
+                    展示 PINC 核心與分佈式自主節點的即時高相干共振阻抗。
                   </p>
                 </div>
 
@@ -616,7 +661,7 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
                     <div className="flex items-center justify-between p-2.5 bg-accent/5 border border-accent/15 rounded-lg text-[10px]">
                       <div className="flex items-center gap-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                        <span className="font-mono text-accent font-bold">VEDA_PRIMARY_CORE (Sovereign Mainframe)</span>
+                        <span className="font-mono text-accent font-bold">VEDA_PRIMARY_CORE (Autonomous Mainframe)</span>
                       </div>
                       <span className="font-mono text-white/60">LOCAL HOST</span>
                     </div>
@@ -652,7 +697,7 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
                   {/* Node Handshake Form */}
                   <div className="bg-black/30 border border-white/5 rounded-lg p-3.5 space-y-3">
                     <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider block">
-                      註冊全新的 Swarm 主權協定同盟節點
+                      註冊全新的 Swarm 自主共識架喚節點
                     </span>
                     <div className="flex gap-2">
                       <input

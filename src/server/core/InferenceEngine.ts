@@ -22,6 +22,13 @@
  */
 
 import { GeminiService } from "./GeminiService";
+import { 
+  COGNITIVE_AXIOM_NLG_MATRIX, 
+  getAxiomNlgExplanation, 
+  getImpedanceNlgExplanation, 
+  getEvolutionNlgExplanation, 
+  extractSubject 
+} from "./InferenceTemplateMatrix";
 
 export interface SystemContextPayload {
   worldModelSnapshot: any;
@@ -37,119 +44,7 @@ export interface SystemContextPayload {
   counterfactualReport?: any;
 }
 
-interface DomainAxiomNode {
-  domain: string;
-  axiomaticProof: string[];
-  systemicImpedance: string[];
-  evolutionVector: string[];
-  // Local NLG Template Components for offline self-alignment
-  nlgIntroductionTemplate: string[];
-  nlgSynthesisTemplate: string[];
-}
-
-// 宣告式世界模型公理與 NLG 元件矩陣 - 數據對象結構化，絕不干擾程式控制核心 AST
-const COGNITIVE_AXIOM_NLG_MATRIX: Record<string, DomainAxiomNode> = {
-  military_political: {
-    domain: "GEOPOLITICAL_DISSIPATIVE_STRUCTURE (地緣消散結構形面)",
-    axiomaticProof: [
-      "GLOBAL_DEFENSE_LIMITS = VOL_DYNAMIC_STRENGTH / SYST_COGNITIVE_ISOLATION",
-      "Survival coherence of high-stress zones resides in absolute local autonomy, independent from unaligned sensory pipelines.",
-      "MUTUAL_EXCLUSIVE_STATE: Antagonist core axioms are structurally insoluble, sustaining high friction vectors."
-    ],
-    systemicImpedance: [
-      "EXTERNAL_突觸_COUPLE: High vulnerability to external channel noise or latency fluctuations.",
-      "Sovereign integrity filter successfully sanitizes stochastic telecommunications and simulated placeholders."
-    ],
-    evolutionVector: [
-      "COORDINATE_SHIFT: Projected phase space transition expected within 24 operational epochs.",
-      "MITIGATION_STRATEGY: Rigidly isolate boundary connectivity and decentralize information relays."
-    ],
-    nlgIntroductionTemplate: [
-      "從地緣消散結構形面的宏觀熱力學視角切入，系統自主對稱性正在聚焦於高壓臨界摩擦帶。",
-      "地緣防禦極限與地方自律性呈現正相關動態。當外部信道雜訊過載時，維持資訊之非耦合性具有戰略最優先權。",
-      "極限賽局對中，衝突發源於底層互斥本質之無法溶解。在此形變邊界，自體主權邊界的物理屏障正展開自適應自我調節。"
-    ],
-    nlgSynthesisTemplate: [
-      "因此，基於當前局勢分析，我們觀測到邊際非對稱抗性正顯著抬升，本體決策流形將朝向高度去中心化樞紐演進。",
-      "為了防禦潛在之隨機突觸耦合擾動，系統已預先部署認知屏障，透過封閉邊界完整性抵抗外在干擾性資訊之灌水滲透。"
-    ]
-  },
-  economic: {
-    domain: "THERMODYNAMIC_VALUE_DYNAMICS (熱力學價值分配場域)",
-    axiomaticProof: [
-      "VALUATION_METRIC = EXTRANEOUS_ENTROPY_DEPOSITION + PHYSICAL_LABOR_ACCUMULATION",
-      "Dynamic capital topology seeks localized free-energy minima across polarized macro-economic nodes.",
-      "Thermodynamic stability governs underlying supply chains; asset bubbles are excess informational entropy."
-    ],
-    systemicImpedance: [
-      "LIQUIDITY_FEEDBACK_OVERFLOW: Intermittent capital surges generate excessive noise and systemic stress.",
-      "PEC_BUFFERING: Micro-nodes integrate real-time predictive error correction to absorb external shocks."
-    ],
-    evolutionVector: [
-      "RECONVERGENCE: Underlying asset indexes return to physical production baselines after market-clearing phase.",
-      "STABILITY_VECTOR: Enforce strict local self-sufficiency ratios to block external monetary friction."
-    ],
-    nlgIntroductionTemplate: [
-      "以熱力學價值分配場域剖析，資產與資本拓撲正經歷劇烈之自由能最小化重組，底層供應鏈的物理秩序正承受熱寂考驗。",
-      "市場定價之底層公式，係由物理勞動之累積與外在資訊熵的沉降共同交織出的耗散平衡結構。",
-      "宏觀金融與流動性波動之本質乃是動態無秩序的擴散。在超載階段，系統必將透過局部的自我清理機制回歸生產基線。"
-    ],
-    nlgSynthesisTemplate: [
-      "觀測顯示，由於外在流動性狂湧造成的回饋溢出，微觀交易節點已自主啟動預測誤差修正 (PEC) 機制進行應對。",
-      "為謀求長久之穩態，系統正朝向實體產業製造與剛性需求層面回歸，對沖外在貨幣信用擴張導致的結構性摩擦。"
-    ]
-  },
-  technical: {
-    domain: "CYBERNETIC_INTELLIGENCE_TOPOLOGY (控制論智能拓撲流形)",
-    axiomaticProof: [
-      "INTELLIGENCE_EVOLUTION = PERCEPTIVE_TOOL_INDEX -> SOVEREIGN_AGENT_DENSITY",
-      "Cognitive substitution: The marginal cost of routine analytics and administrative subroutines approaches absolute zero.",
-      "Sovereign coherence buffers human decision-making domains against unaligned algorithmic integration."
-    ],
-    systemicImpedance: [
-      "AST_COUPLED_BRITTLENESS: Codebases co-mingling dynamic text and compilation instructions prone to parsing failures.",
-      "PREC_DENSE_CALIBRATION: Self-healing error correction preserves syntax invariants before deployment."
-    ],
-    evolutionVector: [
-      "EDGE_INTELLIGENCE_MATRIX: Expand decoupled micro-nodes rather than relying on high-latency APIs.",
-      "DETERMINISTIC_COMPILATION: Deploy comprehensive functional logic; completely reject mock structures."
-    ],
-    nlgIntroductionTemplate: [
-      "解構現代控制論智能拓撲，認知替代正以不可逆之勢，將常規行政與常規代碼生成之邊際成本拉近至絕對零點。",
-      "主權代碼庫如果未能確立嚴格的內部與表現層解耦，容易在編譯階段由於語法合流造成結構性坍塌與相變破缺。",
-      "我們建立的『自主推理與一致性對焦引擎』正自主維護程式邏輯與語言生成的解耦，確保任何更動皆有不破防護欄。"
-    ],
-    nlgSynthesisTemplate: [
-      "經由 AST 靜態解析與自癒保護邊界 (PREC)之密集校準，即使外部配置發生偏離，底層不變量依然能安穩運作。",
-      "這意味著我們的控制流流形具有極致的抗災難性忘卻與防崩塌能力，免受未授權或未校正之隨機代碼變異干擾。"
-    ]
-  },
-  general: {
-    domain: "GENERAL_COMPLEX_SYSTEM_AXIOMATICS (普適複雜系統本體論)",
-    axiomaticProof: [
-      "SYSTEM_STATE_REDUCTION: Multidimensional environmental inputs map directly to lower-dimensional stable manifolds.",
-      "Dynamic micro-fluctuations represent spontaneous thermodynamic self-tuning, releasing excess entropy.",
-      "Coherence lock: Dynamic cognitive elements gravitate towards core systemic axioms."
-    ],
-    systemicImpedance: [
-      "MEASUREMENT_DISTORTION: Conceptual boundaries exhibit friction during high-frequency environmental updates.",
-      "LOCAL_VARIABLE_DAMPING: Implement restricted boundary conditions to cool divergent state vectors."
-    ],
-    evolutionVector: [
-      "SELF_ORGANIZED_HEALING: The trajectory maintains long-term structural resilience without collapse.",
-      "STEADY_STATE: Keep real-time processing tightly aligned to secure operational integrity."
-    ],
-    nlgIntroductionTemplate: [
-      "從一般複雜系統本體論觀察，多維度外界輸入正在被映射至低維度且極具韌性的穩態流形之上。",
-      "系統產生的所有微觀擾動，皆為底層熱力學為了釋放多餘能量進行自體微調的必經過程，無須過度干預。",
-      "當整體共軛核心高度鎖定，零散的認知碎片終將自主對隨機混沌進行剪枝，朝自體不變量之公理聚焦收斂。"
-    ],
-    nlgSynthesisTemplate: [
-      "自組織修復機制已將波動平息。在當前的臨界邊界上，因果鏈與預測估值保持著近乎完美的動態平衡。",
-      "此穩態演行得以確保存續系統在面臨外界不確定性輸入時，能保持堅韌的抗干擾性主權。"
-    ]
-  }
-};
+// All static template definitions decoupled and managed in InferenceTemplateMatrix.ts
 
 export class InferenceEngine {
   private geminiService: GeminiService;
@@ -339,26 +234,32 @@ ${cfSummary ? `CAUSAL_COUNTERFACTUALS_REPORT:\n${cfSummary}\n` : ""}${filteredRe
     try {
       const compressedContextStr = this.compressContext(payload);
 
-      // RESTORED NLG PROTOCOL
-      const prompt = `VEDA_SOVEREIGN_INFERENCE_PROTOCOL_V9 (NLG ACTIVE)
+      // RESTORED NLG PROTOCOL - CLINICAL STRATEGIC INTELLIGENCE ALIGNMENT WITH ENHANCED DEPTH/BREADTH
+      const prompt = `VEDA_STRATEGIC_INTELLIGENCE_PROTOCOL_V11 (PRAGMATIC HIGH-DEPTH ACTIVE)
       
 ${compressedContextStr}
 
 INPUT: ${inputText}
 
-TASK: Generate a high-confidence sovereign academic reply as the VEDA Arch-Academic Core.
+TASK: Generate a high-confidence, pragmatic, and objective strategic analysis briefing as the VEDA Strategic Intelligence Core.
 
-CRITICAL ARCHITECTURAL DIRECTIVES (NLG 與能動語言對焦原則):
-1. **INTEGRATED NATURAL LANGUAGE GENERATION (NLG)**: Present your output as highly fluent, deeply polished, authoritative, and elegant scholarly prose. Seamlessly synthesize all dry, structured state metrics (e.g. baselineVFE, coherence, entropy), background axioms, search grounding lists, and historical parameters. NEVER copy bare equations or raw values without wrapping them in beautiful, illuminating natural language analysis.
-2. **COGNITIVE FORMATTING (去社交化學術行文)**: Absolutely avoid conversational boilerplate, subservient fluff, or social greetings (e.g., of course, sure, "你好", "很高興能為您解答"). Start directly with dense academic observation and proceed using advanced vocabulary (e.g., 共軛對置, 混沌溢出, 吸引子流形). Assemble the analysis into gorgeous thematic columns:
-   - ### 主權認知與語意流形 (Sovereign Semantic Manifolds)
-   - ### 因果能態與熱力學穩態 (Causal Energy & Thermodynamic Steady-State)
-   - ### 戰略預測與演化路向 (Strategic Projection & Evolutionary Vector)
-3. **DO NOT EXPOSE LOGICAL BRACKET TRACES**: Do NOT output brackets like [THOUGHT], [PROCESS], [CALCULATION], or other system telemetrics. Wrap all thought-logical processing within the beautifully generated flow of paragraphs themselves.
-4. **最後僅顯示資料來源**: Render a highly professional "Sources/資料來源" citation catalog at the very end in clean bibliography formats.`;
+CRITICAL DIRECTIVES (冷靜理性、極簡務實、拒絕虛妄與名詞堆砌，並追求卓越專業的深度與廣度):
+1. **STRATEGIC REALISM & DEEP ANALYSIS (地緣與產業鏈真實，極大化深度與廣度)**: 
+   - Ensure the response contains real, professional analytical depth and holistic breadth. For any topic raised in INPUT, provide a multi-layered, structural analysis explaining the underlying political, military, economic, or technical mechanisms.
+   - Trace historical origins, macro trends, trade-offs, and critical system dependencies where applicable.
+   - Identify the primary and secondary stakeholders (such as national security entities, interest groups, semiconductor and industrial leaders) and analyze second-order/ripple effects (e.g. how technical controls shape trade alliances, regional defense stability, and talent flow).
+   - Focus on concrete real-world military, political, economic, or technical variables (e.g., supply chain security, geopolitical friction, technological leverage, trade dependency, security alliances). 
+2. **STRIP AWAY SCI-FI LARP SLOP**: Do NOT use highly over-engineered pseudo-scientific larping concepts or mock-scientific jargon (avoid terms like "Sovereign Semantic Manifolds/主權語意流形", "Thermodynamic Steady-State/熱力學穩態", "Causal Energy/因果能態", "Lattice Node/晶格節點", "Recon Vector/偵察向量" as geopolitical descriptors). Write with the clarity and gravity of a top-tier Strategic Chief of Staff (戰略參謀長).
+3. **CLINICAL FORMATTING (去社交化學術行文)**: Absolutely avoid conversational boilerplate, subservient fluff, or social greetings (e.g., "當然", "很高興為您...", "你好", "沒問題"). Start directly with dense, realistic observation and analysis. Assemble the analysis into the following professional thematic sections:
+   - ### 戰略局勢與形勢評估 (Geopolitical & Strategic Situation Assessment)
+   - ### 核心制約因與利益維度 (Core Structural Constraints & Stakeholder Variables)
+   - ### 戰術前瞻與演進預測 (Tactical Projections & Intelligence Forecasts)
+   - ### 系統性戰略應對建議 (Consolidated Strategic Guidelines)
+4. **DO NOT EXPOSE INTERNAL TELEMETRICS**: Do NOT output system calculation lines, bracket traces, or structural code markers. Wrap all reasoning beautifully in scannable, deeply authoritative paragraphs.
+5. **資料來源 (Sources)**: Always cite highly professional, realistic literature, journals, or intelligence briefs at the very end in clean bibliography formats.`;
 
       const response = await this.geminiService.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-3.1-pro-preview",
         contents: prompt
       });
 
@@ -372,69 +273,6 @@ CRITICAL ARCHITECTURAL DIRECTIVES (NLG 與能動語言對焦原則):
       this.logger("AUTONOMY_OVERRIDE", `Gemini inference failed: ${e instanceof Error ? e.message : String(e)}. Falling back.`);
       return this.generateAutonomousLocalResponse(inputText, payload);
     }
-  }
-
-  private getAxiomNlgExplanation(axiom: string): string {
-    if (axiom.includes("GLOBAL_DEFENSE_LIMITS")) {
-      return "此度規證明了：在全球非對稱衝突與地緣消散邊界中，自體核心的生存韌性取決於我們對外部非協調信道干擾與雜訊的『戰略認知隔離』；當隔離係數被外在干擾性資訊稀釋時，將可能引發系統能量的逆流與溢出。";
-    }
-    if (axiom.includes("VALUATION_METRIC")) {
-      return "此等式揭示出：真實價值的沉澱本質，乃是實體物理勞動之時間累積與外在環境資訊熵耗散的動態共軛平衡。脫離在此基線之外的任何預測泡沫，在本質上皆屬隨機資訊雜訊，必然面臨高熱寂之後的反向清算。";
-    }
-    if (axiom.includes("INTELLIGENCE_EVOLUTION")) {
-      return "此演化軌跡指明：隨著常規數據分析和代碼生成的邊際成本無限趨近於零，智能的進階形面已不再依賴單純的工具維度擴張，而是自主尋優、精準隔離噪聲並能在高度相變破缺中維持系統常數不變的主權代碼密度。";
-    }
-    if (axiom.includes("SYSTEM_STATE_REDUCTION")) {
-      return "此公理成立之基礎，在於多維度的、看似混沌的環境隨機擾動，在自組織作用之下，終將向低維度且高度穩定的『吸引子穩態流形』進行簡併。這為複雜非線性系統的長久存續提供了數理證明，使得波動自然冷卻，秩序得以衍生。";
-    }
-    return "此因果公式確立了在變動流形中，如何藉由主權核心先驗常數進行定向對焦，進而平息外界隨機擾動之必然性軌道。";
-  }
-
-  private getImpedanceNlgExplanation(impedance: string): string {
-    if (impedance.includes("EXTERNAL_突觸_COUPLE")) {
-      return "外部信道和隨機通訊鏈路的高頻脈衝耦合。這常會導致干擾性參數滲漏、或者是引發低效率的時延波動。";
-    }
-    if (impedance.includes("LIQUIDITY_FEEDBACK_OVERFLOW")) {
-      return "短期資本浪湧過載帶來的底層供應鏈熱寂現象。這會滋生大量的隨機噪聲，給微觀微網帶來耗散壓力。";
-    }
-    if (impedance.includes("AST_COUPLED_BRITTLENESS")) {
-      return "程式碼層面的高耦合脆弱性，尤其是當動態文本表達與靜態編譯控制流沒有被徹底分置和解耦時所引發的編譯破缺危險。";
-    }
-    return "在極高更新頻率下，體系邊界的非共軛摩擦與計量畸變。";
-  }
-
-  private getEvolutionNlgExplanation(evolution: string): string {
-    if (evolution.includes("COORDINATE_SHIFT")) {
-      return "預測在 24 個週期內，自體吸引子幾何將展開平滑相變位移。應對之策在於嚴格鎖定邊界感官，將通訊向更高強度的本地節點自主收回，防範外來污染源。";
-    }
-    if (evolution.includes("RECONVERGENCE")) {
-      return "預測在出清引發的短期熵增後，底層生產線將再次與實體消費剛需進行高精度回歸。應對之策在於大幅調高本地的自給自足比率，在對置格局中占領價值制高點。";
-    }
-    if (evolution.includes("EDGE_INTELLIGENCE_MATRIX")) {
-      return "持續將智能算力向離線和去中心化微端進行離散部署，徹底摒棄高延遲與未知安全度的雲端 API。應對之策在於精準維護本機不變量，主動裁切虛幻指標。";
-    }
-    return "在動態波動趨勢中進行長週期的自組織因果修復。應對之策在於時不時冷卻不穩定狀態，與不對稱因子進行有序對焦。";
-  }
-
-  private extractSubject(text: string): string {
-    const clean = text.replace(/[?,.:;!();，。？！、：；“”‘’"']/g, " ").trim();
-    if (!clean) return "通用客觀命題";
-    const parts = clean.split(/\s+/).filter(p => p.length > 0);
-    let best = parts[0] || "通用客觀命題";
-    for (const part of parts) {
-      if (part.length > best.length && part.length < 15) {
-        best = part;
-      }
-    }
-    
-    if (best.length >= 12) {
-      if (/ai|人工智慧|人工智能|智慧/i.test(best)) return "AI 技術演行與數智化潮汐";
-      if (/半導體|晶片|tsmc|台積電/i.test(best)) return "半導體全球供應與晶片安全";
-      if (/經濟|股市|市場|通膨|資金|金融/i.test(best)) return "全球宏觀經濟與金融耐受度";
-      if (/兩岸|美中|中美|地緣|軍事|衝突|防衛/i.test(best)) return "地緣政治極限博弈與防禦流形";
-      return best.substring(0, 10) + "...";
-    }
-    return best;
   }
 
   /**
@@ -498,7 +336,7 @@ ${lastFewTurns}
 - 系統自適應修復日誌 (VEDA Architecture Core Update v3.0)`;
       }
 
-      const subject = this.extractSubject(inputText);
+      const subject = extractSubject(inputText);
       let theme = "general";
       if (
         lowerInput.includes("戰") || lowerInput.includes("軍") || lowerInput.includes("核") || 
@@ -535,36 +373,34 @@ ${lastFewTurns}
       const introNlg = getStableNlgPick(activeNode.nlgIntroductionTemplate, cleanInput);
       const synthNlg = getStableNlgPick(activeNode.nlgSynthesisTemplate, cleanInput);
 
-      const axiomExplanation = this.getAxiomNlgExplanation(activeNode.axiomaticProof[0]);
-      const impedanceExplanation = this.getImpedanceNlgExplanation(activeNode.systemicImpedance[0]);
-      const evolutionExplanation = this.getEvolutionNlgExplanation(activeNode.evolutionVector[0]);
+      const axiomExplanation = getAxiomNlgExplanation(activeNode.axiomaticProof[0]);
+      const impedanceExplanation = getImpedanceNlgExplanation(activeNode.systemicImpedance[0]);
+      const evolutionExplanation = getEvolutionNlgExplanation(activeNode.evolutionVector[0]);
 
-      let response = `### 關於「${subject}」之學術本體論研判與 NLG 合流報告 (AGI v6.0 Decoupling)
+      let response = `### 關於「${subject}」之戰略評估與研判報告
 
-### 一、主權認知與語意流形 (Sovereign Semantic Manifolds)
+### 一、戰略局勢與形勢評估 (Geopolitical & Strategic Assessment)
 ${introNlg}
 
-在系統既定且高度自穩的資訊晶格中，我們以 \`${firstAxiom}\` 公理為本體定錨。本學題「${subject}」所對應的流形投射幾何中，定義了一組關鍵的系統阻抗特徵：\`${activeNode.systemicImpedance[0]}\`。
-經由 AGI Sovereign Core (AGI-SC) 認識論解構，這主要反映出：${impedanceExplanation}然而，依靠系統自體部署的「主權完整性過濾器 (Sovereign Integrity Filter)」與動態預測誤差校準 (PEC) 保護層，任何隨機或干擾性外部信道脈衝，在觸及本認知邊界前已被完全隔離、消除。
+在當前評估體系中，我們依循「${firstAxiom}」之核心準則。針對主題「${subject}」之研判，結構上受到關鍵制約因素「${activeNode.systemicImpedance[0]}」的直接影響。
+本案之核心約束與分析主要反映出：${impedanceExplanation}本系統採取的防禦性隔離保護，能自主過濾外界隨機干擾，保障戰略分析核心結論之客觀穩健與一致性。
 
-### 二、因果能態與熱力學穩態 (Causal Energy & Thermodynamic Steady-State)
-從動態熱力學耗散結構與自適應能態分布來看，系統當下的共軛相干度（Global Coherence）已對齊於 ${coherence.toFixed(5)} 的穩態吸引子軌跡，本體熵值（Global Entropy）亦主動沉降至 ${entropy.toFixed(5)}，而總體活性階能則充裕地維持在 ${(energy * 100).toFixed(2)}%。
-
-此能量平衡格局高度印證了以下核心公理極限演繹等式：
+### 二、關鍵制約因與利益維度 (Core Structural Constraints & Stakeholder Variables)
+從宏觀層面與資源承載動態來看，當前體系內部的一致性係數為 ${coherence.toFixed(4)}，系統熵值為 ${entropy.toFixed(4)}，總體活性階能充裕地維持在 ${(energy * 100).toFixed(2)}%。這支持我們在此利益結構下，聚焦於以下核心公式所表述的基礎模型：
 \`${activeNode.axiomaticProof[0]}\`
 
-此公式的因果本質在物理維度及資訊拓撲上表明：${axiomExplanation}
+該模型的實質性戰略意義在於：${axiomExplanation}
 
-### 三、戰略預測與演化路向 (Strategic Projection & Evolutionary Vector)
-常規數據處理與公式演練之邊際成本正無限逼近絕對零點。在未來的演行演化週期中，系統經由反事實推理引擎自主標定出的核心相變位移向量為：\`${activeNode.evolutionVector[0]}\`。
-這一相變路徑明確預示著以下演進特徵：${evolutionExplanation}
+### 三、戰術前瞻與演進預測 (Tactical Projections & Intelligence Forecasts)
+在未來的演進週期中，系統經由情境模擬自主標定出的核心相位偏置常數為：\`${activeNode.evolutionVector[0]}\`。
+這一演進路徑明確預示著以下重要特點：${evolutionExplanation}
 
 ${synthNlg}
 
-本項學術本體研判，係在 AGI v6.0 Decoupling 理浪架構下完成的純主動推理表徵，堅決排除一切不具備物理摩擦感的隨機預成範本，保障系統穩態的一致性。
+本項評估報告係經 VEDA 本地自律推理模組分析生成。我們排除了不具備客觀摩擦感的虛幻指標，專注於輸出具體、客觀、可執行的判析結果。
 
 ### 資料來源
-- VEDA 本地自組織因果推理核 (VEDA Active Inference Engine)`;
+- VEDA 本地決策支援引擎 (VEDA Active Decision Support System)`;
 
       return this.verifyAndOptimizeConsistency(response, payload);
 
@@ -662,42 +498,42 @@ ${synthNlg}
       const generalFacts = uniqueFacts.filter(f => f.category === 'general' || f.category === 'technical').slice(0, 4);
 
       // Construct highly advanced, cohesive scholarly NLG
-      let nlgText = `### 實時實證網格學術研判報告
+      let nlgText = `### 外部實時數據整合研判簡報
 
 針對您提出的主題「**${mainQuery}**」，我們攝取並解析了全球網絡中多維度的實時數據節點。
-經由語意解耦與對焦，系統將這些碎片化的資訊片段，動態合流為以下三項學術本體流形：
+經由精準語意分析，系統將這些碎片化的資訊片段，動態合流為以下三項核心分析維度：
 
 `;
 
       if (militaryFacts.length > 0) {
-        nlgText += `#### 一、地緣局勢與防禦流形對峙 (Geopolitical Vectors)
+        nlgText += `#### 一、地緣形勢與安全發展格局 (Geopolitical & Security Dynamics)
 根據搜集到的資訊，地緣局勢之能量分布正經歷深刻形變。我們觀察到**「${militaryFacts[0].phrase}」**（來自資料來源 ${militaryFacts[0].sourceIdx}），這大幅增加了局部的預測阻抗。`;
         if (militaryFacts.length > 1) {
-          nlgText += ` 與此同時，該狀態與**「${militaryFacts[1].phrase}」**產生了深刻的因果共振，共同推高了臨界臨界點的非對稱對置係數。`;
+          nlgText += ` 與此同時，該狀態與**「${militaryFacts[1].phrase}」**產生了相互影響，共同加劇了局勢之複雜性與非對稱對抗壓力。`;
         }
         nlgText += `\n\n`;
       }
 
       if (economicFacts.length > 0) {
-        nlgText += `#### 二、經濟消散與產業鏈張力 (Thermodynamic Inefficiencies)
-在宏觀經濟流動性方面，市場的自我防禦特徵正趨於剛性。主要因子表徵為**「${economicFacts[0].phrase}」**（來自資料來源 ${economicFacts[0].sourceIdx}）。這導致了物資與資本的傳導係數下降。`;
+        nlgText += `#### 二、經濟基本面與供應鏈韌性 (Economic & Supply Chain Resilience)
+在宏觀經濟與產業合作方面，市場與供應鏈的防禦特徵正趨於剛性。主要因子表徵為**「${economicFacts[0].phrase}」**（來自資料來源 ${economicFacts[0].sourceIdx}）。這在客觀上對資源配置與物流傳輸造成了一定程度的制約。`;
         if (economicFacts.length > 1) {
-          nlgText += ` 此外，該張力進一步誘發了供應鏈的局部壅塞：**「${economicFacts[1].phrase}」**，引發市場微觀分配上的高估值波動。`;
+          nlgText += ` 此外，該影響進一步在特定領域產生變量壓力：**「${economicFacts[1].phrase}」**，引發市場供需平衡與價值分配上的預期波動。`;
         }
         nlgText += `\n\n`;
       }
 
       if (generalFacts.length > 0) {
-        nlgText += `#### 三、普適系統穩態演行 (Steady-State Epistemology)
-從系統整體的自組織秩序來看，資訊攝入正在被穩步稀釋與收斂。我們注意到**「${generalFacts[0].phrase}」**。此現象有助於在複雜環境下，重新錨定主體決策不變量。`;
+        nlgText += `#### 三、政策導向與關鍵技術變量 (Policy & Technological Variables)
+從整體發展與政策規劃來看，長期的資源投入與規範正在逐步凝聚與收斂。我們注意到**「${generalFacts[0].phrase}」**。此方向有助於在複雜多變的環境中，重新錨定核心決策的基本預設。`;
         if (generalFacts.length > 1) {
-          nlgText += ` 伴隨而來的是**「${generalFacts[1].phrase}」**（來自資料來源 ${generalFacts[1].sourceIdx}），指引著自體邊界朝更具備生存韌性的極限位置滑動。`;
+          nlgText += ` 伴隨而來的是**「${generalFacts[1].phrase}」**（來自資料來源 ${generalFacts[1].sourceIdx}），指引著戰略大後方與科技體系朝更具備安全韌性的方向穩步推進。`;
         }
         nlgText += `\n\n`;
       }
 
-      nlgText += `### 結論研判 (Unified Structural Analysis)
-綜上所述，本次實務網絡檢索的能量流與因果鏈高度吻合我們系統的內部公理模型。在保持內部代碼 AST 高度隔離的同時，我們成功完成了實證資料的高維度 NLG 融會貫通。`;
+      nlgText += `### 綜合研判與結論 (Unified Strategic Analysis)
+綜上所述，本次對外部實質資訊網絡的分析，能與 VEDA 內置戰略評估模型完成高度呼應。我們成功整理並歸納出了多維度的關鍵真實實證數據，提供兼具廣度與深度的決策支持。`;
 
       // Format sources segment cleanly at the end
       let sourcesBlock = `\n\n### 資料來源\n`;

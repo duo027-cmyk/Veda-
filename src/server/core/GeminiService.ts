@@ -17,11 +17,195 @@ export class GeminiService {
   private currentKey: string = "";
   private isBlocked: boolean = false;
   private rateLimitCooldownUntil: number = 0;
+  private quotaExceededUntil: number = 0;
+  private degradedModels = new Map<string, number>();
   private logger: (type: string, msg: string) => void;
 
   constructor(logger?: (type: string, msg: string) => void) {
     this.logger = logger || ((type, msg) => console.log(`[GEMINI_SERVICE][${type}] ${msg}`));
     this.syncClient();
+  }
+
+  /**
+   * Patches a GoogleGenAI instance to automatically retry transient errors and dynamically 
+   * fallback to standard/efficient models.
+   */
+  private patchAiInstance(aiInstance: GoogleGenAI): GoogleGenAI {
+    if (!aiInstance || !aiInstance.models || (aiInstance as any).__patched) {
+      return aiInstance;
+    }
+
+    const originalGenerateContent = aiInstance.models.generateContent.bind(aiInstance.models);
+
+    aiInstance.models.generateContent = async (params: any) => {
+      // If we are cooling down under rate limit, wait or raise an error for retry loop
+      if (Date.now() < this.rateLimitCooldownUntil) {
+        const remaining = Math.max(0, this.rateLimitCooldownUntil - Date.now());
+        this.logger("COOLDOWN", `Adaptive cooldown is active. Holding search query for ${remaining}ms.`);
+        await new Promise(resolve => setTimeout(resolve, Math.min(remaining, 5000)));
+      }
+
+      // Helper function to map/normalize models to prevent 404/400 errors
+      const getNormalizedModel = (m: string): string => {
+        if (m === "gemini-3.5-flash") return "gemini-2.5-flash";
+        if (m === "gemini-2.5-flash") return "gemini-2.0-flash";
+        if (m === "gemini-2.0-flash") return "gemini-1.5-flash";
+        if (m === "gemini-1.5-flash") return "gemini-3.1-flash-lite";
+        if (m === "gemini-3.1-flash-lite") return "gemini-1.5-flash-8b";
+        if (m === "gemini-1.5-flash-8b") return "gemini-flash-latest";
+        if (m === "gemini-3.1-pro-preview" || m === "gemini-3.1-pro") return "gemini-2.5-pro";
+        if (m === "gemini-2.5-pro") return "gemini-1.5-pro";
+        if (m === "gemini-1.5-pro") return "gemini-3.5-flash";
+        return m;
+      };
+
+      // Build fallback list starting with the requested model
+      const modelsToTry = [params.model];
+      modelsToTry.push(getNormalizedModel(params.model));
+
+      const isSpecializedAudioVideoImage = 
+         params.model.includes("image") || 
+         params.model.includes("veo") || 
+         params.model.includes("lyria") || 
+         params.model.includes("generateVideos") ||
+         params.model.includes("generateAudio");
+
+      if (!isSpecializedAudioVideoImage) {
+        // Sequentially fall back across multiple solid production-grade nodes based on capability guidelines
+        modelsToTry.push("gemini-2.5-flash");
+        modelsToTry.push("gemini-2.0-flash");
+        modelsToTry.push("gemini-1.5-flash");
+        modelsToTry.push("gemini-1.5-flash-8b");
+        modelsToTry.push("gemini-3.5-flash");
+        modelsToTry.push("gemini-3.1-flash-lite");
+        modelsToTry.push("gemini-2.5-pro");
+        modelsToTry.push("gemini-1.5-pro");
+        modelsToTry.push("gemini-flash-latest");
+        modelsToTry.push("gemini-3.1-pro-preview");
+      }
+
+      // Deduplicate fallback chain and prioritize non-degraded models first
+      const uniqueModels = Array.from(new Set(modelsToTry)).sort((a, b) => {
+        const aCooldown = this.degradedModels.get(a) || 0;
+        const bCooldown = this.degradedModels.get(b) || 0;
+        const aIsDegraded = aCooldown > Date.now();
+        const bIsDegraded = bCooldown > Date.now();
+        if (aIsDegraded && !bIsDegraded) return 1;
+        if (!aIsDegraded && bIsDegraded) return -1;
+        return 0;
+      });
+
+      let lastError: any = null;
+
+      for (const model of uniqueModels) {
+        // Safe check so we don't attempt models that are strictly registered as degraded/overloaded right now
+        const modelCooldown = this.degradedModels.get(model) || 0;
+        if (modelCooldown > Date.now()) {
+          this.logger("PROACTIVE_FAILOVER_SKIP", `Model ${model} is currently cooled down/degraded. Passing over for adjacent nodes.`);
+          continue;
+        }
+
+        let attempt = 0;
+        const maxAttempts = 3;
+
+        while (attempt < maxAttempts) {
+          attempt++;
+          try {
+            this.logger("INFERENCE", `Executing query: model=${model}, attempt=${attempt}/${maxAttempts}`);
+            
+            const response = await originalGenerateContent({
+              ...params,
+              model: model,
+            });
+
+            if (response && (response.text !== undefined || response.candidates)) {
+              this.degradedModels.delete(model); // Restore health state instantly
+              return response;
+            }
+            throw new Error("Empty response received from Gemini.");
+          } catch (err: any) {
+            lastError = err;
+            const errMsg = err?.message || String(err);
+            const cleanMsg = this.cleanErrorMessage(err);
+            this.logger("WARNING", `Attempt ${attempt} failed with model ${model}: ${cleanMsg}`);
+
+            // Classify error and apply rate-limits/cooldown
+            this.handleError(err, false);
+            if (this.isBlocked) {
+              this.logger("SECURITY", "Fatal security condition detected during generation loop. Aborting fallback.");
+              throw err;
+            }
+
+            // If model is experiencing high demand (503), do not retry on this overloaded model. Immediately switch!
+            const isModelOverloaded = 
+              errMsg.includes("503") || 
+              errMsg.includes("UNAVAILABLE") || 
+              errMsg.includes("high demand") || 
+              errMsg.includes("temporary") || 
+              errMsg.includes("overloaded");
+
+            // If model is rate-limited or quota exceeded (429), do not retry on this model either. Immediately try next available model!
+            const isModelQuotaExceeded = 
+              errMsg.includes("429") || 
+              errMsg.includes("RESOURCE_EXHAUSTED") || 
+              errMsg.includes("quota") || 
+              errMsg.includes("Quota") ||
+              errMsg.includes("limit") ||
+              errMsg.includes("Limit") ||
+              errMsg.includes("Resource exhausted");
+
+            // If model is not found or invalid (400), do not retry either! Immediately try next available model.
+            const isModelNotFoundOrInvalid =
+              errMsg.includes("400") ||
+              errMsg.includes("not found") ||
+              errMsg.includes("Not found") ||
+              errMsg.includes("invalid model") ||
+              errMsg.includes("INVALID_ARGUMENT") ||
+              errMsg.includes("does not exist") ||
+              errMsg.includes("not exist");
+
+            if (isModelOverloaded || isModelQuotaExceeded || isModelNotFoundOrInvalid) {
+              let reason = "overloaded (503/UNAVAILABLE)";
+              let cooldownDuration = 120000; // 2 mins default
+              if (isModelQuotaExceeded) {
+                // If model has a limit of 0, it means it's strictly not supported under this free-tier API Key.
+                // We lock it for 24 hours to prevent slow, failing retry checks.
+                if (errMsg.includes("limit: 0") || errMsg.includes("FreeTier")) {
+                  reason = "zero-quota-free-tier (429/RESOURCE_EXHAUSTED - Locked for 24h)";
+                  cooldownDuration = 86400000; // 24 hours
+                } else {
+                  reason = "quota-exhausted (429/RESOURCE_EXHAUSTED)";
+                  cooldownDuration = 180000; // 3 mins for Quota limits to reset
+                }
+              } else if (isModelNotFoundOrInvalid) {
+                reason = "not-found/invalid (400/INVALID_ARGUMENT)";
+                cooldownDuration = 300000; // 5 mins for missing/unsupported models
+              }
+              
+              this.degradedModels.set(model, Date.now() + cooldownDuration);
+              this.logger("PROACTIVE_FAILOVER", `Model ${model} is ${reason}. Registering degradation for ${cooldownDuration}ms. Moving immediately to adjacent node.`);
+              break; // break the attempt loop to try the next model
+            }
+
+            if (attempt < maxAttempts) {
+              const backoffMs = attempt * 1200; // exponential back-off
+              this.logger("RETRY", `Transient issue detected. Initiating ${backoffMs}ms back-off delay.`);
+              await new Promise(resolve => setTimeout(resolve, backoffMs));
+            }
+          }
+        }
+
+        this.logger("COGNITIVE_DEGRADATION", `Model ${model} exhausted maximum retries. Escalating to subsequent fallback model.`);
+      }
+
+      if (lastError) {
+        this.handleError(lastError, true);
+      }
+      throw lastError;
+    };
+
+    (aiInstance as any).__patched = true;
+    return aiInstance;
   }
 
   /**
@@ -38,8 +222,8 @@ export class GeminiService {
 
     if (isValid) {
       if (!this.ai || this.currentKey !== rawKey) {
-        this.logger("SECURITY", "Synthesizing new GoogleGenAI client mapping.");
-        this.ai = new GoogleGenAI({
+        this.logger("SECURITY", "Synthesizing new GoogleGenAI client mapping with self-healing core decorator.");
+        const rawAi = new GoogleGenAI({
           apiKey: rawKey,
           httpOptions: {
             headers: {
@@ -47,6 +231,7 @@ export class GeminiService {
             }
           }
         });
+        this.ai = this.patchAiInstance(rawAi);
         this.currentKey = rawKey;
       }
       this.isBlocked = false;
@@ -55,7 +240,7 @@ export class GeminiService {
       this.isBlocked = true;
       if (!this.ai) {
         // Fallback dummy client to prevent crash
-        this.ai = new GoogleGenAI({
+        const rawAi = new GoogleGenAI({
           apiKey: "DISABLED_KEY",
           httpOptions: {
             headers: {
@@ -63,6 +248,7 @@ export class GeminiService {
             }
           }
         });
+        this.ai = this.patchAiInstance(rawAi);
         this.currentKey = "DISABLED_KEY";
       }
       return false;
@@ -74,11 +260,7 @@ export class GeminiService {
    */
   public isExternalAiActive(): boolean {
     this.syncClient();
-    if (this.isBlocked) return false;
-    if (Date.now() < this.rateLimitCooldownUntil) {
-      return false; // Rate limit is active
-    }
-    return true;
+    return !this.getBlockedStatus();
   }
 
   /**
@@ -91,20 +273,17 @@ export class GeminiService {
   }
 
   /**
-   * Check blocked state, considering both permanent blocks and rate-limiting cooldown flags.
+   * Check blocked state, indicating a permanent key deactivation or configuration block.
    */
   public getBlockedStatus(): boolean {
-    if (this.isBlocked) return true;
-    if (Date.now() < this.rateLimitCooldownUntil) {
-      return true; // Blocked under cooldown
-    }
-    return false;
+    return this.isBlocked || Date.now() < this.quotaExceededUntil;
   }
 
   public setBlockedStatus(blocked: boolean) {
     this.isBlocked = blocked;
     if (!blocked) {
       this.rateLimitCooldownUntil = 0; // Clear rate-limit cooldown on manual reset
+      this.quotaExceededUntil = 0;
     }
   }
 
@@ -127,6 +306,16 @@ export class GeminiService {
     }
 
     if (
+      errMsg.includes("503") ||
+      errMsg.includes("UNAVAILABLE") ||
+      errMsg.includes("high demand") ||
+      errMsg.includes("temporary") ||
+      errMsg.includes("overloaded")
+    ) {
+      return "EXTERNAL_SERVICE_OVERLOADED (Gemini 外部服務負載飽和/臨時無法連線，已啟動多級自癒備援)";
+    }
+
+    if (
       errMsg.includes("API key not valid") || 
       errMsg.includes("INVALID_ARGUMENT") || 
       errMsg.includes("400") ||
@@ -146,7 +335,7 @@ export class GeminiService {
   /**
    * Classifies error types and applies appropriate blockades or temporary cooldown timers.
    */
-  public handleError(err: any): boolean {
+  public handleError(err: any, isGlobalBlocked: boolean = false): boolean {
     const errMsg = err?.message || String(err);
 
     // Rate Limit or Quota Exceeded (HTTP 429) detection
@@ -159,21 +348,25 @@ export class GeminiService {
       errMsg.includes("Limit") ||
       errMsg.includes("Resource exhausted")
     ) {
-      this.logger("RATE_LIMIT", "Quota boundary hit. Imposing an adaptive 30-second cooldown to restore energy limits.");
-      this.rateLimitCooldownUntil = Date.now() + 30000; // 30-second adaptive cooldown for quick recovery and back-off
+      if (isGlobalBlocked) {
+        this.logger("RATE_LIMIT", "Quota boundary hit. Imposing an adaptive 5-minute offline block to prevent endpoint noise and allow recovery.");
+        this.rateLimitCooldownUntil = Date.now() + 300000; // 5-minute cooldown for general rate-limit
+        this.quotaExceededUntil = Date.now() + 300000;    // 5-minute offline block
+      } else {
+        this.logger("RATE_LIMIT", "Model-specific quota exhausted. Registering localized degradation to try adjacent fallback nodes.");
+      }
       return true;
     }
 
-    // Invalid parameters, expired authorization, or fatal keys (HTTP 400 etc)
+    // Invalid API key or authorization errors (fatal key issues)
     if (
       errMsg.includes("API key not valid") || 
-      errMsg.includes("INVALID_ARGUMENT") || 
-      errMsg.includes("400") ||
-      errMsg.includes("not found") ||
+      errMsg.includes("API_KEY_INVALID") ||
       errMsg.includes("Forbidden") ||
-      errMsg.includes("Unauthorized")
+      errMsg.includes("Unauthorized") ||
+      errMsg.includes("invalid key")
     ) {
-      this.logger("SECURITY", "Invalid environment authorization detected. Deactivating external inference.");
+      this.logger("SECURITY", "Invalid API key or authorization. Deactivating external inference.");
       this.isBlocked = true;
       return false;
     }

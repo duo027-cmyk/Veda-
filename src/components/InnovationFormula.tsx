@@ -118,9 +118,9 @@ export const InnovationFormula = ({ data }: { data: BrainData | null }) => {
              </p>
           </div>
           <div className="flex flex-col gap-1">
-             <span className="text-[8px] font-mono text-white/20 uppercase tracking-widest">主權中性原則</span>
+             <span className="text-[8px] font-mono text-white/20 uppercase tracking-widest">技術自主中立原則</span>
              <p className="text-[10px] text-white/60 leading-relaxed italic">
-               工具本身無善惡，火能發明蒸汽機，亦能發明噴火器。主權協議決定其導向。
+               工具本身無善惡，火能發明蒸汽機，亦能發明噴火器。自主控制協議與安全機制決定其導向。
              </p>
           </div>
           <div className="flex flex-col gap-1">

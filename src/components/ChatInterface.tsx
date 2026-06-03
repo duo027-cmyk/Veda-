@@ -12,7 +12,8 @@ import {
   BookOpen,
   Copy,
   Check,
-  Code
+  Code,
+  Sparkles
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -92,6 +93,9 @@ interface Message {
   trace?: any[];
   actions?: any[];
   isStreaming?: boolean;
+  showDemystified?: boolean;
+  demystifiedText?: string;
+  isDemystifying?: boolean;
 }
 
 export const ChatInterface = () => {
@@ -210,7 +214,9 @@ export const ChatInterface = () => {
                   mode: chunk.reasoning_mode || m.mode,
                   confidence: chunk.sovereign_confidence !== undefined ? chunk.sovereign_confidence : m.confidence,
                   trace: chunk.thought_trace || m.trace,
-                  actions: chunk.actions || m.actions
+                  actions: chunk.actions || m.actions,
+                  demystifiedText: chunk.demystifiedText !== undefined ? chunk.demystifiedText : m.demystifiedText,
+                  showDemystified: chunk.showDemystified !== undefined ? chunk.showDemystified : m.showDemystified
                 };
               }
               return m;
@@ -258,6 +264,56 @@ export const ChatInterface = () => {
       });
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleDemystifyMessage = async (msgIdx: number, originalText: string) => {
+    const targetMsg = messages[msgIdx];
+    if (!targetMsg) return;
+
+    if (targetMsg.demystifiedText) {
+      setMessages(prev => {
+        const next = [...prev];
+        next[msgIdx] = {
+          ...next[msgIdx],
+          showDemystified: !next[msgIdx].showDemystified
+        };
+        return next;
+      });
+      return;
+    }
+
+    setMessages(prev => {
+      const next = [...prev];
+      next[msgIdx] = {
+        ...next[msgIdx],
+        isDemystifying: true
+      };
+      return next;
+    });
+
+    try {
+      const decodedTranslation = await vedaService.demystifyText(originalText);
+      setMessages(prev => {
+        const next = [...prev];
+        next[msgIdx] = {
+          ...next[msgIdx],
+          demystifiedText: decodedTranslation,
+          showDemystified: true,
+          isDemystifying: false
+        };
+        return next;
+      });
+    } catch (err) {
+      console.error("Failed to decode text:", err);
+      setMessages(prev => {
+        const next = [...prev];
+        next[msgIdx] = {
+          ...next[msgIdx],
+          isDemystifying: false
+        };
+        return next;
+      });
     }
   };
 
@@ -339,30 +395,47 @@ export const ChatInterface = () => {
               )}
             >
                <div className={cn(
-                 "message-bubble",
+                 "message-bubble relative",
                  msg.role === 'user' ? "user-bubble" : "ai-bubble"
                )}>
+                  {msg.showDemystified && (
+                    <div className="mb-3.5 pb-2 border-b border-amber-500/20 text-[10px] text-amber-400 font-mono tracking-widest leading-none select-none flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">🌟 HUMAN EXPRESSION LAYER / 常人理解解碼版</span>
+                      <span className="text-[8px] opacity-60">DECODED_OK</span>
+                    </div>
+                  )}
                   <div className="markdown-body">
                     <ReactMarkdown
                       remarkPlugins={[remarkMath, remarkGfm]}
                       rehypePlugins={[rehypeKatex]}
                       components={{
-                        code({ node, inline, className, children, ...props }: any) {
-                          const match = /language-(\w+)/.exec(className || '');
-                          return !inline ? (
-                            <CodeBlock 
-                              language={match ? match[1] : ''} 
-                              value={String(children).replace(/\n$/, '')} 
-                            />
-                          ) : (
-                            <code className={`${className} bg-white/10 px-1.5 py-0.5 rounded-none text-cyan-300 border border-white/5 font-mono text-[11px]`} {...props}>
+                        pre({ node, children, ...props }: any) {
+                          const codeChild = React.Children.toArray(children).find(
+                            (child) => React.isValidElement(child) && (child.type === 'code' || (child.props as any)?.className?.includes('language-'))
+                          );
+                          if (React.isValidElement(codeChild)) {
+                            const codeProps = codeChild.props as any;
+                            const match = /language-(\w+)/.exec(codeProps.className || '');
+                            const value = String(codeProps.children || '').replace(/\n$/, '');
+                            return (
+                              <CodeBlock 
+                                language={match ? match[1] : ''} 
+                                value={value} 
+                              />
+                            );
+                          }
+                          return <pre {...props}>{children}</pre>;
+                        },
+                        code({ node, className, children, ...props }: any) {
+                          return (
+                            <code className={`${className || ''} bg-white/10 px-1.5 py-0.5 rounded-none text-cyan-300 border border-white/5 font-mono text-[11px]`} {...props}>
                               {children}
                             </code>
                           );
                         }
                       }}
                     >
-                      {msg.text || ""}
+                      {msg.showDemystified ? (msg.demystifiedText || "") : (msg.text || "")}
                     </ReactMarkdown>
                     {msg.role === 'veda' && isTyping && idx === messages.length -1 && !msg.text && (
                        <motion.span 
@@ -473,7 +546,7 @@ export const ChatInterface = () => {
                </div>
 
                {msg.role === 'veda' && (
-                 <div className="px-6 flex items-center gap-6 mt-1 opacity-40">
+                 <div className="px-6 flex items-center gap-6 mt-1.5 flex-wrap">
                     {msg.mode && (
                        <div className="flex items-center gap-2">
                           <div className={cn(
@@ -497,6 +570,26 @@ export const ChatInterface = () => {
                         <span className="text-[7px] font-mono tracking-widest text-ink italic">CON_LEVEL: {(msg.confidence * 100).toFixed(0)}%</span>
                       </div>
                     )}
+
+                    <button
+                      onClick={() => handleDemystifyMessage(idx, msg.text)}
+                      disabled={msg.isDemystifying}
+                      className={cn(
+                        "flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono tracking-wider transition-all border active:scale-95",
+                        msg.showDemystified 
+                          ? "bg-amber-500/10 text-amber-300 border-amber-500/30 shadow-[0_0_8px_rgba(251,191,36,0.2)]"
+                          : "text-ink/40 border-border-subtle hover:text-amber-400 hover:border-amber-500/30 hover:bg-amber-500/5 hover:shadow-[0_0_10px_rgba(251,191,36,0.1)] hover:opacity-100"
+                      )}
+                      title="解碼表達層 / Translate to Plain Chinese"
+                    >
+                      <Sparkles size={10} className={cn("text-amber-400", msg.isDemystifying && "animate-spin")} />
+                      {msg.isDemystifying 
+                        ? "DECODING..." 
+                        : msg.showDemystified 
+                          ? "SHOW ACADEMIC" 
+                          : "白話解碼"
+                      }
+                    </button>
                  </div>
                )}
 

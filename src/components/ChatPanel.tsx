@@ -62,6 +62,9 @@ interface Message {
   pinned?: boolean;
   suggestions?: string[];
   isStreaming?: boolean;
+  showDemystified?: boolean;
+  demystifiedText?: string;
+  isDemystifying?: boolean;
 }
 
 interface ChatPanelProps {
@@ -651,6 +654,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
             sources: finalResult.sources || null,
             imageUrl: finalResult.imageUrl || null,
             suggestions: finalResult.suggestions || null,
+            demystifiedText: finalResult.demystifiedText || null,
+            showDemystified: finalResult.showDemystified ?? true,
             isStreaming: false 
           } : m
         ));
@@ -1209,27 +1214,64 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
                           "ff-text-body",
                           msg.text.includes('[VEDA_EPISTEMIC_BOUNDARY]') && "border-l-2 border-orange-500 pl-4 bg-orange-500/5 py-2"
                         )}>
+                          {msg.showDemystified && msg.demystifiedText && (
+                            <div className="mb-2 pb-1 border-b border-cyan-500/10 text-[9px] text-cyan-400 font-mono tracking-widest flex items-center justify-between">
+                              <span className="flex items-center gap-1">🌟 HUMAN EXPRESSION LAYER / 常人理解解碼版</span>
+                            </div>
+                          )}
                           <ReactMarkdown 
                             remarkPlugins={[remarkMath, remarkGfm]} 
                             rehypePlugins={[rehypeKatex]}
                             components={{
-                              code({ node, inline, className, children, ...props }: any) {
-                                const match = /language-(\w+)/.exec(className || '');
-                                return !inline ? (
-                                  <CodeBlock 
-                                    language={match ? match[1] : ''} 
-                                    value={String(children).replace(/\n$/, '')} 
-                                  />
-                                ) : (
-                                  <code className={`${className} bg-white/10 px-1.5 py-0.5 rounded-none text-cyan-300 border border-white/5`} {...props}>
+                              pre({ node, children, ...props }: any) {
+                                const codeChild = React.Children.toArray(children).find(
+                                  (child) => React.isValidElement(child) && (child.type === 'code' || (child.props as any)?.className?.includes('language-'))
+                                );
+                                if (React.isValidElement(codeChild)) {
+                                  const codeProps = codeChild.props as any;
+                                  const match = /language-(\w+)/.exec(codeProps.className || '');
+                                  const value = String(codeProps.children || '').replace(/\n$/, '');
+                                  return (
+                                    <CodeBlock 
+                                      language={match ? match[1] : ''} 
+                                      value={value} 
+                                    />
+                                  );
+                                }
+                                return <pre {...props}>{children}</pre>;
+                              },
+                              code({ node, className, children, ...props }: any) {
+                                return (
+                                  <code className={`${className || ''} bg-white/10 px-1.5 py-0.5 rounded-none text-cyan-300 border border-white/5`} {...props}>
                                     {children}
                                   </code>
                                 );
                               }
                             }}
                           >
-                            {msg.text.replace('[VEDA_EPISTEMIC_BOUNDARY]', '【認識論邊界 / EPISTEMIC BOUNDARY】')}
+                            {msg.showDemystified && msg.demystifiedText 
+                              ? msg.demystifiedText 
+                              : msg.text.replace('[VEDA_EPISTEMIC_BOUNDARY]', '【認識論邊界 / EPISTEMIC BOUNDARY】')}
                           </ReactMarkdown>
+
+                          {msg.role === 'veda' && msg.demystifiedText && (
+                            <div className="flex items-center gap-2 mt-3 pt-2 border-t border-white/5">
+                              <button
+                                onClick={() => {
+                                  setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, showDemystified: !m.showDemystified } : m));
+                                }}
+                                className={cn(
+                                  "text-[8px] font-mono border px-2 py-0.5 rounded transition-colors flex items-center gap-1",
+                                  msg.showDemystified 
+                                    ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30" 
+                                    : "text-white/40 border-white/10 hover:text-cyan-400 hover:border-cyan-500/30"
+                                )}
+                              >
+                                <Sparkles className="w-2.5 h-2.5" />
+                                {msg.showDemystified ? "SHOW ACADEMIC" : "白話解碼"}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1553,7 +1595,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
                     </div>
 
                     <div className="p-4 bg-accent/5 border border-accent/10 space-y-3">
-                      <div className="text-[9px] font-mono text-accent uppercase tracking-widest">主權架構師筆記 / ARCHITECT_NOTE</div>
+                      <div className="text-[9px] font-mono text-accent uppercase tracking-widest">核心系統架構筆記 / ARCHITECT_NOTE</div>
                       <p className="text-xs text-white/70 italic leading-relaxed ff-text-body">
                         "{auditResult.architect_note}"
                       </p>

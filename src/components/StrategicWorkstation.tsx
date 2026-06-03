@@ -462,7 +462,7 @@ export const StrategicWorkstation: React.FC<StrategicWorkstationProps> = ({ data
                                 {appraisal.grade}
                               </div>
                               <span className="text-[9px] font-mono tracking-[0.2em] uppercase text-white/40 block mt-2">
-                                {appraisal.grade === 'L4' ? 'L4 主權專家型' : appraisal.grade === 'L3' ? 'L3 分析型' : 'L2~L1 搜尋/整理型'}
+                                {appraisal.grade === 'L4' ? 'L4 自主專家級' : appraisal.grade === 'L3' ? 'L3 深度分析級' : 'L2~L1 知識檢索與整理級'}
                               </span>
                             </>
                           ) : (
@@ -767,7 +767,7 @@ export const StrategicWorkstation: React.FC<StrategicWorkstationProps> = ({ data
                       value={newIntent}
                       onChange={(e) => setNewIntent(e.target.value)}
                       rows={4}
-                      placeholder="e.g. 側重於能源供應鏈、去中心化防禦體系與 AI 主權的交匯點分析..."
+                      placeholder="e.g. 側重於能源供應鏈、去中心化安全架構與 AI 自主隱私計算的交匯點分析..."
                       className="bg-white/5 border border-white/10 p-4 text-sm text-white/80 focus:border-accent/40 outline-none transition-all font-serif leading-relaxed"
                     />
                   </div>

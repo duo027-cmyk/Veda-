@@ -21,6 +21,7 @@ import { Header } from './components/Header';
 import { ChatInterface } from './components/ChatInterface';
 import { SynapseOverview } from './components/SynapseOverview';
 import { CoreConfig } from './components/CoreConfig';
+import { CognitiveArchitecture } from './components/CognitiveArchitecture';
 import { KnowledgeVault } from './components/KnowledgeVault';
 import { VedaCrystalLogo } from './components/VedaCrystalLogo';
 import { HoneycombHUD } from './components/HoneycombHUD';
@@ -266,6 +267,7 @@ export default function App() {
           ],
           CORE: [
             { id: 'CORE', label: t.nav_core_config },
+            { id: 'ARCHITECTURE', label: t.nav_architecture },
             { id: 'EFFICACY', label: t.nav_tiers },
             { id: 'CINEMA', label: t.nav_cinema }
           ]
@@ -419,6 +421,7 @@ export default function App() {
                 onUpdate={() => fetchVedaData()} 
               />
             )}
+            {view === 'ARCHITECTURE' && <CognitiveArchitecture />}
             {view === 'EFFICACY' && <EfficacyManifold data={userData} onUpgrade={(tier) => handleAction('setSystemTier', { tier })} />}
             {view === 'CORE' && (
                <CoreConfig data={userData} onUpdate={() => fetchVedaData()} />

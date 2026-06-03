@@ -375,3 +375,201 @@ export class SolomonKingEngineV3 {
     this.energy = Math.min(1.0, this.energy + amount);
   }
 }
+
+/**
+ * AerospaceTripleModularRedundancy (航太級主權三重複聯共識器)
+ * Executes redundant mathematical pathways, voter-filtering outliers to prevent hardware bit-flips or SEUs.
+ */
+export class AerospaceTripleModularRedundancy {
+  /**
+   * Voter function on state vectors.
+   * Compares three state arrays and runs a consensus filter.
+   * If one branch has suffered an SEU, it is isolated and the majority consensus is voted.
+   */
+  public voteVector(a: number[], b: number[], c: number[]): { votedState: number[]; faultIsolatedIndex: number | null; errorDeviation: number } {
+    const size = a.length;
+    const votedState = new Array(size).fill(0);
+    let faultIsolatedIndex: number | null = null;
+
+    // Calculate pairwise distances
+    const dAB = this.euclideanDistance(a, b);
+    const dBC = this.euclideanDistance(b, c);
+    const dCA = this.euclideanDistance(c, a);
+
+    // If they are all close, average them
+    if (dAB < 0.05 && dBC < 0.05 && dCA < 0.05) {
+      for (let i = 0; i < size; i++) {
+        votedState[i] = (a[i] + b[i] + c[i]) / 3;
+      }
+      return { votedState, faultIsolatedIndex: null, errorDeviation: (dAB + dBC + dCA) / 3 };
+    }
+
+    // Isolate the faulty branch
+    if (dAB < dBC && dAB < dCA) {
+      // C is the outlier
+      faultIsolatedIndex = 2;
+      for (let i = 0; i < size; i++) votedState[i] = (a[i] + b[i]) / 2;
+      return { votedState, faultIsolatedIndex, errorDeviation: Math.max(dBC, dCA) };
+    } else if (dBC < dAB && dBC < dCA) {
+      // A is the outlier
+      faultIsolatedIndex = 0;
+      for (let i = 0; i < size; i++) votedState[i] = (b[i] + c[i]) / 2;
+      return { votedState, faultIsolatedIndex, errorDeviation: Math.max(dAB, dCA) };
+    } else {
+      // B is the outlier
+      faultIsolatedIndex = 1;
+      for (let i = 0; i < size; i++) votedState[i] = (a[i] + c[i]) / 2;
+      return { votedState, faultIsolatedIndex, errorDeviation: Math.max(dAB, dBC) };
+    }
+  }
+
+  private euclideanDistance(x: number[], y: number[]): number {
+    return Math.sqrt(x.reduce((sum, val, i) => sum + Math.pow(val - (y[i] || 0), 2), 0));
+  }
+}
+
+/**
+ * StateIntegrityEDAC (狀態漢明自癒與錯誤檢測自校正)
+ * Guards the hyper-dimensional state vectors against cosmic radiation or numerical overflow.
+ */
+export class StateIntegrityEDAC {
+  /**
+   * Generates a digital signature and parity check for a given high-dimension state.
+   */
+  public generateEDACSignature(state: number[]): { hash: string; parity: number; checkCount: number } {
+    const rawString = state.map(v => v.toFixed(6)).join(",");
+    const hash = crypto.createHash('sha256').update(rawString).digest('hex').substring(0, 16);
+    const parity = state.reduce((acc, val) => acc ^ Math.floor(val * 100000), 0);
+    return { hash, parity, checkCount: state.length };
+  }
+
+  /**
+   * Sanitizes and autocurates the state matrix, repairing anomalies (NaN, Infinity, raw outliers) with emergency fallbacks.
+   */
+  public sanitizeAndRepair(state: number[], baseline: number[]): { repairedState: number[]; correctedAnomalyCount: number } {
+    let correctedAnomalyCount = 0;
+    const repairedState = state.map((v, i) => {
+      const baseVal = baseline[i] !== undefined ? baseline[i] : 0.5;
+      if (isNaN(v) || !isFinite(v)) {
+        correctedAnomalyCount++;
+        return baseVal; // Repair via baseline anchor
+      }
+      if (v < 0 || v > 1) {
+        correctedAnomalyCount++;
+        return Math.max(0, Math.min(1, baseVal));
+      }
+      return v;
+    });
+    return { repairedState, correctedAnomalyCount };
+  }
+}
+
+export interface AdaptiveHyperparameters {
+  learningRate: number;        // 自適應學習率
+  processNoiseScale: number;   // 過程噪聲動態縮放因子
+  measurementNoiseScale: number; // 觀測噪聲動態縮放因子
+  forgettingFactor: number;    // 遺忘因子 alpha
+  chiSquareConfidence: number; // 卡方檢驗信心度臨界值
+}
+
+/**
+ * CausalKalmanFilter (航太級傳感器自適應卡爾曼濾波與卡方異常剔除器)
+ * Implements adaptive covariance estimation (Sage-Husa variant) and dynamic hyperparameter control parameters
+ * to self-heal and isolate sensor failures under harsh environmental noise or bit flips.
+ */
+export class CausalKalmanFilter {
+  private x: number = 0.5; // Estimated state
+  private P: number = 1.0; // Estimate uncertainty covariance
+  private Q: number = 0.005; // Base Process variance
+  private R: number = 0.08; // Base Measurement variance
+  private CHI_SQUARE_THRESHOLD: number = 3.841; // 95% threshold for 1 DOF
+
+  // 航太級動態自適應協方差矩陣與超參數控制層
+  private hyperparameters: AdaptiveHyperparameters = {
+    learningRate: 0.05,
+    processNoiseScale: 1.0,
+    measurementNoiseScale: 1.0,
+    forgettingFactor: 0.98,
+    chiSquareConfidence: 3.841,
+  };
+
+  private windowedInnovations: number[] = [];
+  private readonly maxWindowSize: number = 15;
+
+  public update(
+    measurement: number, 
+    predictedControl: number, 
+    environmentalFactors?: { entropy?: number; coherence?: number; sevDetected?: boolean }
+  ): { state: number; isolated: boolean; innovation: number; currentParams?: AdaptiveHyperparameters } {
+    
+    // 1. 基於環境反饋自主更新「自適應控制參數層」 (Adaptive Hyperparameters Optimization)
+    if (environmentalFactors) {
+      const entropy = environmentalFactors.entropy ?? 0.5;
+      const coherence = environmentalFactors.coherence ?? 0.8;
+      const sev = environmentalFactors.sevDetected ?? false;
+
+      // 根據環境動態進行超參數演化
+      this.hyperparameters.forgettingFactor = Math.max(0.90, Math.min(0.99, 0.98 - (entropy * 0.05)));
+      this.hyperparameters.learningRate = Math.max(0.01, Math.min(0.30, 0.05 * (1.0 + (1.0 - coherence) * 2.0)));
+      
+      // 當高能事件 (SEU) 發生時寬容檢驗閾值，適應大抖動
+      this.hyperparameters.chiSquareConfidence = sev ? 5.024 : 3.841; // 信心限度自主退避
+
+      // 動態協方差矩陣係數匹配
+      this.hyperparameters.processNoiseScale = Math.max(0.1, Math.min(5.0, 1.0 + entropy * 1.5 - (coherence * 0.5)));
+      this.hyperparameters.measurementNoiseScale = Math.max(0.1, Math.min(10.0, sev ? 4.0 : (1.0 + (1.0 - coherence) * 3.0)));
+    }
+
+    // 2. 應用航太自適應協方差校正 (Sage-Husa 簡化自適應變體)
+    const activeQ = this.Q * this.hyperparameters.processNoiseScale;
+    const activeR = this.R * this.hyperparameters.measurementNoiseScale;
+
+    // 先驗狀態與先驗協方差推算 (加上超參數遺忘因子，加權歷史信賴)
+    const x_priori = predictedControl;
+    const p_priori = (this.hyperparameters.forgettingFactor * this.P) + activeQ;
+
+    // 計算觀測殘差 
+    const y = measurement - x_priori;
+    const s = p_priori + activeR; // 殘差動態協方差
+
+    // 卡方檢驗 (Chi-Square Fault Isolation)
+    const chiSquareVal = (y * y) / s;
+    if (chiSquareVal > this.hyperparameters.chiSquareConfidence) {
+      // 異常點隔離：信賴航跡 projection 推算，並舒張協方差以免緊咬偏置鎖死
+      this.x = x_priori;
+      this.P = p_priori * 1.05; 
+      return { state: this.x, isolated: true, innovation: chiSquareVal, currentParams: { ...this.hyperparameters } };
+    }
+
+    // 3. 在線動態校正觀測噪聲協方差 (Sage-Husa Noise Window Adaptation)
+    this.windowedInnovations.push(y);
+    if (this.windowedInnovations.length > this.maxWindowSize) {
+      this.windowedInnovations.shift();
+    }
+
+    if (this.windowedInnovations.length > 3) {
+      const meanInno = this.windowedInnovations.reduce((a, b) => a + b, 0) / this.windowedInnovations.length;
+      const varInno = this.windowedInnovations.reduce((acc, val) => acc + Math.pow(val - meanInno, 2), 0) / (this.windowedInnovations.length - 1);
+      const adaptiveScale = Math.max(0.2, Math.min(5.0, varInno / (this.R + 1e-6)));
+      // 動態混合一階滑動濾波
+      this.hyperparameters.measurementNoiseScale = (0.85 * this.hyperparameters.measurementNoiseScale) + (0.15 * adaptiveScale);
+    }
+
+    // 4. 後驗更新 (卡爾曼增益與狀態修正)
+    const K = p_priori / s; 
+    this.x = x_priori + K * y + (this.hyperparameters.learningRate * y); 
+    this.P = (1 - K) * p_priori;
+
+    return { 
+      state: Math.max(0, Math.min(1, this.x)), 
+      isolated: false, 
+      innovation: chiSquareVal,
+      currentParams: { ...this.hyperparameters }
+    };
+  }
+
+  public getUncertainty(): number {
+    return this.P;
+  }
+}
+

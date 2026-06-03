@@ -107,13 +107,37 @@ async function fetchWithRetry(url: string, options?: RequestInit, retries = 5, d
       const isJson = contentType && contentType.includes("application/json");
 
       if (response.ok) {
+        let isJsonParsed = isJson;
+        let responseText = "";
+
         if (!isJson && targetUrl.includes("/api/")) {
-          const text = await response.text();
-          const previewSnippet = text.trim().substring(0, 100);
-          console.error(`[VEDA_FETCH] Protocol Inversion: Expected JSON but got HTML for ${targetUrl}. This usually means a server routing error or 404.`);
+          // Fallback parsing: Recover if Content-Type was stripped or misconfigured by routing proxy
+          responseText = await response.text();
+          try {
+            JSON.parse(responseText);
+            isJsonParsed = true; 
+          } catch (e) {
+            // Truly not JSON
+          }
+        }
+
+        if (!isJsonParsed && targetUrl.includes("/api/")) {
+          if (!responseText) {
+            responseText = await response.text();
+          }
+          const previewSnippet = responseText.trim().substring(0, 100);
+          console.warn(`[VEDA_FETCH] Protocol Inversion (Attempt ${i + 1}/${retries}): Expected JSON but got HTML/Text for ${targetUrl}.`);
           
-          // v-AA Strategy: Throw a structured error that can be handled as a "System Desync"
           throw new Error(`API_ROUTING_ERROR: Received HTML at ${targetUrl}. Body preview: ${previewSnippet}`);
+        }
+
+        // Reconstruct Response if body was already read via .text() to prevent stream disturbed errors
+        if (responseText) {
+          return new Response(responseText, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers
+          });
         }
         return response;
       }
@@ -298,16 +322,17 @@ export const vedaService = {
     } catch (err: any) {
       console.error("[VEDA_SERVICE] Chat error details:", err);
       const errorMsg = err.message || JSON.stringify(err);
-      const isQuotaError = errorMsg.includes("429") || err.status === 429 || (err.error && err.error.code === 429) || errorMsg.includes("quota");
+      const lowerMsg = errorMsg.toLowerCase();
+      const isQuotaError = lowerMsg.includes("429") || err.status === 429 || (err.error && err.error.code === 429) || lowerMsg.includes("quota");
       
       if (isQuotaError) {
         console.warn("[VEDA_SERVICE] Chat quota exceeded.");
-        yield { text: "系統目前負載過高，或已觸及配額邊界。我的處理單元正在排隊等待資源。", isDone: true };
-      } else if (errorMsg.includes("offline") || errorMsg.includes("network")) {
-        yield { text: "檢測到外部認識論鏈路不穩定。請檢查您的連線狀態。", isDone: true };
+        yield { text: "報告指揮官：目前思維單元負載過高，已觸及配額邊界。請稍候，我正在排隊調度資源。", isDone: true };
+      } else if (lowerMsg.includes("offline") || lowerMsg.includes("network") || lowerMsg.includes("unable to reach") || lowerMsg.includes("failed to fetch") || lowerMsg.includes("abort")) {
+        yield { text: "參謀部提示：檢測到外部認識論鏈路不穩定，或主機正在重啟自癒。請稍候 5 秒後重新發送請求。", isDone: true };
       } else {
         const detailedError = `[PROTOCOL_INTERRUPTION] ${errorMsg.substring(0, 50)}`;
-        yield { text: `${detailedError}。核心已執行保護性凍結，請重新嘗試。`, isDone: true };
+        yield { text: `${detailedError}。核心已自動實施防禦性保護，請重新發送請求。`, isDone: true };
       }
     }
   },
@@ -666,8 +691,11 @@ export const vedaService = {
     }
     this.activeMemoriesPromise = (async () => {
       try {
-        const res = await fetchWithRetry("/api/memories", { method: "GET" }, 3, 1000, 15000);
+        const res = await fetchWithRetry("/api/memories", { method: "GET" }, 15, 2000, 30000);
         return await res.json();
+      } catch (err) {
+        console.warn("[VEDA_SERVICE] Failed to fetch memories. Returning fallback empty array.", err);
+        return [];
       } finally {
         this.activeMemoriesPromise = null;
       }
@@ -681,8 +709,11 @@ export const vedaService = {
     }
     this.activeGraphPromise = (async () => {
       try {
-        const res = await fetchWithRetry("/api/graph", { method: "GET" }, 3, 1000, 15000);
+        const res = await fetchWithRetry("/api/graph", { method: "GET" }, 15, 2000, 30000);
         return await res.json();
+      } catch (err) {
+        console.warn("[VEDA_SERVICE] Failed to fetch graph data. Returning fallback.", err);
+        return { nodes: [], links: [] };
       } finally {
         this.activeGraphPromise = null;
       }
@@ -696,8 +727,15 @@ export const vedaService = {
     }
     this.activeStrategicPromise = (async () => {
       try {
-        const res = await fetchWithRetry("/api/strategic", { method: "GET" }, 3, 1000, 15000);
+        const res = await fetchWithRetry("/api/strategic", { method: "GET" }, 15, 2000, 30000);
         return await res.json();
+      } catch (err) {
+        console.warn("[VEDA_SERVICE] Failed to fetch strategic metrics. Returning standby fallback.", err);
+        return {
+          status: "STBY",
+          message: "DEGRADED_COGNITIVE_FALLBACK",
+          metrics: { stability: 0.8, coherence: 0.9 }
+        };
       } finally {
         this.activeStrategicPromise = null;
       }
@@ -746,6 +784,11 @@ export const vedaService = {
     return this.postAction({ action: 'setSystemTier', params: { tier } });
   },
 
+  async demystifyText(text: string): Promise<string> {
+    const res = await this.postAction({ action: 'demystifyText', params: { text } });
+    return res?.translation || text;
+  },
+
   async dream(): Promise<any> {
     const res = await fetchWithRetry("/api/dream", {
       method: "POST",
@@ -785,37 +828,62 @@ export const vedaService = {
 
     // 2. Performance: Try via WebSocket for established links
     if (this.socket?.readyState === WebSocket.OPEN) {
-      return new Promise((resolve, reject) => {
-        const requestId = Math.random().toString(36).substring(7);
-        const timeout = setTimeout(() => {
-          this.socket?.removeEventListener('message', handleSocketMessage);
-          reject(new Error("SOCKET_ACTION_TIMEOUT"));
-        }, 15000);
+      try {
+        const wsResponse = await new Promise((resolve, reject) => {
+          const requestId = Math.random().toString(36).substring(7);
+          
+          // Allocate a longer 60-second window for heavy dynamic inference tasks, keeping standard actions at 15 seconds
+          const slowActions = [
+            'demystifyText', 'imagine', 'animate', 'evolve',
+            'synthesizeAudio', 'synthesizeScene', 'runVjepaPrediction',
+            'initiateCinemaProject', 'distillProjectContext',
+            'initiateStrategicReport', 'appraiseStrategicReport',
+            'enrichReportToL4', 'synthesizeReportSection', 'batchSynthesizeReport'
+          ];
+          const timeoutDuration = slowActions.includes(payload.action) ? 60000 : 15000;
 
-        const handleSocketMessage = (event: MessageEvent) => {
-          try {
-            const msg = JSON.parse(event.data);
-            if (msg.type === 'ACTION_RESULT' && msg.requestId === requestId) {
-              clearTimeout(timeout);
-              this.socket?.removeEventListener('message', handleSocketMessage);
-              if (msg.result.success) resolve(msg.result.data);
-              else reject(new Error(msg.result.error || "UNKNOWN_SOCKET_ACTION_FAULT"));
-            }
-          } catch (e) {}
-        };
+          const timeout = setTimeout(() => {
+            this.socket?.removeEventListener('message', handleSocketMessage);
+            reject(new Error("SOCKET_ACTION_TIMEOUT"));
+          }, timeoutDuration);
 
-        this.socket.addEventListener('message', handleSocketMessage);
-        this.socket.send(JSON.stringify({ type: 'EXECUTE_ACTION', ...payload, requestId }));
-      });
+          const handleSocketMessage = (event: MessageEvent) => {
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg.type === 'ACTION_RESULT' && msg.requestId === requestId) {
+                clearTimeout(timeout);
+                this.socket?.removeEventListener('message', handleSocketMessage);
+                if (msg.result.success) resolve(msg.result.data);
+                else reject(new Error(msg.result.error || "UNKNOWN_SOCKET_ACTION_FAULT"));
+              }
+            } catch (e) {}
+          };
+
+          this.socket?.addEventListener('message', handleSocketMessage);
+          this.socket?.send(JSON.stringify({ type: 'EXECUTE_ACTION', ...payload, requestId }));
+        });
+        return wsResponse;
+      } catch (wsError) {
+        console.warn(`[VEDA_SERVICE] WebSocket invocation for '${payload.action}' failed or timed out. Initiating automatic HTTP failover protocol.`, wsError);
+        // Fall through to standard HTTP request
+      }
     }
 
-    // 3. Reliability: Fallback to standard HTTP for initial boot or broken links
+    // 3. Reliability: Fallback to standard HTTP for initial boot, broken link, or socket execution timeouts
     const res = await fetchWithRetry("/api/action", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return res.json();
+    
+    if (!res.ok) {
+      const errorJson = await res.json().catch(() => ({}));
+      throw new Error(errorJson.message || `HTTP_ACTION_FAULT_STATUS_${res.status}`);
+    }
+    
+    const parsed = await res.json();
+    // Unify the response structure to return internal data if successfully packaged
+    return parsed?.success && parsed?.data !== undefined ? parsed.data : parsed;
   },
 
   async reportSafetyAlert(params: { type: string, description: string, user_mask: string, severity: string }): Promise<any> {

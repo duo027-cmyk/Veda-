@@ -17,11 +17,6 @@ interface UIState {
 }
 
 const getInitialTheme = (): 'DARK' | 'LIGHT' => {
-  if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('veda-theme') as 'DARK' | 'LIGHT';
-    if (saved) return saved;
-    if (window.matchMedia('(prefers-color-scheme: light)').matches) return 'LIGHT';
-  }
   return 'DARK';
 };
 

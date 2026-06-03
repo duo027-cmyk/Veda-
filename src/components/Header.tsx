@@ -64,19 +64,6 @@ export const Header = () => {
         >
           <Sliders size={18} className="group-hover:scale-110 transition-transform duration-300" />
         </motion.button>
-
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={toggleTheme}
-          className="pointer-events-auto p-2.5 rounded-full border border-border-subtle bg-panel shadow-xl flex items-center justify-center transition-all hover:border-accent hover:text-accent group text-ink"
-        >
-          {theme === 'DARK' ? (
-            <Sun size={18} className="group-hover:rotate-45 transition-transform duration-500" />
-          ) : (
-            <Moon size={18} className="group-hover:-rotate-12 transition-transform duration-500" />
-          )}
-        </motion.button>
       </div>
     </header>
   );
