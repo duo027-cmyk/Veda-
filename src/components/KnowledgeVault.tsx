@@ -25,7 +25,9 @@ import {
   ArrowRight,
   Database,
   Info,
-  BookOpen
+  BookOpen,
+  History,
+  Plus
 } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { BrainData } from '../types';
@@ -33,6 +35,9 @@ import { NeuralManifold } from './NeuralManifold';
 import { KnowledgeGraph } from './KnowledgeGraph';
 import { vedaService } from '../services/vedaService';
 import { cn } from '../lib/utils';
+import { useAuthStore } from '../store/authStore';
+import { db } from '../firebase';
+import { collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'firebase/firestore';
 
 export const KnowledgeVault = ({ data }: { data: BrainData | null }) => {
   const { t } = useI18n();
@@ -207,6 +212,141 @@ export const KnowledgeVault = ({ data }: { data: BrainData | null }) => {
       }
     };
     reader.readAsText(file);
+  };
+
+  // --- Axioms Refiner & Auto-Save States ---
+  const { user } = useAuthStore();
+  const [refiningAxioms, setRefiningAxioms] = useState<string[]>([]);
+  const [newAxiomText, setNewAxiomText] = useState("");
+  const [saveStatus, setSaveStatus] = useState<'IDLE' | 'AUTO_SAVING' | 'SAVED' | 'FAULT'>('IDLE');
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyVersions, setHistoryVersions] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [isAxiomExpanded, setIsAxiomExpanded] = useState(false);
+
+  // Sync axioms with data.axioms on load
+  useEffect(() => {
+    if (data?.axioms && data.axioms.length > 0 && refiningAxioms.length === 0) {
+      setRefiningAxioms(data.axioms);
+    }
+  }, [data?.axioms]);
+
+  // Handle auto-save of refined axioms to Firestore & trigger live websocket push
+  useEffect(() => {
+    if (refiningAxioms.length === 0) return;
+
+    // Skip if unchanged to avoid loops
+    if (data?.axioms && JSON.stringify(data.axioms) === JSON.stringify(refiningAxioms)) {
+      return;
+    }
+
+    setSaveStatus('AUTO_SAVING');
+    const timer = setTimeout(async () => {
+      try {
+        // 1. Push live socket update to VEDA server core
+        const { resonanceService } = await import('../services/resonanceService');
+        resonanceService.updateAxioms(refiningAxioms);
+
+        // 2. Persist to Firestore if signed in
+        if (user) {
+          const versionData = {
+            axioms: refiningAxioms,
+            timestamp: serverTimestamp(),
+            editorEmail: user.email || 'anonymous',
+            userId: user.uid,
+            versionCount: refiningAxioms.length
+          };
+          const ref = collection(db, 'users', user.uid, 'axioms_history');
+          await addDoc(ref, versionData);
+          setSaveStatus('SAVED');
+          
+          if (showHistory) {
+            fetchHistory();
+          }
+        } else {
+          // LocalStorage fallback for offline/guest sessions
+          const localHist = JSON.parse(localStorage.getItem('veda_axioms_history') || '[]');
+          localHist.unshift({
+            id: 'local-' + Date.now(),
+            axioms: refiningAxioms,
+            timestamp: Date.now(),
+            editorEmail: 'local-guest'
+          });
+          localStorage.setItem('veda_axioms_history', JSON.stringify(localHist.slice(0, 50)));
+          setSaveStatus('SAVED');
+          if (showHistory) {
+            setHistoryVersions(localHist.slice(0, 50));
+          }
+        }
+      } catch (err: any) {
+        console.error("[AXIOM_AUTO_SAVE_ERR] Fail:", err);
+        setSaveStatus('FAULT');
+      }
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [refiningAxioms, user]);
+
+  const fetchHistory = async () => {
+    if (!user) {
+      const localHist = JSON.parse(localStorage.getItem('veda_axioms_history') || '[]');
+      setHistoryVersions(localHist);
+      return;
+    }
+
+    setLoadingHistory(true);
+    try {
+      const ref = collection(db, 'users', user.uid, 'axioms_history');
+      const q = query(ref, orderBy('timestamp', 'desc'), limit(15));
+      const snaps = await getDocs(q);
+      const versions: any[] = [];
+      snaps.forEach(docSnap => {
+        const d = docSnap.data();
+        const ts = d.timestamp?.toMillis ? d.timestamp.toMillis() : Date.now();
+        versions.push({
+          id: docSnap.id,
+          axioms: d.axioms || [],
+          timestamp: ts,
+          editorEmail: d.editorEmail || 'anonymous'
+        });
+      });
+      setHistoryVersions(versions);
+    } catch (err) {
+      console.error("[FETCH_AXIOM_HISTORY_ERR]", err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showHistory) {
+      fetchHistory();
+    }
+  }, [showHistory, user]);
+
+  const handleRevertVersion = async (versionAxioms: string[]) => {
+    setRefiningAxioms(versionAxioms);
+    const { resonanceService } = await import('../services/resonanceService');
+    resonanceService.updateAxioms(versionAxioms);
+    setSaveStatus('SAVED');
+  };
+
+  const handleAddAxiom = () => {
+    if (!newAxiomText.trim()) return;
+    setRefiningAxioms(prev => [...prev, newAxiomText.trim()]);
+    setNewAxiomText("");
+  };
+
+  const handleRemoveAxiom = (index: number) => {
+    setRefiningAxioms(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleEditAxiom = (index: number, value: string) => {
+    setRefiningAxioms(prev => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
   };
 
   const refresh = async () => {
@@ -550,6 +690,178 @@ export const KnowledgeVault = ({ data }: { data: BrainData | null }) => {
                 </div>
 
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ✦ Sovereign Axiom Matrix Refiner || 核心公理鏈動態調整與對齊 */}
+      <div className="ghibli-glass mano-border border-white/5 p-4 md:p-6 rounded-none flex flex-col gap-4">
+        <button 
+          onClick={() => setIsAxiomExpanded(!isAxiomExpanded)}
+          className="flex justify-between items-center w-full text-left text-xs md:text-sm tracking-[0.3em] font-mono text-white/50 hover:text-white/90 transition-colors uppercase"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-yellow-500">✦</span>
+            <span>Sovereign Axiom Matrix Refiner</span>
+            <span className="hidden md:inline text-white/20">|</span>
+            <span className="hidden md:inline font-sans font-light italic text-white/30 text-[10px]">主權公理矩陣微調與演化</span>
+          </div>
+          <div className="flex items-center gap-2 text-[10px]">
+            {saveStatus === 'AUTO_SAVING' && (
+              <span className="text-amber-400 font-mono text-[8.5px] animate-pulse uppercase mr-2 font-bold flex items-center gap-1">
+                <RefreshCw size={8} className="animate-spin" /> Auto-Saving...
+              </span>
+            )}
+            {saveStatus === 'SAVED' && (
+              <span className="text-emerald-400 font-mono text-[8.5px] uppercase mr-2 font-bold flex items-center gap-1">
+                <Check size={8} /> Saved to Firestore
+              </span>
+            )}
+            {saveStatus === 'FAULT' && (
+              <span className="text-rose-400 font-mono text-[8.5px] uppercase mr-2 font-bold flex items-center gap-1">
+                <Info size={8} /> Save Fault
+              </span>
+            )}
+            <span className="text-accent/60">{isAxiomExpanded ? "COLLAPSE" : "EXPAND CONSOLE"}</span>
+            {isAxiomExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </div>
+        </button>
+
+        <AnimatePresence>
+          {isAxiomExpanded && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+              className="overflow-hidden flex flex-col gap-6 pt-4 border-t border-white/5"
+            >
+              {/* Add New Axiom Input */}
+              <div className="flex gap-2">
+                <input 
+                  type="text"
+                  placeholder="輸入欲注入之新系統運作公理 / Add a new core constraint axiom..."
+                  value={newAxiomText}
+                  onChange={(e) => setNewAxiomText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleAddAxiom();
+                  }}
+                  className="flex-1 bg-white/5 border border-white/10 p-2.5 px-4 text-[10.5px] tracking-wider font-sans text-white focus:outline-none focus:border-accent/40"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddAxiom}
+                  className="px-5 bg-gold hover:bg-gold/80 hover:scale-[1.01] text-black font-semibold text-[10px] tracking-widest font-mono flex items-center gap-1.5 transition-all text-center uppercase"
+                >
+                  <Plus size={11} /> Add Axiom
+                </button>
+              </div>
+
+              {/* Axioms List Edit Fields */}
+              <div className="flex flex-col gap-3.5 max-h-[350px] overflow-y-auto custom-scrollbar p-0.5">
+                {refiningAxioms.length === 0 ? (
+                  <div className="text-center py-6 text-[10px] text-white/20 font-mono tracking-widest uppercase">
+                    No active core axioms. Add one above to begin telemetry alignment.
+                  </div>
+                ) : (
+                  refiningAxioms.map((axiom, idx) => (
+                    <div 
+                      key={`refining-${idx}`}
+                      className="flex items-center gap-3 bg-white/[0.02] border border-white/5 hover:border-white/10 p-2.5 transition-all group"
+                    >
+                      <div className="text-[8px] font-mono text-white/30 tracking-widest bg-white/5 px-2 py-1 select-none">
+                        #{idx + 1}
+                      </div>
+
+                      <input 
+                        type="text"
+                        value={axiom}
+                        onChange={(e) => handleEditAxiom(idx, e.target.value)}
+                        className="flex-1 bg-transparent text-[11px] font-sans text-white placeholder:text-white/20 focus:outline-none border-b border-white/0 focus:border-white/20 pb-0.5"
+                        placeholder="Axiom description context"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAxiom(idx)}
+                        className="text-white/20 hover:text-red-400 p-1.5 opacity-40 group-hover:opacity-100 transition-all"
+                        title="Remove Axiom"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Version History Toggle Header */}
+              <div className="border-t border-white/5 pt-4 flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={() => setShowHistory(!showHistory)}
+                  className="flex items-center gap-2 text-[9px] tracking-[0.2em] font-mono text-accent hover:text-white transition-colors uppercase"
+                >
+                  <History size={11} />
+                  <span>{showHistory ? "Hide Evolutionary Versions" : "Show Core Version History"}</span>
+                </button>
+                <div className="text-[7.5px] font-mono text-white/20 uppercase tracking-widest">
+                  Auto-sync triggers 1.5s after typing halts
+                </div>
+              </div>
+
+              {/* Version History Collapsible List */}
+              <AnimatePresence>
+                {showHistory && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="flex flex-col gap-3 pt-2 bg-black/10 border border-white/5 p-4 overflow-hidden"
+                  >
+                    <div className="text-[8px] font-mono text-white/30 tracking-widest border-b border-white/5 pb-1 mb-1">
+                      CHRONICLES INDEXED IN FIRESTORE
+                    </div>
+
+                    {loadingHistory ? (
+                      <div className="text-center py-4 font-mono text-[8px] text-white/30 uppercase tracking-widest animate-pulse">
+                        Querying database ledgers...
+                      </div>
+                    ) : historyVersions.length === 0 ? (
+                      <div className="text-center py-4 font-mono text-[8px] text-white/20 uppercase tracking-widest">
+                        Axioms history ledger is empty. Publish an update to anchor the first version.
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2.5 max-h-[220px] overflow-y-auto custom-scrollbar">
+                        {historyVersions.map((version, idx) => (
+                          <div 
+                            key={`hist-v-${version.id || idx}`}
+                            className="bg-white/[0.01] border border-white/5 p-2.5 flex justify-between items-center hover:bg-white/[0.03] transition-colors"
+                          >
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[9px] font-mono text-white/80 font-bold uppercase tracking-wider">
+                                Epoch version {historyVersions.length - idx} &bull; {version.axioms.length} Axioms
+                              </span>
+                              <span className="text-[7.5px] font-mono text-white/30">
+                                {new Date(version.timestamp).toLocaleString()} &bull; {version.editorEmail}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleRevertVersion(version.axioms)}
+                              className="px-2.5 py-1.5 bg-accent hover:bg-accent/80 text-white font-mono text-[8.5px] tracking-wider uppercase transition-colors"
+                            >
+                              Revert to this
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
             </motion.div>
           )}
         </AnimatePresence>

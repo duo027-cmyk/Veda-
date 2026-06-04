@@ -460,7 +460,8 @@ export class AGISovereignBrain implements IVedaBrain {
         getState: () => this.state,
         getGlobalCoherence: () => this.getGlobalCoherence(),
         isAiBlocked: () => this.isExternalAiBlocked,
-        handleAiError: (err) => this.geminiService.handleError(err)
+        handleAiError: (err) => this.geminiService.handleError(err),
+        getAi: () => this.ai
       }
     );
 

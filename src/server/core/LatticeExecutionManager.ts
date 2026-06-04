@@ -19,8 +19,13 @@ export class LatticeExecutionManager {
       getGlobalCoherence: () => number;
       isAiBlocked?: () => boolean;
       handleAiError?: (err: any) => void;
+      getAi?: () => any;
     }
   ) {}
+
+  private get activeAi() {
+    return this.callbacks.getAi ? this.callbacks.getAi() : this.ai;
+  }
 
   public async processLatticeJobs() {
     const activeJobs = this.latticeComputeArray.getActiveJobs();
@@ -80,7 +85,7 @@ export class LatticeExecutionManager {
     this.callbacks.neuralLog('LATTICE_COMPUTE', `晶格任務執行引爆：[${job.type}] ID: ${job.id}`);
 
     const isBlocked = this.callbacks.isAiBlocked ? this.callbacks.isAiBlocked() : false;
-    const isDegraded = !this.ai || (this.ai.apiKey === "DISABLED_KEY") || isBlocked;
+    const isDegraded = !this.activeAi || (this.activeAi.apiKey === "DISABLED_KEY") || isBlocked;
 
     try {
       if (['STRATEGIC_OUTLINE', 'REPORT_SECTION_SYNTHESIS', 'CAUSAL_EVOLUTION_REPORT', 'STRATEGIC_PREDICTION'].includes(job.type)) {
@@ -97,16 +102,16 @@ export class LatticeExecutionManager {
           prompt = job.payload.prompt;
         }
 
-        let targetModel = 'gemini-3.5-flash';
+        let targetModel = 'gemini-2.5-flash';
         // Auto-select premium reasoning model for advanced academic synthesis
         if (['STRATEGIC_OUTLINE', 'REPORT_SECTION_SYNTHESIS', 'STRATEGIC_PREDICTION'].includes(job.type)) {
-          targetModel = 'gemini-3.1-pro-preview';
+          targetModel = 'gemini-2.5-pro';
         }
 
         let result;
         try {
           this.callbacks.neuralLog('LATTICE_COMPUTE', `Running inference with academic-grade model: ${targetModel}`);
-          result = await this.ai.models.generateContent({
+          result = await this.activeAi.models.generateContent({
             model: targetModel,
             contents: prompt
           });
@@ -128,9 +133,9 @@ export class LatticeExecutionManager {
             return this.executeAutonomousFallback(job);
           }
 
-          this.callbacks.neuralLog('LATTICE_COMPUTE_FALLBACK', `Premium model failed or restricted. Re-routing query payload to high-speed auxiliary core: gemini-3.5-flash`);
-          result = await this.ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+          this.callbacks.neuralLog('LATTICE_COMPUTE_FALLBACK', `Premium model failed or restricted. Re-routing query payload to high-speed auxiliary core: gemini-2.5-flash`);
+          result = await this.activeAi.models.generateContent({
+            model: 'gemini-2.5-flash',
             contents: prompt
           });
         }
