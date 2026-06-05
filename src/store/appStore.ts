@@ -1,6 +1,6 @@
 // 統一應用狀態管理 - 替代分散的 stores
 import { create } from 'zustand';
-import { BrainData, EvolutionStatus } from '../types';
+import { BrainData } from '../types';
 import { User } from 'firebase/auth';
 
 export interface AppState {

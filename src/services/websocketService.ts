@@ -76,7 +76,7 @@ export class WebSocketService {
         });
       }
 
-      // 處理 RPC 响應
+      // 處理 RPC 響應
       if (message.requestId && this.pendingRequests.has(message.requestId)) {
         const pending = this.pendingRequests.get(message.requestId)!;
         clearTimeout(pending.timeout);
