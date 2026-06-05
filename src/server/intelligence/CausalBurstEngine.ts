@@ -247,37 +247,51 @@ export class CausalBurstEngine {
     const subSteps = Math.min(250, Math.ceil(effectiveDelta / maxSubStep)); 
     const dt = effectiveDelta / subSteps;
 
+    const qCoords = this.q_coords;
+    const pMomenta = this.p_momenta;
+    const attractors = this.attractors;
+    const kPotential = this.k_potential;
+    const gCoupling = this.g_coupling;
+    const cosCouplings = new Float64Array(D - 1);
+
     for (let step = 0; step < subSteps; step++) {
       // 1. Update Position variables q(t+dt) = q(t) + dt * p(t)
       for (let i = 0; i < D; i++) {
-        this.q_coords[i] += dt * this.p_momenta[i];
+        qCoords[i] += dt * pMomenta[i];
       }
 
-      // 2. Compute non-linear gradient forces F = -grad(V)
+      // 2. Precompute coordinate couplings to halve transcendental operations
+      for (let i = 0; i < D - 1; i++) {
+        cosCouplings[i] = Math.cos(qCoords[i] - qCoords[i+1]);
+      }
+
+      // 3. Compute non-linear gradient forces F = -grad(V)
       // V(q) = 0.5 * k * (q - q_target)^2 + sum( g_i * sin(q_i - q_{i+1}) )
       for (let i = 0; i < D; i++) {
-        let force = -this.k_potential[i] * (this.q_coords[i] - this.attractors[i]);
+        let force = -kPotential[i] * (qCoords[i] - attractors[i]);
         
         // Neighboring coordinate cross-coupling to model complex causal pathways
         if (i < D - 1) {
-          force -= this.g_coupling[i] * Math.cos(this.q_coords[i] - this.q_coords[i+1]);
+          force -= gCoupling[i] * cosCouplings[i];
         }
         if (i > 0) {
-          force += this.g_coupling[i-1] * Math.cos(this.q_coords[i-1] - this.q_coords[i]);
+          force += gCoupling[i-1] * cosCouplings[i-1];
         }
 
-        // 3. Update Conjugate Momenta p(t+dt) = p(t) + dt * (F - gamma * p)
-        this.p_momenta[i] += dt * (force - damping_gamma * this.p_momenta[i]);
+        // 4. Update Conjugate Momenta p(t+dt) = p(t) + dt * (F - gamma * p)
+        pMomenta[i] += dt * (force - damping_gamma * pMomenta[i]);
       }
 
-      // 4. Calculate continuous Lagrangian and consolidate global Action Integral
+      // 5. Calculate continuous Lagrangian and consolidate global Action Integral
       let kineticSum = 0;
       let potentialSum = 0;
       for (let i = 0; i < D; i++) {
-        kineticSum += 0.5 * Math.pow(this.p_momenta[i], 2);
-        potentialSum += 0.5 * this.k_potential[i] * Math.pow(this.q_coords[i] - this.attractors[i], 2);
+        const pi = pMomenta[i];
+        const diff_qi = qCoords[i] - attractors[i];
+        kineticSum += 0.5 * pi * pi;
+        potentialSum += 0.5 * kPotential[i] * diff_qi * diff_qi;
         if (i < D - 1) {
-          potentialSum += this.g_coupling[i] * Math.sin(this.q_coords[i] - this.q_coords[i+1]);
+          potentialSum += gCoupling[i] * Math.sin(qCoords[i] - qCoords[i+1]);
         }
       }
       const lagrangian = kineticSum - potentialSum;
@@ -288,7 +302,8 @@ export class CausalBurstEngine {
     // Compute total system path displacement Euclidean distance in Phase-Space
     let pathDisplacementSq = 0;
     for (let i = 0; i < D; i++) {
-      pathDisplacementSq += Math.pow(this.q_coords[i] - this.attractors[i], 2);
+      const diff = qCoords[i] - attractors[i];
+      pathDisplacementSq += diff * diff;
     }
     const meanDisplacement = Math.sqrt(pathDisplacementSq) / D;
     const epistemicComplexity = this.sandboxEntropy * 0.42;

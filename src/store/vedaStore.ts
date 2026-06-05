@@ -134,6 +134,11 @@ export const useVedaStore = create<VedaState>((set, get) => ({
           resultMsg = `卓越類比公理已融入律法，系統穩態相干性顯著提升。`;
           break;
         }
+        case 'setComputeMode': {
+          await vedaService.postAction({ action: 'setComputeMode', params: { mode: params.mode } });
+          resultMsg = `主權運算模式已切換為：${params.mode === 'throughput' ? '高吞吐（High Throughput）' : '高精準（High Precision）'}。`;
+          break;
+        }
         case 'refreshTele': {
           resultMsg = `因果遥測流已重對位並刷新。`;
           break;

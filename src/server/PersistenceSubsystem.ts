@@ -41,11 +41,13 @@ export class PersistenceSubsystem extends BaseSubsystem {
         return true;
       }
 
-      await fsPromises.writeFile(STATE_PATH, content, "utf-8");
+      const tempPath = `${STATE_PATH}.tmp`;
+      await fsPromises.writeFile(tempPath, content, "utf-8");
+      await fsPromises.rename(tempPath, STATE_PATH);
       this.lastSavedHash = currentHash;
       return true;
     } catch (e) {
-      this.log('FAULT', `State persistence failure: ${e}`);
+      this.log('FAULT', `State persistence failure (atomic write): ${e}`);
       return false;
     }
   }
@@ -53,9 +55,11 @@ export class PersistenceSubsystem extends BaseSubsystem {
   public async saveMemories(mineral: any[], provisional: any[]): Promise<void> {
     try {
       const data = JSON.stringify({ mineral, provisional });
-      await fsPromises.writeFile(this.MEMORIES_PATH, data, "utf-8");
+      const tempPath = `${this.MEMORIES_PATH}.tmp`;
+      await fsPromises.writeFile(tempPath, data, "utf-8");
+      await fsPromises.rename(tempPath, this.MEMORIES_PATH);
     } catch (e) {
-      this.log('FAULT', `Memories persistence failure: ${e}`);
+      this.log('FAULT', `Memories persistence failure (atomic write): ${e}`);
     }
   }
 
@@ -63,10 +67,12 @@ export class PersistenceSubsystem extends BaseSubsystem {
     try {
       if (causalIndex) {
         const data = await save(causalIndex);
-        await fsPromises.writeFile(this.INDEX_PATH, JSON.stringify(data), "utf-8");
+        const tempPath = `${this.INDEX_PATH}.tmp`;
+        await fsPromises.writeFile(tempPath, JSON.stringify(data), "utf-8");
+        await fsPromises.rename(tempPath, this.INDEX_PATH);
       }
     } catch (e) {
-      this.log('FAULT', `Index persistence failure: ${e}`);
+      this.log('FAULT', `Index persistence failure (atomic write): ${e}`);
     }
   }
 

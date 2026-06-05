@@ -55,8 +55,11 @@ export class GeneticOptimizer {
   private crossover(p1: Float32Array, p2: Float32Array): Float32Array {
     const child = new Float32Array(this.genomeSize);
     const point = Math.floor(Math.random() * this.genomeSize);
-    for (let i = 0; i < this.genomeSize; i++) {
-      child[i] = i < point ? p1[i] : p2[i];
+    if (point > 0) {
+      child.set(p1.subarray(0, point), 0);
+    }
+    if (point < this.genomeSize) {
+      child.set(p2.subarray(point), point);
     }
     return child;
   }

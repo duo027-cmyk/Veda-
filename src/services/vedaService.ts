@@ -894,6 +894,18 @@ export const vedaService = {
     return this.postAction({ action: "submitLatticeTask", params: { type, payload } });
   },
 
+  async pauseLatticeJob(id: string, isPaused: boolean): Promise<any> {
+    return this.postAction({ action: "pauseLatticeJob", params: { id, isPaused } });
+  },
+
+  async reorderLatticeJob(id: string, direction: 'up' | 'down'): Promise<any> {
+    return this.postAction({ action: "reorderLatticeJob", params: { id, direction } });
+  },
+
+  async smartPurgeLatticeJobs(timeoutMs: number): Promise<any> {
+    return this.postAction({ action: "smartPurgeLatticeJobs", params: { timeoutMs } });
+  },
+
   async solidifyLatticeJob(jobId: string, result: any, coherence: number = 0.95): Promise<any> {
     return this.postAction({ action: "solidifyLatticeJob", params: { jobId, result, coherence } });
   },

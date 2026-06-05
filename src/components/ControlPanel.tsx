@@ -43,11 +43,16 @@ import {
   Download,
   CloudSun,
   Trash2,
-  Save
+  Save,
+  Play,
+  Pause,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { BrainData, LogEntry, EvolutionStatus } from '../types';
 
 import { resonanceService } from '../services/resonanceService';
+import { vedaService } from '../services/vedaService';
 import { cn } from '../lib/utils';
 
 interface ControlPanelProps {
@@ -80,6 +85,7 @@ interface ControlPanelProps {
   localStatus?: { available: boolean; version?: string; models?: string[] };
   onScanLocal?: () => void;
   axioms?: string[];
+  onComputeModeChange?: (mode: 'throughput' | 'precision') => void;
 }
 
 const FlagIndicator = ({ active, label, color }: { active?: boolean, label: string, color: string }) => (
@@ -193,7 +199,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   onToggleLocalMode,
   localStatus = { available: false },
   onScanLocal,
-  axioms = []
+  axioms = [],
+  onComputeModeChange
 }) => {
   const [activeModule, setActiveModule] = useState<'ALL' | 'ANALYSIS' | 'INTENT' | 'SYSTEM' | 'MEMORIES' | 'FEDERATION'>('ALL');
   const [realTimeHistory, setRealTimeHistory] = useState<{ val: number; time: string }[]>([]);
@@ -201,6 +208,58 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   const [isJoining, setIsJoining] = useState(false);
   const [editingAxioms, setEditingAxioms] = useState<string[]>([]);
   const [isAxiomEditMode, setIsAxiomEditMode] = useState(false);
+  const [localPausedList, setLocalPausedList] = useState<Record<string, boolean>>({});
+  
+  // Smart Purge parameters for automatic and manual queue purification
+  const [purgeTimeoutMs, setPurgeTimeoutMs] = useState<number>(10000); // default 10 seconds
+  const [autoPurgeEnabled, setAutoPurgeEnabled] = useState<boolean>(true); // default true for automated queue safety
+  const [lastPurgedInfo, setLastPurgedInfo] = useState<string>('Inactive status: monitoring queue');
+
+  const [recalibratingMode, setRecalibratingMode] = useState<'throughput' | 'precision' | null>(null);
+  const prevComputeModeRef = useRef<string | undefined>(data?.compute_mode);
+
+  // Automatic identifying and clearing of failed or stale workloads
+  useEffect(() => {
+    if (!autoPurgeEnabled || (data?.compute_mode || 'precision') !== 'throughput') return;
+
+    const interval = setInterval(async () => {
+      try {
+        const result = await vedaService.smartPurgeLatticeJobs(purgeTimeoutMs);
+        if (result && result.purgedCount > 0) {
+          const timestamp = new Date().toLocaleTimeString();
+          setLastPurgedInfo(`Auto-cleared ${result.purgedCount} stale/failed task(s) @ ${timestamp}`);
+          
+          if (result.purgedIds) {
+            setLocalPausedList(prev => {
+              const updated = { ...prev };
+              result.purgedIds.forEach((id: string) => {
+                delete updated[id];
+              });
+              return updated;
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Auto smart purge failed", err);
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [autoPurgeEnabled, purgeTimeoutMs, data?.compute_mode]);
+
+  useEffect(() => {
+    if (data?.compute_mode && prevComputeModeRef.current !== undefined && prevComputeModeRef.current !== data.compute_mode) {
+      setRecalibratingMode(data.compute_mode as 'throughput' | 'precision');
+      const timer = setTimeout(() => {
+        setRecalibratingMode(null);
+      }, 1500);
+      prevComputeModeRef.current = data.compute_mode;
+      return () => clearTimeout(timer);
+    }
+    if (data?.compute_mode) {
+      prevComputeModeRef.current = data.compute_mode;
+    }
+  }, [data?.compute_mode]);
 
   useEffect(() => {
     if (axioms.length > 0 && editingAxioms.length === 0) {
@@ -476,6 +535,359 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                   ))}
                 </div>
               </div>
+
+              {/* Sovereign Compute Mode */}
+              <div className="col-span-2 pt-4 mt-2 border-t border-white/5 space-y-2 relative overflow-hidden">
+                <AnimatePresence mode="wait">
+                  {recalibratingMode && (
+                    <motion.div
+                      key={`recalibrate-overlay-${recalibratingMode}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className="absolute inset-0 bg-neutral-950/90 backdrop-blur-[1px] z-20 flex flex-col items-center justify-center p-3 text-center"
+                    >
+                      {/* Laser scanner element */}
+                      <motion.div 
+                        initial={{ top: "0%" }}
+                        animate={{ top: "100%" }}
+                        transition={{ repeat: Infinity, duration: 1.2, ease: "easeInOut" }}
+                        className={cn(
+                          "absolute left-0 right-0 h-[1.5px] z-30 opacity-80",
+                          recalibratingMode === 'throughput' 
+                            ? "bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.8)]" 
+                            : "bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]"
+                        )}
+                      />
+                      
+                      {recalibratingMode === 'throughput' ? (
+                        <div className="flex flex-col items-center select-none animate-pulse">
+                          <Cpu className="w-4 h-4 text-amber-500 mb-1" />
+                          <span className="text-[8px] font-bold text-amber-300 tracking-[0.2em] uppercase">RECALIBRATING LATTICES...</span>
+                          <span className="text-[5px] text-amber-500/80 font-mono tracking-widest mt-0.5">TPU BATCH HIGH-THROUGHPUT ARRAY</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center select-none">
+                          <Brain className="w-4 h-4 text-cyan-400 mb-1 animate-spin" style={{ animationDuration: '4s' }} />
+                          <span className="text-[8px] font-bold text-cyan-300 tracking-[0.2em] uppercase">ALIGNING TENSOR MODEL...</span>
+                          <span className="text-[5px] text-cyan-500/80 font-mono tracking-widest mt-0.5">GPU HIGH-PRECISION INFERENCE PIPELINE</span>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div className="flex justify-between items-center text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">
+                  <span>Sovereign Compute Mode</span>
+                  <span className="text-amber-400">GPU / TPU Analogy</span>
+                </div>
+                <div className="flex gap-2">
+                  {[
+                    { id: 'throughput', label: 'HIGH THROUGHPUT', desc: 'Batch / TPU style' },
+                    { id: 'precision', label: 'HIGH PRECISION', desc: 'Deep / GPU style' }
+                  ].map((mode) => {
+                    const isSelected = (data?.compute_mode || 'precision') === mode.id;
+                    return (
+                      <button 
+                        key={`compute-mode-${mode.id}`}
+                        onClick={() => {
+                          if (onComputeModeChange) {
+                            onComputeModeChange(mode.id as 'throughput' | 'precision');
+                          }
+                        }}
+                        className={cn(
+                          "flex-1 py-1.5 px-2 text-center transition-all border flex flex-col items-center justify-center cursor-pointer",
+                          isSelected 
+                            ? mode.id === 'throughput' 
+                              ? "bg-amber-500/20 border-amber-500 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
+                              : "bg-cyan-500/20 border-cyan-500 text-cyan-300 shadow-[0_0_10px_rgba(6,182,212,0.2)]"
+                            : "bg-white/2 border-white/5 text-white/30 hover:bg-white/5 hover:text-white/60"
+                        )}
+                      >
+                        <span className="text-[8px] font-black tracking-widest">{mode.label}</span>
+                        <span className="text-[5px] opacity-60 mt-0.5 tracking-wide">{mode.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                {/* Dynamically display actual simulation parameters under GPU/TPU analogy style */}
+                <div className="p-2 bg-black/30 border border-white/5 rounded text-[7px] space-y-1 font-mono text-white/50">
+                  <div className="flex justify-between items-center text-white/50">
+                    <span>Active Hardware Protocol:</span>
+                    <span className={cn("font-bold uppercase", (data?.compute_mode || 'precision') === 'throughput' ? "text-amber-400" : "text-cyan-400")}>
+                      {(data?.compute_mode || 'precision') === 'throughput' ? '⚡ TPU Cluster Array' : '🧠 Deep Tensor GPU'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-white/40">
+                    <span>Simulation Step-Size Factor:</span>
+                    <span className="text-white/80 font-bold">
+                      {data?.simulation_step_size !== undefined ? `${data.simulation_step_size}x (Dynamic)` : ((data?.compute_mode || 'precision') === 'throughput' ? '1.50x' : '0.45x')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-white/40">
+                    <span>Lookahead Complexity Depth:</span>
+                    <span className="text-white/80 font-bold">
+                      {data?.simulation_complexity !== undefined ? `${data.simulation_complexity} Steps (EFE)` : ((data?.compute_mode || 'precision') === 'throughput' ? '2 Steps (Fast)' : '6 Steps (Deep)')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-white/40">
+                    <span>Hardware Quantization Target:</span>
+                    <span className="text-white/80 font-bold">
+                      {(data?.compute_mode || 'precision') === 'throughput' ? 'INT4_XLA (Vector Quantized)' : 'FP32_IEEE (Full Precision)'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-white/40">
+                    <span>Inference Latency Target:</span>
+                    <span className="text-white/80 font-bold">
+                      {data?.innovation_manifold?.latency_ns !== undefined ? `${data.innovation_manifold.latency_ns.toFixed(1)} ns` : ((data?.compute_mode || 'precision') === 'throughput' ? '4.8 ns' : '185.5 ns')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-white/40">
+                    <span>Parallel Compute Capacity:</span>
+                    <span className="text-white/80 font-bold">
+                      {data?.innovation_manifold?.throughput_teraops !== undefined ? `${data.innovation_manifold.throughput_teraops} TERAOPs/s` : ((data?.compute_mode || 'precision') === 'throughput' ? '480 TERAOPs/s' : '45 TERAOPs/s')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+               {/* Sovereign High-Throughput Queue Indicator */}
+              {(data?.compute_mode || 'precision') === 'throughput' && (
+                <div className="col-span-2 pt-4 mt-2 border-t border-white/5 space-y-2 relative overflow-hidden">
+                  <div className="flex justify-between items-center text-[7px] text-white/30 uppercase tracking-[0.3em] font-bold ff-font">
+                    <span>⚡ BATCH COMPUTE QUEUE</span>
+                    <span className="text-amber-400">TPU Cluster Scheduling</span>
+                  </div>
+                  
+                  <div className="bg-black/30 border border-white/5 rounded p-2.5 space-y-2 font-mono">
+                    <div className="flex justify-between items-center text-[7px] text-white/40 uppercase tracking-wider font-mono">
+                      <span>STATUS: ONLINE & SCHEDULING</span>
+                      <span className="text-amber-500 font-bold">
+                        Q-PENDING: {((data?.lattice_jobs || []) as any[]).filter((j: any) => j.status === 'PENDING').length}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                      {((data?.lattice_jobs || []) as any[]).map((job: any, index: number, arr: any[]) => {
+                        const isPending = job.status === 'PENDING';
+                        const isExecuting = job.status === 'PROCESSING' || job.status === 'SYNTHESIZING';
+                        const isPaused = localPausedList[job.id] !== undefined ? localPausedList[job.id] : !!job.isPaused;
+                        
+                        return (
+                          <div 
+                            key={`q-job-${job.id}`} 
+                            className={cn(
+                              "p-2 border flex items-center justify-between text-[7px] transition-all",
+                              isExecuting 
+                                ? "bg-amber-500/10 border-amber-500/40 text-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.1)] animate-pulse"
+                                : isPending && isPaused 
+                                  ? "bg-white/2 border-white/5 text-white/30" 
+                                  : "bg-white/4 border-white/10 text-white/70"
+                            )}
+                          >
+                            <div className="flex flex-col gap-0.5 text-left">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-[8px] tracking-wide">{job.id}</span>
+                                <span className={cn(
+                                  "px-1 py-[1px] rounded-[1px] text-[4.5px] uppercase font-black tracking-widest",
+                                  isExecuting 
+                                    ? "bg-amber-500 text-black" 
+                                    : isPending && isPaused 
+                                      ? "bg-white/10 text-white/40" 
+                                      : "bg-cyan-500/20 text-cyan-300"
+                                )}>
+                                  {isExecuting ? 'processing' : isPending && isPaused ? 'paused' : 'pending'}
+                                </span>
+                              </div>
+                              <div className="text-[5.5px] text-white/40 uppercase tracking-wider mt-0.5">
+                                TYPE: {job.type} • HEIGHT: {job.blockHeight || index + 1}
+                              </div>
+                            </div>
+
+                            {/* Queue Actions */}
+                            {isPending && (
+                              <div className="flex items-center gap-1">
+                                {/* Pause / Play button */}
+                                <button
+                                  onClick={async (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const nextPaused = !isPaused;
+                                    setLocalPausedList(prev => ({ ...prev, [job.id]: nextPaused }));
+                                    try {
+                                      await vedaService.pauseLatticeJob(job.id, nextPaused);
+                                    } catch (err) {
+                                      console.error("Pause fail", err);
+                                      setLocalPausedList(prev => ({ ...prev, [job.id]: !nextPaused }));
+                                    }
+                                  }}
+                                  className="p-1 bg-white/2 border border-white/5 rounded text-white/60 hover:bg-amber-500/20 hover:text-amber-300 hover:border-amber-500/40 transition-colors cursor-pointer"
+                                  title={isPaused ? "Resume Compute Kernels" : "Pause Compute Kernels"}
+                                >
+                                  {isPaused ? <Play className="w-[8.5px] h-[8.5px]" /> : <Pause className="w-[8.5px] h-[8.5px]" />}
+                                </button>
+
+                                {/* Move Up */}
+                                <button
+                                  disabled={index === 0}
+                                  onClick={async (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    try {
+                                      await vedaService.reorderLatticeJob(job.id, 'up');
+                                    } catch (err) {
+                                      console.error("Reorder UP failed", err);
+                                    }
+                                  }}
+                                  className="p-1 bg-white/2 border border-white/5 rounded text-white/60 disabled:opacity-20 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                                  title="Move Up in Computation Queue"
+                                >
+                                  <ArrowUp className="w-[8.5px] h-[8.5px]" />
+                                </button>
+
+                                {/* Move Down */}
+                                <button
+                                  disabled={index === arr.length - 1}
+                                  onClick={async (e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    try {
+                                      await vedaService.reorderLatticeJob(job.id, 'down');
+                                    } catch (err) {
+                                      console.error("Reorder DOWN failed", err);
+                                    }
+                                  }}
+                                  className="p-1 bg-white/2 border border-white/5 rounded text-white/60 disabled:opacity-20 hover:bg-white/10 hover:text-white transition-colors cursor-pointer"
+                                  title="Move Down in Computation Queue"
+                                >
+                                  <ArrowDown className="w-[8.5px] h-[8.5px]" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {(!data?.lattice_jobs || data.lattice_jobs.length === 0) && (
+                        <div className="text-center py-5 border border-dashed border-white/10 text-white/30 text-[6px] tracking-[0.1em] uppercase rounded leading-relaxed">
+                          No active compute operations in TPU Queue.<br />
+                          Tap the button below to schedule simulated workloads.
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Symmetrical Smart Purge Configuration Panel */}
+                    <div className="p-2 bg-white/[0.02] border border-white/5 rounded space-y-1.5 font-mono text-[6.5px]">
+                      <div className="flex justify-between items-center text-white/40 uppercase tracking-widest text-[5.5px]">
+                        <span>🧠 SMART PURGE PROTOCOL (V-AUTO-CLEAN)</span>
+                        <span className="text-cyan-400 font-bold">STATE RECOVERY ACTIVE</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* Configurable Timeout selector */}
+                        <div className="flex flex-col gap-1">
+                          <label className="text-white/40 uppercase tracking-wide">Stale Timeout Limit:</label>
+                          <select 
+                            value={purgeTimeoutMs}
+                            onChange={(e) => setPurgeTimeoutMs(Number(e.target.value))}
+                            className="w-full bg-black/60 border border-white/10 rounded px-1.5 py-0.5 text-white/80 focus:border-cyan-500/50 focus:outline-none"
+                          >
+                            <option value={3000}>3 Seconds (Dev Mode)</option>
+                            <option value={5000}>5 Seconds (Ultra Aggressive)</option>
+                            <option value={10000}>10 Seconds (Standard Dynamic)</option>
+                            <option value={30000}>30 Seconds (Deferred Calibration)</option>
+                            <option value={60000}>1 Minute (Production Standard)</option>
+                          </select>
+                        </div>
+
+                        {/* Auto Purge toggle */}
+                        <div className="flex flex-col gap-1 justify-between">
+                          <label className="text-white/40 uppercase tracking-wide">Automated Background Engine:</label>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setAutoPurgeEnabled(p => !p);
+                            }}
+                            className={cn(
+                              "w-full py-0.5 rounded border text-[6px] font-black uppercase tracking-wider transition-colors cursor-pointer",
+                              autoPurgeEnabled 
+                                ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-300"
+                                : "bg-white/2 border-white/5 text-white/30"
+                            )}
+                          >
+                            {autoPurgeEnabled ? "● ACTIVE AUTO-CLEANSE" : "○ MANUAL TRIGGERS ONLY"}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Manual Trigger Force Purge and feedback inline */}
+                      <div className="flex gap-1.5 items-center pt-1 mt-1 border-t border-white/5">
+                        <button
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            try {
+                              const result = await vedaService.smartPurgeLatticeJobs(purgeTimeoutMs);
+                              const timestamp = new Date().toLocaleTimeString();
+                              if (result && result.purgedCount > 0) {
+                                setLastPurgedInfo(`Manual-cleared ${result.purgedCount} stale/failed task(s) @ ${timestamp}`);
+                                if (result.purgedIds) {
+                                  setLocalPausedList(prev => {
+                                    const updated = { ...prev };
+                                    result.purgedIds.forEach((id: string) => delete updated[id]);
+                                    return updated;
+                                  });
+                                }
+                              } else {
+                                setLastPurgedInfo(`Explicit check @ ${timestamp}: All items active and healthy`);
+                              }
+                            } catch (err) {
+                              console.error("Manual purge failed", err);
+                              setLastPurgedInfo("System recovery fault during purge");
+                            }
+                          }}
+                          className="px-2 py-0.5 bg-cyan-700/20 hover:bg-cyan-700/40 border border-cyan-500/30 text-cyan-300 hover:text-cyan-200 text-[6px] font-black uppercase tracking-widest rounded transition-all cursor-pointer"
+                        >
+                          ⚡ PURGE NOW
+                        </button>
+                        <div className="text-[5px] text-white/30 truncate flex-1 tracking-wider uppercase font-mono italic">
+                          {lastPurgedInfo}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Instant testing / scheduling launcher block */}
+                    <div className="pt-2 border-t border-white/5">
+                      <button
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          try {
+                            const types = [
+                              "COGNITIVE_GRID_CALIBRATION",
+                              "THERMAL_DILATION_REASONING",
+                              "HYPERVECTOR_ENTROPY_ANALYSIS",
+                              "EPISTEMIC_GRID_SYNTHESIS"
+                            ];
+                            const randomType = types[Math.floor(Math.random() * types.length)] || "COGNITIVE_GRID_CALIBRATION";
+                            await vedaService.submitLatticeTask(randomType, {
+                              source: "CONTROL_PANEL_BATCH_SCHEDULER",
+                              simulated: true,
+                              workloadSize: "128-CORE-TPU-VECTOR",
+                              coherenceTarget: 0.985
+                            });
+                          } catch (err) {
+                            console.error("Submit fail", err);
+                          }
+                        }}
+                        className="w-full py-1 bg-amber-500/10 hover:bg-amber-500/25 border border-amber-500/20 hover:border-amber-500/40 text-amber-400 text-[6.5px] rounded tracking-[0.2em] font-black uppercase transition-all cursor-pointer"
+                      >
+                        ➕ Dispatch Simulated High-Throughput Task
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Sovereign Evolution Gauge */}
               {data?.sovereign_index !== undefined && (

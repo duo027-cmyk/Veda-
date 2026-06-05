@@ -456,6 +456,10 @@ export default function App() {
         logs={userData?.logs || []}
         showControls={showControlPanel}
         memories={userData?.memories || []}
+        onComputeModeChange={async (mode) => {
+          await handleAction('setComputeMode', { mode });
+          await fetchVedaData();
+        }}
         onIntentChange={async (idx, val) => {
           const newIntent = [...(userData?.settings?.vector_intent || [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])];
           newIntent[idx] = val;

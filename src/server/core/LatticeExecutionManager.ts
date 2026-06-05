@@ -51,7 +51,7 @@ export class LatticeExecutionManager {
     }
 
     for (const job of currentActiveJobs) {
-      if (job.status === 'PENDING' && this.latticeComputeArray.canExecute()) {
+      if (job.status === 'PENDING' && !job.isPaused && this.latticeComputeArray.canExecute()) {
         this.latticeComputeArray.setExecuting(job.id);
         this.executeLatticeTask(job).catch((err) => {
           this.callbacks.neuralLog('LATTICE_FAULT', `Task ${job.id} failed: ${err.message}`);
@@ -179,7 +179,10 @@ export class LatticeExecutionManager {
   public async solidifyLatticeJob(params: { jobId: string, result: any, coherence?: number }) {
     const { jobId, result, coherence = 0.95 } = params;
     const job = this.latticeComputeArray.getJob(jobId);
-    if (!job) throw new Error("JOB_NOT_FOUND");
+    if (!job) {
+      this.callbacks.neuralLog("SYSTEM_RECOVERY", `晶格任務 [ID: ${jobId}] 已由 Smart Purge 機制清洗，略過固化流程（狀態保持整潔）。`);
+      return { success: false, error: "JOB_PURGED" };
+    }
 
     this.callbacks.neuralLog("LATTICE_SOLIDIFIED", `收悉晶格固化回傳：${jobId}`);
 

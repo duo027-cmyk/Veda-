@@ -607,6 +607,38 @@ async function startServer() {
       }
     });
 
+    api.post("/v1/lattice/pause", async (req, res) => {
+      try {
+        const { id, isPaused } = req.body;
+        if (!id) {
+          return res.status(400).json({ error: "Missing job id" });
+        }
+        if (brain.pauseLatticeJob) {
+          const success = brain.pauseLatticeJob(id, !!isPaused);
+          return res.json({ success, id, isPaused: !!isPaused });
+        }
+        res.status(500).json({ error: "Lattice manager not operational" });
+      } catch (e: any) {
+        res.status(500).json({ error: "LATTICE_PAUSE_ERROR", message: e.message || String(e) });
+      }
+    });
+
+    api.post("/v1/lattice/reorder", async (req, res) => {
+      try {
+        const { id, direction } = req.body;
+        if (!id || (direction !== 'up' && direction !== 'down')) {
+          return res.status(400).json({ error: "Missing required parameters: id or direction ('up'|'down')" });
+        }
+        if (brain.reorderLatticeJob) {
+          const success = brain.reorderLatticeJob(id, direction);
+          return res.json({ success, id, direction });
+        }
+        res.status(500).json({ error: "Lattice manager not operational" });
+      } catch (e: any) {
+        res.status(500).json({ error: "LATTICE_REORDER_ERROR", message: e.message || String(e) });
+      }
+    });
+
     api.post("/v1/federation/join", async (req, res) => {
       try {
         const { nodeId, nodeUrl, coherence } = req.body;

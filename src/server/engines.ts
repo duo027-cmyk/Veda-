@@ -53,6 +53,7 @@ export class HDCEngine {
   private readonly dimension: number = 1024;
   private readonly jitterTable: Float32Array;
   private readonly positionCache: Float32Array[] = [];
+  private readonly hvCache = new Map<string, Float32Array>();
   
   // Reusable buffers to avoid GC pressure during high-frequency math
   private readonly mathBuffer: Float32Array;
@@ -83,8 +84,10 @@ export class HDCEngine {
    * Generates a bipolar hypervector (-1, 1).
    */
   public generateHypervector(seed?: string): Float32Array {
-    const hv = new Float32Array(this.dimension);
     if (seed) {
+      const cached = this.hvCache.get(seed);
+      if (cached) return cached;
+      const hv = new Float32Array(this.dimension);
       const hash = crypto.createHash('sha256').update(seed).digest();
       const hashLen = hash.length;
       for (let i = 0; i < this.dimension; i += 1) {
@@ -93,12 +96,15 @@ export class HDCEngine {
         const bit = (byte >> bitOffset) & 1;
         hv[i] = bit === 1 ? 1 : -1;
       }
+      this.hvCache.set(seed, hv);
+      return hv;
     } else {
+      const hv = new Float32Array(this.dimension);
       for (let i = 0; i < this.dimension; i += 1) {
         hv[i] = Math.random() < 0.5 ? -1 : 1;
       }
+      return hv;
     }
-    return hv;
   }
 
   /**
@@ -259,8 +265,9 @@ export class HDCEngine {
   public similarity(hv1: Float32Array, hv2: Float32Array): number {
     let dot = 0;
     const len = Math.min(this.dimension, hv1.length, hv2.length);
+    const jitter = this.jitterTable;
     for (let i = 0; i < len; i += 1) {
-      dot += (hv1[i] * this.jitterTable[i % 1024]) * hv2[i];
+      dot += hv1[i] * jitter[i] * hv2[i];
     }
     return dot / this.dimension;
   }

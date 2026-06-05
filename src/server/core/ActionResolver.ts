@@ -86,6 +86,33 @@ export class ActionResolver {
         result.data = this.brain.submitLatticeTask(params.type, params.payload);
         break;
 
+      case "pauseLatticeJob":
+        if (this.brain.pauseLatticeJob) {
+          result.data = this.brain.pauseLatticeJob(params.id, params.isPaused);
+        } else {
+          result.success = false;
+          result.error = "Method not implemented";
+        }
+        break;
+
+      case "reorderLatticeJob":
+        if (this.brain.reorderLatticeJob) {
+          result.data = this.brain.reorderLatticeJob(params.id, params.direction);
+        } else {
+          result.success = false;
+          result.error = "Method not implemented";
+        }
+        break;
+
+      case "smartPurgeLatticeJobs":
+        if (this.brain.smartPurgeLatticeJobs) {
+          result.data = this.brain.smartPurgeLatticeJobs(params.timeoutMs);
+        } else {
+          result.success = false;
+          result.error = "Method not implemented";
+        }
+        break;
+
       case "solidifyLatticeJob":
         result.data = await this.brain.solidifyLatticeJob(params);
         break;

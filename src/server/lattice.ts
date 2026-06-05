@@ -427,6 +427,7 @@ export interface LatticeJob<T = any> {
   coherence: number;
   timestamp: number;
   blockHeight: number;
+  isPaused?: boolean;
 }
 
 export class MineralLatticeComputeArray {
@@ -437,6 +438,51 @@ export class MineralLatticeComputeArray {
   private activeCount = 0;
 
   constructor() {}
+
+  public pauseJob(id: string, isPaused: boolean): boolean {
+    const job = this.jobs.get(id);
+    if (job) {
+      job.isPaused = isPaused;
+      this.jobs.set(id, { ...job });
+      return true;
+    }
+    return false;
+  }
+
+  public reorderJob(id: string, direction: 'up' | 'down'): boolean {
+    const activeJobs = this.getActiveJobs().filter(j => j.status === 'PENDING');
+    const index = activeJobs.findIndex(j => j.id === id);
+    if (index === -1) return false;
+
+    let targetIndex = -1;
+    if (direction === 'up' && index > 0) {
+      targetIndex = index - 1;
+    } else if (direction === 'down' && index < activeJobs.length - 1) {
+      targetIndex = index + 1;
+    }
+
+    if (targetIndex !== -1) {
+      const jobA = activeJobs[index];
+      const jobB = activeJobs[targetIndex];
+
+      const entries = Array.from(this.jobs.entries());
+      const idxA = entries.findIndex(([k]) => k === jobA.id);
+      const idxB = entries.findIndex(([k]) => k === jobB.id);
+
+      if (idxA !== -1 && idxB !== -1) {
+        const temp = entries[idxA];
+        entries[idxA] = entries[idxB];
+        entries[idxB] = temp;
+
+        this.jobs.clear();
+        for (const [k, v] of entries) {
+          this.jobs.set(k, v);
+        }
+        return true;
+      }
+    }
+    return false;
+  }
 
   public submitTask(type: string, payload: any): string {
     const id = `LATTICE_${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
@@ -493,6 +539,24 @@ export class MineralLatticeComputeArray {
 
   public getSolidifiedResults(): LatticeJob[] {
     return Array.from(this.jobs.values()).filter(j => j.status === 'SOLIDIFIED').slice(-20);
+  }
+
+  public smartPurge(timeoutMs: number): { purgedCount: number; purgedIds: string[] } {
+    const now = Date.now();
+    const purgedIds: string[] = [];
+    for (const [id, job] of this.jobs.entries()) {
+      const isFailed = job.status === 'FAILED';
+      const isStale = (now - job.timestamp) > timeoutMs && job.status !== 'SOLIDIFIED';
+      
+      if (isFailed || isStale) {
+        if (job.status === 'PROCESSING' || job.status === 'SYNTHESIZING') {
+          this.activeCount = Math.max(0, this.activeCount - 1);
+        }
+        this.jobs.delete(id);
+        purgedIds.push(id);
+      }
+    }
+    return { purgedCount: purgedIds.length, purgedIds };
   }
 
   public purge(id: string) {

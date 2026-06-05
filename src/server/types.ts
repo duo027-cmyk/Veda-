@@ -176,4 +176,8 @@ export interface IVedaBrain {
   toggleSystemDeblinded(params?: { active?: boolean }): Promise<{ success: boolean; is_deblinded: boolean }>;
   igniteUltimateSovereignty(): Promise<{ success: boolean; tier: string; proximity: number }>;
   demystifyText(params: { text: string }): Promise<{ success: boolean; translation: string }>;
+  setComputeMode?(params: { mode: 'throughput' | 'precision' }): Promise<any>;
+  pauseLatticeJob?(id: string, isPaused: boolean): boolean;
+  reorderLatticeJob?(id: string, direction: 'up' | 'down'): boolean;
+  smartPurgeLatticeJobs?(timeoutMs: number): { purgedCount: number; purgedIds: string[] };
 }
