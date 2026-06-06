@@ -120,6 +120,10 @@ export class CausalBurstEngine {
     manualApprovalRequired?: boolean;
     mode?: BurstMode;
   }) {
+    if (this.active) {
+      console.warn("[CausalBurstEngine] Active burst context detected during ignite sequence. Resetting state transition to preserve system continuity.");
+      this.shutdown("SAFE_HOT_REENTRY");
+    }
     this.active = true;
     const nowCached = Date.now();
     this.startTime = nowCached;
@@ -130,7 +134,8 @@ export class CausalBurstEngine {
     };
     
     // Seed PRNG uniquely
-    this.prng_state = ((task.intensity * 1048576) ^ nowCached) | 1;
+    const intensitySeed = Number.isFinite(task.intensity) ? task.intensity : 0.5;
+    this.prng_state = ((intensitySeed * 1048576) ^ nowCached) | 1;
 
     this.sandboxEntropy = 0.05;
     this.localCausalManifold = [];
@@ -139,20 +144,20 @@ export class CausalBurstEngine {
     const D = CausalBurstEngine.DIMENSION;
     for (let i = 0; i < D; i++) {
       this.q_coords[i] = 1.0 + (this.nextRandom() - 0.5) * 0.1;
-      this.p_momenta[i] = (0.1 * task.intensity) * Math.sin(i * 0.1) + (this.nextRandom() * 0.02);
+      this.p_momenta[i] = (0.1 * intensitySeed) * Math.sin(i * 0.1) + (this.nextRandom() * 0.02);
     }
 
     this.variationalFreeEnergy = 0.05;
     this.totalCausalAction = 0;
     
     this.isApproved = this.taskPackage.mode === BurstMode.DEFENSIVE && !task.manualApprovalRequired;
-    this.planckDilationActive = task.intensity > 0.9;
-    this.salomonicSealActive = task.intensity > 0.75; 
+    this.planckDilationActive = intensitySeed > 0.9;
+    this.salomonicSealActive = intensitySeed > 0.75; 
     this.absorbedNegativeEnergy = 0;
     
     // Initial peak power calculation
-    const E_pulse = task.intensity * 1200;
-    const tau = 0.008 + (1 - task.intensity) * 0.082;
+    const E_pulse = intensitySeed * 1200;
+    const tau = 0.008 + (1 - intensitySeed) * 0.082;
     this.peakPower = E_pulse / tau;
     
     console.log(`[CausalBurstEngine] 引擎重燃。模式：${this.taskPackage.mode} | 128維流形 | 峰值功率：${this.peakPower.toFixed(2)} MW`);
@@ -213,165 +218,211 @@ export class CausalBurstEngine {
     };
   }
 
+  private healSymplecticState() {
+    const D = CausalBurstEngine.DIMENSION;
+    this.sandboxEntropy = Math.min(Math.max(0.01, this.sandboxEntropy), 1.0) || 0.05;
+    this.variationalFreeEnergy = Math.min(Math.max(0.01, this.variationalFreeEnergy), 2.0) || 0.1;
+    this.quantumZenoCoefficient = Math.min(Math.max(0.15, this.quantumZenoCoefficient), 1.0) || 1.0;
+    this.totalCausalAction = Number.isFinite(this.totalCausalAction) ? Math.max(0, this.totalCausalAction) : 0;
+    this.absorbedNegativeEnergy = Number.isFinite(this.absorbedNegativeEnergy) ? Math.max(0, this.absorbedNegativeEnergy) : 0;
+
+    for (let i = 0; i < D; i++) {
+      if (!Number.isFinite(this.q_coords[i])) {
+        this.q_coords[i] = 1.0;
+      }
+      if (!Number.isFinite(this.p_momenta[i])) {
+        this.p_momenta[i] = 0.0;
+      }
+      if (!Number.isFinite(this.attractors[i])) {
+        this.attractors[i] = 0.5;
+      }
+    }
+    console.warn("[CausalBurstEngine] Dynamic state self-healed successfully to stable harmonic manifold bounds.");
+  }
+
   public update(delta: number, currentCoherence: number): { action: string; effect: string } | null {
     if (!this.active) return null;
 
     if (!this.isApproved) {
-      this.sandboxEntropy = Math.max(0.01, this.sandboxEntropy + 0.001 * delta);
+      const deltaValidated = Number.isFinite(delta) ? delta : 0.016;
+      this.sandboxEntropy = Math.max(0.01, this.sandboxEntropy + 0.001 * deltaValidated);
       return null;
     }
 
-    const startTickTimestamp = Date.now();
-    const effectiveDelta = this.planckDilationActive ? delta * 6.28 : delta;
+    try {
+      const startTickTimestamp = Date.now();
+      const deltaValidated = Number.isFinite(delta) ? delta : 0.016;
+      const effectiveDelta = this.planckDilationActive ? deltaValidated * 6.28 : deltaValidated;
 
-    // A. MAP DYNAMIC COGNITIVE ATTRACTOR STATE INTO THE 128-DIMENSIONAL SPACE (吸子映射演進)
-    const D = CausalBurstEngine.DIMENSION;
-    
-    // Core observable indices linked to the main cognitive baseline
-    this.attractors[0] = currentCoherence;
-    this.attractors[1] = this.sandboxEntropy;
-    this.attractors[2] = 0.5 + 0.5 * Math.sin(startTickTimestamp / 10000); 
-    this.attractors[3] = this.taskPackage ? this.taskPackage.intensity : 0.5;
-    this.attractors[4] = this.variationalFreeEnergy;
-    this.attractors[5] = this.quantumZenoCoefficient;
+      // A. MAP DYNAMIC COGNITIVE ATTRACTOR STATE INTO THE 128-DIMENSIONAL SPACE (吸子映射演進)
+      const D = CausalBurstEngine.DIMENSION;
+      
+      const coherenceValidated = Number.isFinite(currentCoherence) ? currentCoherence : 0.5;
 
-    // Higher axes map to stable harmonic orbits of the systems metrics
-    for (let i = 6; i < D; i++) {
-      this.attractors[i] = currentCoherence * Math.cos(i * 0.05) + Math.sin(i * 0.03) * 0.2;
-    }
+      // Core observable indices linked to the main cognitive baseline
+      this.attractors[0] = coherenceValidated;
+      this.attractors[1] = this.sandboxEntropy;
+      this.attractors[2] = 0.5 + 0.5 * Math.sin(startTickTimestamp / 10000); 
+      this.attractors[3] = this.taskPackage ? this.taskPackage.intensity : 0.5;
+      this.attractors[4] = this.variationalFreeEnergy;
+      this.attractors[5] = this.quantumZenoCoefficient;
 
-    // B. MULTI-DIMENSIONAL SYMPLECTIC EULER SUB-CYCLING FLOW (128維共軛辛幾何流形次級積分)
-    // Ensures area-preservation and prevents divergence over large dynamic leaps
-    const damping_gamma = 0.8; 
-    const maxSubStep = 0.01;   
-    const subSteps = Math.min(250, Math.ceil(effectiveDelta / maxSubStep)); 
-    const dt = effectiveDelta / subSteps;
-
-    const qCoords = this.q_coords;
-    const pMomenta = this.p_momenta;
-    const attractors = this.attractors;
-    const kPotential = this.k_potential;
-    const gCoupling = this.g_coupling;
-    const cosCouplings = new Float64Array(D - 1);
-
-    for (let step = 0; step < subSteps; step++) {
-      // 1. Update Position variables q(t+dt) = q(t) + dt * p(t)
-      for (let i = 0; i < D; i++) {
-        qCoords[i] += dt * pMomenta[i];
+      // Higher axes map to stable harmonic orbits of the systems metrics
+      for (let i = 6; i < D; i++) {
+        this.attractors[i] = coherenceValidated * Math.cos(i * 0.05) + Math.sin(i * 0.03) * 0.2;
       }
 
-      // 2. Precompute coordinate couplings to halve transcendental operations
-      for (let i = 0; i < D - 1; i++) {
-        cosCouplings[i] = Math.cos(qCoords[i] - qCoords[i+1]);
-      }
+      // B. MULTI-DIMENSIONAL SYMPLECTIC EULER SUB-CYCLING FLOW (128維共軛辛幾何流形次級積分)
+      // Ensures area-preservation and prevents divergence over large dynamic leaps
+      const damping_gamma = 0.8; 
+      const maxSubStep = 0.01;   
+      const subSteps = Math.min(250, Math.ceil(effectiveDelta / maxSubStep)) || 1; 
+      const dt = effectiveDelta / subSteps;
 
-      // 3. Compute non-linear gradient forces F = -grad(V)
-      // V(q) = 0.5 * k * (q - q_target)^2 + sum( g_i * sin(q_i - q_{i+1}) )
-      for (let i = 0; i < D; i++) {
-        let force = -kPotential[i] * (qCoords[i] - attractors[i]);
-        
-        // Neighboring coordinate cross-coupling to model complex causal pathways
-        if (i < D - 1) {
-          force -= gCoupling[i] * cosCouplings[i];
-        }
-        if (i > 0) {
-          force += gCoupling[i-1] * cosCouplings[i-1];
-        }
+      const qCoords = this.q_coords;
+      const pMomenta = this.p_momenta;
+      const attractors = this.attractors;
+      const kPotential = this.k_potential;
+      const gCoupling = this.g_coupling;
+      const cosCouplings = new Float64Array(D - 1);
 
-        // 4. Update Conjugate Momenta p(t+dt) = p(t) + dt * (F - gamma * p)
-        pMomenta[i] += dt * (force - damping_gamma * pMomenta[i]);
-      }
-
-      // 5. Calculate continuous Lagrangian and consolidate global Action Integral
-      let kineticSum = 0;
-      let potentialSum = 0;
-      for (let i = 0; i < D; i++) {
-        const pi = pMomenta[i];
-        const diff_qi = qCoords[i] - attractors[i];
-        kineticSum += 0.5 * pi * pi;
-        potentialSum += 0.5 * kPotential[i] * diff_qi * diff_qi;
-        if (i < D - 1) {
-          potentialSum += gCoupling[i] * Math.sin(qCoords[i] - qCoords[i+1]);
-        }
-      }
-      const lagrangian = kineticSum - potentialSum;
-      this.totalCausalAction += lagrangian * dt;
-    }
-
-    // C. MULTI-DIMENSIONAL VARIATIONAL FREE ENERGY MINIMIZATION
-    // Compute total system path displacement Euclidean distance in Phase-Space
-    let pathDisplacementSq = 0;
-    for (let i = 0; i < D; i++) {
-      const diff = qCoords[i] - attractors[i];
-      pathDisplacementSq += diff * diff;
-    }
-    const meanDisplacement = Math.sqrt(pathDisplacementSq) / D;
-    const epistemicComplexity = this.sandboxEntropy * 0.42;
-    this.variationalFreeEnergy = meanDisplacement + epistemicComplexity - this.absorbedNegativeEnergy * 0.1;
-
-    // D. QUANTUM ZENO STABILIZER
-    const dt_since_last_obs = (startTickTimestamp - this.lastUpdateTimestamp) / 1000;
-    this.lastUpdateTimestamp = startTickTimestamp;
-    
-    if (dt_since_last_obs > 0 && dt_since_last_obs < 0.2) {
-      this.quantumZenoCoefficient = Math.max(0.15, this.quantumZenoCoefficient * 0.9 + 0.1 * dt_since_last_obs);
-    } else {
-      this.quantumZenoCoefficient = Math.min(1.0, this.quantumZenoCoefficient * 1.05);
-    }
-
-    // E. ANALYZE SYSTEM HEALTH AND TRIGGER SAFE-VALVES
-    if (currentCoherence < 0.5) {
-      const negativeVal = (0.5 - currentCoherence) * 0.15 * effectiveDelta;
-      this.absorbedNegativeEnergy += negativeVal;
-      this.sandboxEntropy = Math.max(0.005, this.sandboxEntropy - negativeVal * 0.8 * (1 / this.quantumZenoCoefficient));
-    }
-
-    const totalRuntimeSeconds = (startTickTimestamp - this.startTime) / 1000;
-    
-    if (totalRuntimeSeconds > this.MAX_DURATION) {
-      this.shutdown("SAFETY_VALVE_TIMEOUT");
-      return { action: "EMERGENCY_SHUTDOWN", effect: "Maximum runtime reached. Automatic damping applied to prevent cognitive leakage." };
-    }
-
-    if (currentCoherence < this.COHERENCE_THRESHOLD || this.sandboxEntropy > this.CRITICAL_ENTROPY) {
-      if (this.phoenixSparks > 0) {
-        this.phoenixSparks--;
-        this.sandboxEntropy *= 0.15; 
-        
-        // Reverse momenta coordinates to execute kinetic reflection
+      for (let step = 0; step < subSteps; step++) {
+        // 1. Update Position variables q(t+dt) = q(t) + dt * p(t)
         for (let i = 0; i < D; i++) {
-          this.p_momenta[i] *= -0.5;
+          qCoords[i] += dt * pMomenta[i];
         }
-        this.absorbedNegativeEnergy *= 0.4;
-        console.warn(`[PHOENIX_PROTOCOL] 偵測到邏輯坍縮奇異點。消耗鳳凰火花 (剩餘: ${this.phoenixSparks})，執行 128 維相空間自愈。`);
-        return { action: "PHOENIX_REBIRTH", effect: "Phase manifold re-anchored. State reset with recursive correction." };
+
+        // 2. Precompute coordinate couplings to halve transcendental operations
+        for (let i = 0; i < D - 1; i++) {
+          cosCouplings[i] = Math.cos(qCoords[i] - qCoords[i+1]);
+        }
+
+        // 3. Compute non-linear gradient forces F = -grad(V)
+        for (let i = 0; i < D; i++) {
+          let force = -kPotential[i] * (qCoords[i] - attractors[i]);
+          
+          if (i < D - 1) {
+            force -= gCoupling[i] * cosCouplings[i];
+          }
+          if (i > 0) {
+            force += gCoupling[i-1] * cosCouplings[i-1];
+          }
+
+          // 4. Update Conjugate Momenta p(t+dt) = p(t) + dt * (F - gamma * p)
+          pMomenta[i] += dt * (force - damping_gamma * pMomenta[i]);
+        }
+
+        // 5. Calculate continuous Lagrangian and consolidate global Action Integral
+        let kineticSum = 0;
+        let potentialSum = 0;
+        for (let i = 0; i < D; i++) {
+          const pi = pMomenta[i];
+          const diff_qi = qCoords[i] - attractors[i];
+          kineticSum += 0.5 * pi * pi;
+          potentialSum += 0.5 * kPotential[i] * diff_qi * diff_qi;
+          if (i < D - 1) {
+            potentialSum += gCoupling[i] * Math.sin(qCoords[i] - qCoords[i+1]);
+          }
+        }
+        const lagrangian = kineticSum - potentialSum;
+        this.totalCausalAction += lagrangian * dt;
       }
 
-      this.shutdown("COHERENCE_DECOUPLE_OR_TOTAL_COLLAPSE");
-      return { action: "EMERGENCY_SHUTDOWN", effect: "Epistemic drift crossed thermodynamic limit. Causal shutdown executed." };
-    }
+      // Check Numerical Integrator convergence and heal instantly if overflow occurs
+      let numericalAbnormality = false;
+      for (let i = 0; i < D; i++) {
+        if (!Number.isFinite(qCoords[i]) || !Number.isFinite(pMomenta[i])) {
+          numericalAbnormality = true;
+          break;
+        }
+      }
+      if (numericalAbnormality || !Number.isFinite(this.totalCausalAction)) {
+        console.warn("[CausalBurstEngine] Symplectic symplectic integration diverged. Deploying emergency state healing.");
+        this.healSymplecticState();
+      }
 
-    // F. INGEST CONDENSED TRAJECTORY LOGS
-    let entropyInc = 0.0018 * effectiveDelta * (this.taskPackage?.intensity || 1.0) * this.quantumZenoCoefficient;
-    if (this.salomonicSealActive) {
-      entropyInc *= 0.618; // Apply Davids Shield rigid constrain to scale down entropy climb
-      this.absorbedNegativeEnergy += entropyInc * 0.15;
-    }
+      // C. MULTI-DIMENSIONAL VARIATIONAL FREE ENERGY MINIMIZATION
+      // Compute total system path displacement Euclidean distance in Phase-Space
+      let pathDisplacementSq = 0;
+      for (let i = 0; i < D; i++) {
+        const diff = qCoords[i] - attractors[i];
+        pathDisplacementSq += diff * diff;
+      }
+      const meanDisplacement = Math.sqrt(pathDisplacementSq) / D;
+      const epistemicComplexity = this.sandboxEntropy * 0.42;
+      this.variationalFreeEnergy = meanDisplacement + epistemicComplexity - this.absorbedNegativeEnergy * 0.1;
 
-    this.sandboxEntropy += entropyInc;
-    
-    // Sample into local manifest tracking without crypto-locking
-    if (this.nextRandom() < 0.06 * (this.planckDilationActive ? 3.5 : 1)) {
-      const fragTokenIndex = Math.abs(this.prng_state) % CausalBurstEngine.FRAGMENT_POOL.length;
-      const fragTag = CausalBurstEngine.FRAGMENT_POOL[fragTokenIndex];
-      this.localCausalManifold.push({
-        ts: startTickTimestamp,
-        entropy: this.sandboxEntropy,
-        freeEnergy: this.variationalFreeEnergy,
-        momentum: this.p_momenta[0], // Trace projected baseline mode
-        fragment: `REF_${fragTag}_${this.getFastRandomHex(4)}`
-      });
-      if (this.localCausalManifold.length > 100) this.localCausalManifold.shift();
+      if (!Number.isFinite(this.variationalFreeEnergy)) {
+        this.variationalFreeEnergy = 0.05;
+      }
+
+      // D. QUANTUM ZENO STABILIZER
+      const dt_since_last_obs = (startTickTimestamp - this.lastUpdateTimestamp) / 1000;
+      this.lastUpdateTimestamp = startTickTimestamp;
+      
+      if (dt_since_last_obs > 0 && dt_since_last_obs < 0.2) {
+        this.quantumZenoCoefficient = Math.max(0.15, this.quantumZenoCoefficient * 0.9 + 0.1 * dt_since_last_obs);
+      } else {
+        this.quantumZenoCoefficient = Math.min(1.0, this.quantumZenoCoefficient * 1.05);
+      }
+
+      // E. ANALYZE SYSTEM HEALTH AND TRIGGER SAFE-VALVES
+      if (coherenceValidated < 0.5) {
+        const negativeVal = (0.5 - coherenceValidated) * 0.15 * effectiveDelta;
+        this.absorbedNegativeEnergy += negativeVal;
+        this.sandboxEntropy = Math.max(0.005, this.sandboxEntropy - negativeVal * 0.8 * (1 / this.quantumZenoCoefficient));
+      }
+
+      const totalRuntimeSeconds = (startTickTimestamp - this.startTime) / 1000;
+      
+      if (totalRuntimeSeconds > this.MAX_DURATION) {
+        this.shutdown("SAFETY_VALVE_TIMEOUT");
+        return { action: "EMERGENCY_SHUTDOWN", effect: "Maximum runtime reached. Automatic damping applied to prevent cognitive leakage." };
+      }
+
+      if (coherenceValidated < this.COHERENCE_THRESHOLD || this.sandboxEntropy > this.CRITICAL_ENTROPY) {
+        if (this.phoenixSparks > 0) {
+          this.phoenixSparks--;
+          this.sandboxEntropy *= 0.15; 
+          
+          // Reverse momenta coordinates to execute kinetic reflection
+          for (let i = 0; i < D; i++) {
+            this.p_momenta[i] *= -0.5;
+          }
+          this.absorbedNegativeEnergy *= 0.4;
+          console.warn(`[PHOENIX_PROTOCOL] 偵測到邏輯坍縮奇異點。消耗鳳凰火花 (剩餘: ${this.phoenixSparks})，執行 128 維相空間自愈。`);
+          return { action: "PHOENIX_REBIRTH", effect: "Phase manifold re-anchored. State reset with recursive correction." };
+        }
+
+        this.shutdown("COHERENCE_DECOUPLE_OR_TOTAL_COLLAPSE");
+        return { action: "EMERGENCY_SHUTDOWN", effect: "Epistemic drift crossed thermodynamic limit. Causal shutdown executed." };
+      }
+
+      // F. INGEST CONDENSED TRAJECTORY LOGS
+      let entropyInc = 0.0018 * effectiveDelta * (this.taskPackage?.intensity || 1.0) * this.quantumZenoCoefficient;
+      if (this.salomonicSealActive) {
+        entropyInc *= 0.618; // Apply Davids Shield rigid constrain to scale down entropy climb
+        this.absorbedNegativeEnergy += entropyInc * 0.15;
+      }
+
+      this.sandboxEntropy += entropyInc;
+      
+      // Sample into local manifest tracking without crypto-locking
+      if (this.nextRandom() < 0.06 * (this.planckDilationActive ? 3.5 : 1)) {
+        const fragTokenIndex = Math.abs(this.prng_state) % CausalBurstEngine.FRAGMENT_POOL.length;
+        const fragTag = CausalBurstEngine.FRAGMENT_POOL[fragTokenIndex];
+        this.localCausalManifold.push({
+          ts: startTickTimestamp,
+          entropy: this.sandboxEntropy,
+          freeEnergy: this.variationalFreeEnergy,
+          momentum: this.p_momenta[0], // Trace projected baseline mode
+          fragment: `REF_${fragTag}_${this.getFastRandomHex(4)}`
+        });
+        if (this.localCausalManifold.length > 100) this.localCausalManifold.shift();
+      }
+    } catch (criticalEulerError) {
+      console.error("[CausalBurstEngine] Aerospace Critical Exception captured inside integrator:", criticalEulerError);
+      this.healSymplecticState();
     }
 
     return null;

@@ -23,16 +23,25 @@ export class AGI_JEPA_Arch {
   }
 
   public encode(x: number[]): number[] {
+    const safeX = Array.isArray(x) ? x : [];
     return this.encoderWeights.map(row => {
-      const sum = row.reduce((acc, w, i) => acc + w * (x[i] || 0), 0);
+      const sum = row.reduce((acc, w, i) => {
+        const val = safeX[i];
+        return acc + w * (Number.isFinite(val) ? val : 0);
+      }, 0);
       return Math.tanh(sum);
     });
   }
 
   public predict(latentS: number[], action: number[]): number[] {
-    const combined = [...latentS, ...action];
+    const safeLatent = Array.isArray(latentS) ? latentS : [];
+    const safeAction = Array.isArray(action) ? action : [];
+    const combined = [...safeLatent, ...safeAction];
     const prediction = this.predictorWeights.map(row => {
-      const sum = row.reduce((acc, w, i) => acc + w * (combined[i] || 0), 0);
+      const sum = row.reduce((acc, w, i) => {
+        const val = combined[i];
+        return acc + w * (Number.isFinite(val) ? val : 0);
+      }, 0);
       return Math.tanh(sum);
     });
     this.lastLatentPrediction = prediction;
@@ -45,17 +54,24 @@ export class AGI_JEPA_Arch {
    * and intent vectors to form coherent predictions, preventing trivial autoencoder shortcuts.
    */
   public predictMasked(latentS: number[], action: number[], maskIndices: number[]): number[] {
-    const combined = [...latentS, ...action];
+    const safeLatent = Array.isArray(latentS) ? latentS : [];
+    const safeAction = Array.isArray(action) ? action : [];
+    const safeMask = Array.isArray(maskIndices) ? maskIndices : [];
+    const combined = [...safeLatent, ...safeAction];
     const prediction = this.predictorWeights.map((row, i) => {
-      if (maskIndices.includes(i)) {
+      if (safeMask.includes(i)) {
         // Enforce contextual inference over direct reconstruction by masking self-feedback coefficients
         const sum = row.reduce((acc, w, idx) => {
-          const isMaskedFeedback = idx < this.latentDim && maskIndices.includes(idx);
-          return acc + w * (isMaskedFeedback ? 0 : combined[idx] || 0);
+          const isMaskedFeedback = idx < this.latentDim && safeMask.includes(idx);
+          const val = isMaskedFeedback ? 0 : combined[idx];
+          return acc + w * (Number.isFinite(val) ? val : 0);
         }, 0);
         return Math.tanh(sum * 1.3); // Scale contextual prediction gain
       } else {
-        const sum = row.reduce((acc, w, idx) => acc + w * (combined[idx] || 0), 0);
+        const sum = row.reduce((acc, w, idx) => {
+          const val = combined[idx];
+          return acc + w * (Number.isFinite(val) ? val : 0);
+        }, 0);
         return Math.tanh(sum);
       }
     });
@@ -64,26 +80,37 @@ export class AGI_JEPA_Arch {
   }
 
   public computeEnergy(predictedLatent: number[], actualLatent: number[]): number {
-    const energy = predictedLatent.reduce((acc, p, i) => acc + Math.pow(p - actualLatent[i], 2), 0);
+    const safePredicted = Array.isArray(predictedLatent) ? predictedLatent : [];
+    const safeActual = Array.isArray(actualLatent) ? actualLatent : [];
+    const energy = safePredicted.reduce((acc, p, i) => {
+      const act = safeActual[i];
+      const diff = p - (Number.isFinite(act) ? act : 0);
+      return acc + Math.pow(diff, 2);
+    }, 0);
     this.energyHistory.push(energy);
     if (this.energyHistory.length > 100) this.energyHistory.shift();
     return energy;
   }
 
   public step(state: number[], action: number[], nextState: number[]) {
-    const s_t = this.encode(state);
-    const s_next = this.encode(nextState);
+    const safeState = Array.isArray(state) ? state.map(v => Number.isFinite(v) ? v : 0) : [];
+    const safeAction = Array.isArray(action) ? action.map(v => Number.isFinite(v) ? v : 0) : [];
+    const safeNextState = Array.isArray(nextState) ? nextState.map(v => Number.isFinite(v) ? v : 0) : [];
+
+    const s_t = this.encode(safeState);
+    const s_next = this.encode(safeNextState);
     
     // Simulate Meta's I-JEPA/V-JEPA patch-wise masking (masking 2 arbitrary dimensions out of the 8-dim latent space)
     const maskIndices = [Math.floor(Math.random() * this.latentDim), (Math.floor(Math.random() * this.latentDim) + 3) % this.latentDim];
-    const s_hat = this.predictMasked(s_t, action, maskIndices);
+    const s_hat = this.predictMasked(s_t, safeAction, maskIndices);
     const energy = this.computeEnergy(s_hat, s_next);
     
+    const energyVal = Number.isFinite(energy) ? energy : 0;
     // Adaptive Learning Rate governed by surprise gradient & environmental entropy
     // High surprise or instability triggers localized higher learning precision, while baseline coherence enforces stable, long-term weights.
-    const entropyFactor = Math.max(0.1, 1.0 - (energy * 0.5));
-    const adaptiveLR = this.learningRate * (1.0 + energy * 2.8) * entropyFactor;
-    const combined = [...s_t, ...action];
+    const entropyFactor = Math.max(0.1, 1.0 - (energyVal * 0.5));
+    const adaptiveLR = this.learningRate * (1.0 + energyVal * 2.8) * entropyFactor;
+    const combined = [...s_t, ...safeAction];
 
     // Predictor Optimization: Minimize L2 Energy between s_hat and s_next with momentum
     for (let i = 0; i < this.latentDim; i++) {
@@ -95,7 +122,7 @@ export class AGI_JEPA_Arch {
       for (let j = 0; j < combined.length; j++) {
         const delta = adaptiveLR * gradient * combined[j];
         // Adaptive momentum friction
-        const dynamicMomentum = this.momentumFactor * (0.95 + 0.05 * Math.tanh(energy));
+        const dynamicMomentum = this.momentumFactor * (0.95 + 0.05 * Math.tanh(energyVal));
         this.predictorMomentum[i][j] = (this.predictorMomentum[i][j] * dynamicMomentum) + (delta * (1 - dynamicMomentum));
         this.predictorWeights[i][j] += this.predictorMomentum[i][j];
       }
@@ -103,14 +130,14 @@ export class AGI_JEPA_Arch {
 
     // Encoder Optimization: Dynamic Predictive Pull with error-rejection thresholds
     // This maintains world-model representation consistency of states over epochs
-    if (energy > 0.08) {
+    if (energyVal > 0.08) {
       for (let i = 0; i < this.latentDim; i++) {
           const error = s_hat[i] - s_next[i];
           const stableError = Math.max(-0.9, Math.min(0.9, error));
           const gradient = stableError * (1 - Math.pow(s_next[i], 2));
           for (let j = 0; j < this.inputDim; j++) {
               // Smooth representation alignment
-              this.encoderWeights[i][j] -= adaptiveLR * 0.45 * gradient * (nextState[j] || 0);
+              this.encoderWeights[i][j] -= adaptiveLR * 0.45 * gradient * (safeNextState[j] || 0);
           }
       }
     }

@@ -1,160 +1,69 @@
-import { create } from 'zustand';
-import { vedaService } from '../services/vedaService';
-import { knbService } from '../services/knbService';
-import { resonanceService } from '../services/resonanceService';
+import { useSovereignStore } from './sovereignStore';
+import { useShallow } from 'zustand/react/shallow';
 import { BrainData } from '../types';
 
-interface VedaState {
+export interface VedaState {
   userData: BrainData | null;
   apiError: string | null;
   lastLog: string | null;
   isPulsing: boolean;
   isLoading: boolean;
   
-  // Actions
   setUserData: (userData: BrainData | null | ((prev: BrainData | null) => BrainData | null)) => void;
   setApiError: (error: string | null) => void;
   setLastLog: (log: string | null) => void;
   setIsPulsing: (pulsing: boolean) => void;
-  
-  // Async Actions
   fetchVedaData: () => Promise<void>;
   handleAction: (action: string, params?: any) => Promise<void>;
 }
 
-export const useVedaStore = create<VedaState>((set, get) => ({
-  userData: null,
-  apiError: null,
-  lastLog: null,
-  isPulsing: false,
-  isLoading: true,
+export const useVedaStore = () => {
+  return useSovereignStore(
+    useShallow((state) => ({
+      userData: state.userData,
+      apiError: state.apiError,
+      lastLog: state.lastLog,
+      isPulsing: state.isPulsing,
+      isLoading: state.isLoading,
+      setUserData: state.setUserData,
+      setApiError: state.setApiError,
+      setLastLog: state.setLastLog,
+      setIsPulsing: state.setIsPulsing,
+      fetchVedaData: state.fetchVedaData,
+      handleAction: state.handleAction,
+    }))
+  );
+};
 
-  setUserData: (userData: BrainData | null | ((prev: BrainData | null) => BrainData | null)) => {
-    if (typeof userData === 'function') {
-      set((state) => ({ userData: userData(state.userData), isLoading: false }));
-    } else {
-      set({ userData, isLoading: false });
-    }
-  },
-  setApiError: (apiError) => set({ apiError }),
-  setLastLog: (lastLog) => set({ lastLog }),
-  setIsPulsing: (isPulsing) => set({ isPulsing }),
+(useVedaStore as any).getState = (): VedaState => {
+  const state = useSovereignStore.getState();
+  return {
+    userData: state.userData,
+    apiError: state.apiError,
+    lastLog: state.lastLog,
+    isPulsing: state.isPulsing,
+    isLoading: state.isLoading,
+    setUserData: state.setUserData,
+    setApiError: state.setApiError,
+    setLastLog: state.setLastLog,
+    setIsPulsing: state.setIsPulsing,
+    fetchVedaData: state.fetchVedaData,
+    handleAction: state.handleAction,
+  };
+};
 
-  fetchVedaData: async () => {
-    try {
-      const [d, strength] = await Promise.all([
-        vedaService.getData(),
-        knbService.getCollectiveStrength().catch(err => {
-          console.warn("[KNB] Strength check failed - ignoring for stability", err);
-          return 0;
-        })
-      ]);
-      const safeData = d ? {
-        ...d,
-        collectiveStrength: strength,
-        innovation_manifold: d.innovation_manifold || {
-          innovationIndex: 0,
-          experienceSum: 0,
-          leapPotential: 0,
-          alignmentIndex: 0,
-          protocol: 'INITIALIZING',
-          uncertaintyVariance: 0
-        }
-      } : null;
-      
-      set({ 
-        userData: safeData, 
-        apiError: d ? null : "SYSTEM_STATE_EMPTY", 
-        isLoading: false 
-      });
-    } catch (e: any) {
-      console.warn("[VEDA_SYCHRONIZATION] Transient sync failure:", e);
-      // Only set apiError for actual routing/404/500 errors, not just transient timeouts
-      const msg = e.message?.toLowerCase() || "";
-      if (msg.includes('routing') || msg.includes('404') || msg.includes('500') || msg.includes('network error')) {
-        set({ apiError: e.message || "Unknown Causal Desync", isLoading: false });
-      } else {
-        // Silently fail or show a minor log
-        set({ isLoading: false });
-      }
-    }
-  },
-
-  handleAction: async (action, params) => {
-    set({ isPulsing: true });
-    setTimeout(() => set({ isPulsing: false }), 800);
-    
-    try {
-      let resultMsg = null;
-      
-      switch (action) {
-        case 'resonance': await vedaService.triggerResonance(params); break;
-        case 'synthesize': await vedaService.synthesize(); break;
-        case 'distill': await vedaService.distill(); break;
-        case 'activateBurst': 
-          await vedaService.activateBurst(
-            params?.target || "Sovereign Optimization",
-            params?.intensity || 0.5,
-            params?.manualApproval || false,
-            params?.mode || "DEFENSIVE_COUNTER"
-          );
-          break;
-        case 'approveBurst': await vedaService.approveBurst(); break;
-        case 'deactivateBurst': await vedaService.deactivateBurst(params?.reason || "MANUAL"); break;
-        case 'toggleSteadyState': await vedaService.toggleSteadyState(params?.active || false); break;
-        case 'toggleNanosecondSync': await vedaService.toggleNanosecondSync(params?.active || false); break;
-        case 'createTemporalAnchor': await vedaService.createTemporalAnchor(params?.label || "MANUAL_ANCHOR"); break;
-        case 'timeTravel': await vedaService.timeTravel(params?.anchorId); break;
-        case 'update_reminders': await vedaService.updatePersistence({ reminders: params.reminders }); break;
-        case 'prune': await vedaService.pruneNeuralFragment(params.id); break;
-        case 'imagine': await vedaService.imagine(params.prompt); break;
-        case 'animate': await vedaService.animate(params.prompt); break;
-        case 'synthesizeAudio': await vedaService.synthesizeAudio(params.prompt); break;
-        case 'setSystemTier': await vedaService.setSystemTier(params.tier); break;
-        case 'registerVisualAsset': await vedaService.postAction({ action: 'registerVisualAsset', params }); break;
-        case 'learnFragment': 
-          await knbService.addFragment(params.content, { type: params.type || 'DOCUMENT', source: 'USER_UPLOAD' }); 
-          await vedaService.postAction({ action: 'digestKnowledge', params: { snippets: [params.content], scope: 'USER_UPLOAD' } });
-          break;
-        
-        case 'upgrade': {
-          const res = await fetch('/api/v1/upgrade', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ stat: params.stat })
-          });
-          const json = await res.json();
-          if (json.success) {
-            resultMsg = `系統演化已成功套用至 ${params.stat} 指標。`;
-          }
-          break;
-        }
-        case 'solidifyAnalogicalAxiom': {
-          await vedaService.postAction({ action: 'solidifyAnalogicalAxiom', params });
-          resultMsg = `卓越類比公理已融入律法，系統穩態相干性顯著提升。`;
-          break;
-        }
-        case 'setComputeMode': {
-          await vedaService.postAction({ action: 'setComputeMode', params: { mode: params.mode } });
-          resultMsg = `主權運算模式已切換為：${params.mode === 'throughput' ? '高吞吐（High Throughput）' : '高精準（High Precision）'}。`;
-          break;
-        }
-        case 'refreshTele': {
-          resultMsg = `因果遥測流已重對位並刷新。`;
-          break;
-        }
-      }
-      
-      // Refresh after action
-      await get().fetchVedaData();
-      
-      const currentData = get().userData;
-      if (resultMsg) set({ lastLog: resultMsg });
-      else if (currentData?.msg) set({ lastLog: currentData.msg });
-      
-    } catch (e) {
-      console.error("Action failed", e);
-      set({ lastLog: "PROTOCOL_FAILURE: Connection disrupted" });
-    }
+(useVedaStore as any).setState = (update: any) => {
+  if (typeof update === 'function') {
+    const current = (useVedaStore as any).getState();
+    const next = update(current);
+    useSovereignStore.setState(next);
+  } else {
+    useSovereignStore.setState(update);
   }
-}));
+};
+
+(useVedaStore as any).subscribe = (listener: any) => {
+  return useSovereignStore.subscribe(() => {
+    listener((useVedaStore as any).getState());
+  });
+};

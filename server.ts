@@ -789,14 +789,7 @@ async function startServer() {
             const { action, params, requestId } = data;
             console.log(`[VEDA_SOCKET_ACTION] Executing ${action} via WebSocket Link.`);
             try {
-              let result: any = { success: true };
-              const method = (brain as any)[action];
-              if (typeof method === 'function') {
-                // Ensure 'this' context is preserved for class methods
-                result.data = await method.call(brain, params);
-              } else {
-                result = { success: false, error: `UNKNOWN_ACTION: ${action}` };
-              }
+              const result = await actionResolver.executeAction(action, params);
               ws.send(JSON.stringify({ type: "ACTION_RESULT", requestId, result }));
             } catch (err) {
               console.error(`[VEDA_SOCKET_ACTION_ERR] Fail: ${action}`, err);

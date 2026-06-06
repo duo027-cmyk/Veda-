@@ -137,6 +137,14 @@ export class ActionResolver {
         result.data = await this.brain.distillMemories();
         break;
 
+      case "dream":
+        // Run dream cycle in background
+        if (typeof (this.brain as any).runDreamCycle === "function") {
+          (this.brain as any).runDreamCycle(null).catch((e: any) => console.error("Dream cycle failed from resolver:", e));
+        }
+        result.status = "DREAMING_STARTED";
+        break;
+
       case "generateSovereignResponse":
         result.data = await this.brain.generateSovereignResponse(params);
         break;
@@ -198,6 +206,11 @@ export class ActionResolver {
         break;
 
       default:
+        // Aerospace-Grade Sandboxed Call Protection: prevent dynamic invocation of dangerous prototype methods or internal system properties
+        const forbiddenActions = ["constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable", "__proto__", "prototype"];
+        if (forbiddenActions.includes(action) || action.startsWith("__") || action.startsWith("_") || action.startsWith("private")) {
+          throw new Error(`CORE_SECURITY_VIOLATION: Dynamic invocation of protected directive [${action}] is restricted.`);
+        }
         const method = (this.brain as any)[action];
         if (typeof method === "function") {
           result.data = await method.call(this.brain, params);

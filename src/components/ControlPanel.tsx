@@ -1240,7 +1240,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                     NO MEMORIES DETECTED
                   </div>
                 ) : (
-                  memories.map((memory) => (
+                  memories.slice(0, 35).map((memory) => (
                     <div key={`memory-${memory.id}`} className="bg-white/5 border border-white/5 p-4 space-y-2 hover:border-white/20 transition-colors group relative">
                       <div className="flex justify-between items-center">
                         <span className="text-[7px] text-cyan-400/60 font-bold uppercase tracking-[0.3em] ff-font-serif">{memory.type}</span>
@@ -1626,7 +1626,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
               <TerminalIcon className="w-3 h-3" /> SYSTEM_MONOLOGUE
             </h2>
             <div className="flex-1 overflow-y-auto text-[8px] space-y-1.5 opacity-60 custom-scrollbar font-light text-white ff-text-body">
-              {logs.map((log, i) => (
+              {logs.slice(-60).map((log, i) => (
                 <div key={`kernel-log-${i}-${log.time}`} className={
                   log.type === EvolutionStatus.SUCCESS ? 'text-cyan-400' : 
                   log.type === EvolutionStatus.CRITICAL_REJECTION ? 'text-red-400 font-bold' : 

@@ -80,7 +80,15 @@ export class PersistenceSubsystem extends BaseSubsystem {
     try {
       if (fs.existsSync(STATE_PATH)) {
         const raw = await fsPromises.readFile(STATE_PATH, "utf-8");
-        return JSON.parse(raw);
+        try {
+          return JSON.parse(raw);
+        } catch (rawError) {
+          this.log('FAULT', `State file corrupted during parse: ${rawError}. Backing up file.`);
+          try {
+            await fsPromises.rename(STATE_PATH, `${STATE_PATH}.corrupted.${Date.now()}`);
+          } catch {}
+          return null;
+        }
       }
       return null;
     } catch (e) {
@@ -93,7 +101,19 @@ export class PersistenceSubsystem extends BaseSubsystem {
     try {
       if (fs.existsSync(this.MEMORIES_PATH)) {
         const raw = await fsPromises.readFile(this.MEMORIES_PATH, "utf-8");
-        return JSON.parse(raw);
+        try {
+          const parsed = JSON.parse(raw);
+          return {
+            mineral: Array.isArray(parsed?.mineral) ? parsed.mineral : [],
+            provisional: Array.isArray(parsed?.provisional) ? parsed.provisional : []
+          };
+        } catch (rawError) {
+          this.log('FAULT', `Memories file corrupted during parse: ${rawError}. Backing up file.`);
+          try {
+            await fsPromises.rename(this.MEMORIES_PATH, `${this.MEMORIES_PATH}.corrupted.${Date.now()}`);
+          } catch {}
+          return { mineral: [], provisional: [] };
+        }
       }
       return null;
     } catch (e) {
@@ -107,7 +127,11 @@ export class PersistenceSubsystem extends BaseSubsystem {
       const baselinePath = path.join(process.cwd(), "baselines.json");
       if (fs.existsSync(baselinePath)) {
         const raw = await fsPromises.readFile(baselinePath, "utf-8");
-        return JSON.parse(raw);
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return null;
+        }
       }
       return null;
     } catch (e) {
@@ -120,7 +144,11 @@ export class PersistenceSubsystem extends BaseSubsystem {
     try {
       if (fs.existsSync(this.INDEX_PATH)) {
         const raw = await fsPromises.readFile(this.INDEX_PATH, "utf-8");
-        return JSON.parse(raw);
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return null;
+        }
       }
       return null;
     } catch (e) {

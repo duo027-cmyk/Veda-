@@ -140,12 +140,33 @@ export interface StrategicReport {
   };
 }
 
-export interface LatticeJob {
+export interface LatticeJob<T = any> {
   id: string;
   type: string;
-  payload: any;
   status: 'PENDING' | 'PROCESSING' | 'SYNTHESIZING' | 'SOLIDIFIED' | 'FAILED';
-  result?: any;
+  payload: any;
+  result?: T;
+  coherence: number;
+  timestamp: number;
+  blockHeight: number;
+  isPaused?: boolean;
+}
+
+export interface JepaMetrics {
+  avgEnergy: number;
+  currentEnergy: number;
+  uncertaintyVariance: number;
+  latentState: number[];
+}
+
+export interface StrategicSimulation {
+  id: string;
+  scenario?: string;
+  best_path_id?: string;
+  divergenceVector?: number[];
+  resonanceDelta?: number;
+  coherenceOutcome?: number;
+  entropy?: number;
   timestamp: number;
 }
 
@@ -204,11 +225,12 @@ export interface BrainData extends BrainMetrics, BrainStatus {
   reminders?: Reminder[];
   
   // Complex Subsystems
-  lattice_jobs?: any[];
+  lattice_jobs?: LatticeJob[];
   lattice_results?: any[];
-  strategic_simulations?: any[];
+  strategic_simulations?: StrategicSimulation[];
   long_video_projects?: LongVideoProject[];
   strategic_reports?: StrategicReport[];
+  jepa?: JepaMetrics;
   
   // Intelligence & Modeling
   system_world_model?: WorldModel;

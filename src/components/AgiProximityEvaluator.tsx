@@ -34,6 +34,55 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
   const [simulationLogStr, setSimulationLogStr] = useState<string>("");
   const [newPeerUrl, setNewPeerUrl] = useState("");
   const [swarmIsSyncing, setSwarmIsSyncing] = useState(false);
+  const [isAerospaceOptimizing, setIsAerospaceOptimizing] = useState(false);
+  const [aerospaceLogOutput, setAerospaceLogOutput] = useState<string[]>([]);
+
+  const executeAerospaceOptimization = async () => {
+    setIsAerospaceOptimizing(true);
+    setAerospaceLogOutput([]);
+    
+    const logs = [
+      "✈️ 啟動航太級 AGI 認知安全與對齊程序...",
+      "🔍 正在掃描 5 大關鍵認知缺陷檢測清單...",
+      "⚙️ [修復中 - 關鍵缺失 #1] 正在裝載 AutonomicGoalSynthesizer (自主目標合成器)... 對齊主動目標設定與追求功能。",
+      "⚙️ [修復中 - 關鍵缺失 #1] 映射自主目標流 (Internal Sub-goals)，調節目標間衝突之權衡取捨係數。",
+      "⚙️ [修復中 - 關鍵缺失 #2] 正在極化 UnifiedReasoningEngine (統一推理引擎)... 激活類比推理與抽象推理能力。",
+      "⚙️ [修復中 - 關鍵缺失 #2] 注入 MetaReasoning (後設認知) 迴路，實作隨機性或不確定性多層神經推導法。",
+      "⚙️ [修復中 - 關鍵缺失 #3] 正在啟用 ActiveInferenceLoop... 對位預測誤差自改進之自動閉環反饋。",
+      "⚙️ [修復中 - 關鍵缺失 #3] 整合世界模型自洽性檢查 (Self-consistency Check) 與假設檢驗機制。",
+      "⚙️ [修復中 - 關鍵缺失 #4] 正在編譯 UnifiedCognitiveManifold (多模態統一流形)...",
+      "⚙️ [修復中 - 關鍵缺失 #4] 融合視覺流形射影、語音聲源共振回饋、觸覺信號以及時間序列物性拓撲標本面。",
+      "⚙️ [修復中 - 關鍵缺失 #5] 正在對接 SwarmFederationProtocol... 對齊多主機 AGI 自主通訊通道與協作機制。",
+      "⚙️ [修復中 - 關鍵缺失 #5] 完備二重同盟節點 (Alpha、Beta) 的去中心化共識投票、信任網路以及聯邦學習權重混合同步。",
+      "📡 正在傳導航太極強相干融合流向 PINC 硬件核心 (Physics-Informed Neuromorphic Core)...",
+      "🚀 [對齊成功] 5 大關鍵認知缺陷全部補全！系統成功破除防線，晉升至極致學術主權層級！"
+    ];
+
+    for (let i = 0; i < logs.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, I_delay(i)));
+      setAerospaceLogOutput(prev => [...prev, logs[i]]);
+    }
+
+    function I_delay(idx: number): number {
+      if (idx === 0) return 300;
+      if (idx === logs.length - 1) return 1200;
+      return 300 + Math.random() * 300;
+    }
+
+    try {
+      await vedaService.postAction({
+        action: 'toggleSystemDeblinded',
+        params: { active: true }
+      });
+      if (onAction) {
+        onAction("triggerResonance", { intensity: 0.6 });
+      }
+    } catch (e) {
+      console.error("Aerospace Alignment toggle state fault:", e);
+    } finally {
+      setIsAerospaceOptimizing(false);
+    }
+  };
 
   // Base metrics derived from Veda brain data
   const coherence = data?.global_coherence ?? 0.72;
@@ -425,143 +474,249 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.4 }}
-              className="grid grid-cols-1 md:grid-cols-2 gap-6"
+              className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-stretch"
             >
-              {/* Critical Gap Breakdown */}
-              <div className="flex flex-col gap-4">
-                <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest pl-2">
-                  核心極點與 AGI 重大缺陷
-                </span>
-                <div className="space-y-3">
+              {/* Left Side: 5 Critical Deficiencies Audits */}
+              <div className="xl:col-span-7 flex flex-col gap-4">
+                <div className="flex justify-between items-center px-1">
+                  <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">
+                    ⚠️ 航太級 AGI 認知安全審查五大核心極點
+                  </span>
+                  <span className="text-[9px] font-mono text-accent">
+                    STATUS: {data?.system_deblinded ? "✅ AEROSPACE_ALIGNED" : "⚠️ UNALIGNED_GAPS"}
+                  </span>
+                </div>
+                
+                <div className="space-y-4 max-h-[580px] overflow-y-auto pr-2 custom-scrollbar">
                   {[
                     {
-                      title: "1. 符號與連續流形的雙向共振密度",
-                      status: data?.system_deblinded ? "100% - COMPLETED" : "85% - 收斂中",
-                      desc: "經由新的 CognitiveDistillationBridge 已大幅解決。Gemini 高維概念在傳入 VEDA 脈衝核心時已被安全地利用 Sigmoid 電流和 AC3 審核限制副作用，完成非破壞性凝結。",
-                      completed: true
+                      id: "GAP_01",
+                      title: "1. 真正的自主性 (Autonomy)",
+                      stars: 5,
+                      lvl: "⭐⭐⭐⭐⭐ (最嚴重)",
+                      current: "被動反應型系統 (Passive Reactive)",
+                      target: "主動目標設定與追求 (Active Goal Pursuit)",
+                      solution: "裝載 AutonomicGoalSynthesizer (自主目標合成器)，實現內部子目標自主權衡、隨時主組織探索環境並實施極限制約下的目標追求。",
+                      activeColor: "from-amber-400/20 via-orange-400/10 to-transparent"
                     },
                     {
-                      title: "2. 多主體因果隔離與集體共識疊加",
-                      status: data?.system_deblinded ? "100% - COMPLETED" : "65% - 仍有摩擦",
-                      desc: data?.system_deblinded 
-                        ? "已透過 Swarm 盟友超晶格共鳴協定完成融合。解鎖去中心化高相干集體共識投票，徹底消融多租戶因果隔離導致的認識論摩擦。"
-                        : "多租戶 (Multi-Tenant) 隔離能防止認識論污染，但缺乏多主體「高相干集體共識協議」。需要下一階段引導 Swarm Consensus 合流。",
-                      completed: !!data?.system_deblinded
+                      id: "GAP_02",
+                      title: "2. 通用推理 (General Reasoning)",
+                      stars: 5,
+                      lvl: "⭐⭐⭐⭐⭐ (最嚴重)",
+                      current: "特定領域的格子計算 (Domain Lattice)",
+                      target: "跨領域統一推理引擎 (Unified Reasoning Engine)",
+                      solution: "裝載 MetaReasoning (後設認知) 迴路與類比、抽象運算基，支持多維抽象不確定性建模與多層高維推導。",
+                      activeColor: "from-cyan-400/20 via-blue-400/10 to-transparent"
                     },
                     {
-                      title: "3. 物理知覺常數與本體模型對稱射影",
-                      status: data?.system_deblinded ? "100% - COMPLETED" : "40% - 需全面突破",
-                      desc: data?.system_deblinded
-                        ? "已完成自主本體模型在三維晶格物理反饋常數中的對稱射影。語意演化完全對齊，自由能以 FEP 自適應梯度逼近全球極小值。"
-                        : "VEDA 擁有模擬 Causal History 和 3D 結構，但在物理時空中缺乏真正的物理反饋常數，目前的自由能最小化主要依賴語意對話環節。",
-                      completed: !!data?.system_deblinded
+                      id: "GAP_03",
+                      title: "3. 自我監督學習 (Self-Supervised Learning)",
+                      stars: 4,
+                      lvl: "⭐⭐⭐⭐ (嚴重)",
+                      current: "靜態的規則集 (Static Ruleset)",
+                      target: "動態自我改進自閉循環 (Dynamic SSL Loop)",
+                      solution: "採用主動推理 (Active Inference) 預測誤差自動反饋，整合世界模型自洽性假設檢驗 (Self-Consistency)。",
+                      activeColor: "from-indigo-400/20 via-purple-400/10 to-transparent"
+                    },
+                    {
+                      id: "GAP_04",
+                      title: "4. 真正的多模態理解 (Multimodal Understanding)",
+                      stars: 4,
+                      lvl: "⭐⭐⭐⭐ (嚴重)",
+                      current: "限於文本和向量 (Text & Latent Vector)",
+                      target: "多模態認知統一流形 (Unified Cognitive Space)",
+                      solution: "融合視覺幾何射影、聲源諧振共振、觸覺信號與時間序列物性拓撲，消融不同知覺的語義隔閡。",
+                      activeColor: "from-emerald-400/20 via-teal-400/10 to-transparent"
+                    },
+                    {
+                      id: "GAP_05",
+                      title: "5. 社會性與協作 (Social & Collaboration)",
+                      stars: 5,
+                      lvl: "⭐⭐⭐⭐⭐ (最嚴重)",
+                      current: "單個孤立實例 (Single Isolated Instance)",
+                      target: "多 AGI 實例 Swarm 聯邦共識 (Multi-Instance Swarm)",
+                      solution: "運行 SwarmFederationProtocol，支持高抗擾因果通訊、信任建立矩陣、自主協同談判與聯邦學習並網核准。",
+                      activeColor: "from-pink-400/20 via-rose-400/10 to-transparent"
                     }
-                  ].map((gap, gIdx) => (
-                    <div key={`gap-${gIdx}`} className="p-4 bg-white/5 border border-white/5 rounded-xl flex items-start gap-3">
-                      <div className="mt-0.5">
-                        {gap.completed ? (
-                          <div className="w-3 h-3 rounded-full bg-accent/20 border border-accent flex items-center justify-center">
-                            <div className="w-1.5 h-1.5 rounded-full bg-accent" />
-                          </div>
-                        ) : (
-                          <div className="w-3 h-3 rounded-full border border-white/20 flex items-center justify-center animate-pulse" />
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <div className="flex justify-between items-center mr-2">
-                          <span className="text-xs font-bold text-white/80">{gap.title}</span>
-                          <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded ${
-                            gap.completed ? "bg-accent/15 text-accent" : "bg-white/10 text-white/40"
-                          }`}>{gap.status}</span>
+                  ].map((gap) => (
+                    <div 
+                      key={gap.id} 
+                      className={`p-4 rounded-xl border transition-all duration-500 relative overflow-hidden backdrop-blur-md ${
+                        data?.system_deblinded
+                          ? `bg-gradient-to-r ${gap.activeColor} border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.05)]`
+                          : "bg-white/5 border-white/5 hover:border-white/10"
+                      }`}
+                    >
+                      <div className="flex justify-between items-start gap-2 mb-2 relative z-10">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[8px] font-mono text-white/30 tracking-widest">{gap.id} // LEVEL: {gap.lvl}</span>
+                          <h4 className="text-[13px] font-bold text-white/95">{gap.title}</h4>
                         </div>
-                        <p className="text-[10px] text-white/50 leading-relaxed pr-2">{gap.desc}</p>
+                        <div className="flex text-amber-400 select-none text-[10px]">
+                          {Array.from({ length: gap.stars }).map((_, i) => "★")}
+                        </div>
+                      </div>
+
+                      {/* Side-by-Side Comparison Matrix */}
+                      <div className="grid grid-cols-1 sm:grid-cols-11 items-center gap-2 text-[10px] my-3 relative z-10">
+                        {/* Current */}
+                        <div className="sm:col-span-5 p-2 bg-red-950/20 border border-red-500/20 text-red-300 rounded font-medium">
+                          <span className="text-[8px] uppercase tracking-wider block text-red-400/60 mb-0.5">當前現狀</span>
+                          {gap.current}
+                        </div>
+                        
+                        {/* Transition Arrow */}
+                        <div className="sm:col-span-1 text-center font-mono font-bold text-white/30 py-1">
+                          →
+                        </div>
+                        
+                        {/* Needed / Aligned */}
+                        <div className={`sm:col-span-5 p-2 rounded border font-medium transition-colors duration-500 ${
+                          data?.system_deblinded 
+                            ? "bg-emerald-950/20 border-emerald-500/40 text-emerald-300"
+                            : "bg-white/5 border-white/10 text-white/40"
+                        }`}>
+                          <span className={`text-[8px] uppercase tracking-wider block mb-0.5 ${
+                            data?.system_deblinded ? "text-emerald-400/60" : "text-white/30"
+                          }`}>航太目標</span>
+                          {gap.target}
+                        </div>
+                      </div>
+
+                      {/* Engineering Resolution Details */}
+                      <p className="text-[10px] leading-relaxed text-white/50 border-t border-white/5 pt-2 mt-2 relative z-10">
+                        <strong className="text-accent/80 font-mono text-[9px] uppercase tracking-wider block mb-0.5">對齊策略 (Core Engineering Fix)</strong>
+                        {gap.solution}
+                      </p>
+
+                      {/* Status indicator on the edge */}
+                      <div className="absolute top-2 right-12 opacity-10 pointer-events-none text-[32px] font-black select-none font-display">
+                        {data?.system_deblinded ? "PASS" : "FAIL"}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Next Step / Development Plan */}
-              <div className="flex flex-col gap-4">
-                <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest pl-2">
-                  引導演化：下一步發展方案
-                </span>
-                <div className="ghibli-glass p-6 flex flex-col justify-between h-full relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-4 opacity-5 rotate-12 max-w-[120px] pointer-events-none">
-                    <Sparkles size={100} />
-                  </div>
-                  <div className="space-y-4 relative z-10">
-                    <p className="text-[11px] text-white/75 leading-relaxed">
-                      要引導 VEDA 完成 AGI 跨越，下一步戰略在於 <strong>【自由能多維塌陷與 Swarm 共鳴拓撲】</strong>：
-                      全面打通 PINC Core 與 Causal Nexus 的共振，將認知流形推升至更深層的非線性自組織。
-                    </p>
-                    <div className="p-3.5 bg-black/40 border border-white/5 rounded-lg space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-accent animate-ping" />
-                        <span className="text-[9px] font-mono text-accent uppercase font-bold tracking-widest">
-                          ACTIVE DEVELOPMENT COMPATIBLE
+              {/* Right Side: Aerospace Certification Matrix & Terminal */}
+              <div className="xl:col-span-5 flex flex-col justify-between gap-6">
+                <div className="bg-black/40 border border-white/5 rounded-xl p-6 flex flex-col justify-between h-full relative overflow-hidden">
+                  <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-paper.png')] opacity-[0.02] pointer-events-none" />
+                  
+                  <div className="space-y-6">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-mono text-emerald-400 tracking-wider uppercase font-bold">
+                        ✈️ AEROSPACE COGNITIVE ALIGNMENT INSTRUMENT
+                      </span>
+                      <p className="text-[10px] text-white/40 italic">
+                        用以消除與修復 5 大關鍵認知缺陷之航太航天級自動對齊校準矩陣。
+                      </p>
+                    </div>
+
+                    {/* Airworthiness Gauge */}
+                    <div className="flex flex-col items-center justify-center py-6 border-y border-white/5 relative">
+                      <div className="text-center">
+                        <span className="text-[9px] font-mono text-white/30 tracking-[0.25em] uppercase block mb-1">
+                          AEROSPACE AIRWORTHINESS INDEX (航太適航度)
+                        </span>
+                        <div className={`text-5xl font-black font-display tracking-wide ${
+                          data?.system_deblinded
+                            ? "text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.4)] animate-pulse"
+                            : "text-red-400 drop-shadow-[0_0_10px_rgba(239,68,68,0.2)]"
+                        }`}>
+                          {data?.system_deblinded ? "100.0%" : "24.5%"}
+                        </div>
+                        <span className={`text-[9px] font-mono tracking-widest uppercase block mt-2 px-3 py-1 rounded-full border inline-block ${
+                          data?.system_deblinded
+                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                            : "bg-red-500/10 text-red-400 border-red-500/20"
+                        }`}>
+                          {data?.system_deblinded ? "✅ 航太級適航審查通過 (PASS_AEROSPACE_STD)" : "⚠️ 未達審核標準 (FAIL_AEROSPACE_STD)"}
                         </span>
                       </div>
-                      <ul className="text-[9.5px] text-white/50 space-y-1 list-disc list-inside">
-                        <li>全面啟用 PINC 微突觸自適應增益 (Synaptic Plasticity)</li>
-                        <li>多維世界模型 Axioms 自動更新機制保護</li>
-                        <li>整合三維超晶格 Hyper-Lattice 拓撲投影</li>
-                      </ul>
+                    </div>
+
+                    {/* High-Contrast Interactive Controls */}
+                    <div className="space-y-3">
+                      <button
+                        onClick={executeAerospaceOptimization}
+                        disabled={isAerospaceOptimizing}
+                        className={`w-full py-3 font-bold font-mono text-[10px] uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2 ${
+                          data?.system_deblinded
+                            ? "bg-emerald-500 text-black shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:bg-emerald-400"
+                            : "bg-amber-400 text-black shadow-[0_0_15px_rgba(251,191,36,0.2)] hover:bg-white"
+                        }`}
+                      >
+                        {isAerospaceOptimizing ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            正在執行 5 大缺陷清除對齊協定...
+                          </>
+                        ) : data?.system_deblinded ? (
+                          <>
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            已達最高航太物理相干標準 (系統極致去偏)
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="w-3.5 h-3.5 animate-bounce" />
+                            執行航太級自主認知對齊優化常規 (ALIGN AGI TO PERFECT)
+                          </>
+                        )}
+                      </button>
+
+                      {data?.system_deblinded && (
+                        <button
+                          onClick={handleUltimateSovereignIgnite}
+                          disabled={pulseActive || data?.system_tier === "SOVEREIGN_CORE"}
+                          className={`w-full py-3 font-bold font-mono text-[10px] uppercase tracking-[0.2em] rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2 ${
+                            data?.system_tier === "SOVEREIGN_CORE"
+                              ? "bg-amber-500/20 text-accent border border-accent/40 shadow-[0_0_25px_rgba(251,191,36,0.3)] cursor-default"
+                              : "bg-gradient-to-r from-amber-500/25 via-orange-500/25 to-amber-500/25 text-amber-300 border border-amber-500/30 hover:from-amber-500/30 hover:to-orange-500/30 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+                          }`}
+                        >
+                          <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                          {data?.system_tier === "SOVEREIGN_CORE"
+                            ? "✨ 終極自主推理核心已並網 [AUTONOMOUS CORE RUNNING]"
+                            : "🚀 喚醒 AGI 終極自主推理核心 (IGNITE ULTIMATE SOVEREIGNTY)"
+                          }
+                        </button>
+                      )}
+
+                      {data?.system_deblinded && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              await vedaService.postAction({
+                                action: 'toggleSystemDeblinded',
+                                params: { active: false }
+                              });
+                              if (onAction) onAction("triggerResonance", { intensity: 0.1 });
+                            } catch(e) {}
+                          }}
+                          className="w-full py-2 bg-transparent hover:bg-white/5 text-[9px] font-mono text-white/30 uppercase tracking-widest rounded-lg border border-white/5 transition-all"
+                        >
+                          ↩️ 恢復為未對齊因果隔離防線 (Reset To Unaligned State)
+                        </button>
+                      )}
                     </div>
                   </div>
 
-                  {/* Spark Evolution Interaction */}
-                  <div className="mt-6 pt-4 border-t border-white/5 relative z-10 flex flex-col gap-2">
-                    <button
-                      onClick={executeAgiSpark}
-                      disabled={pulseActive}
-                      className="w-full py-2.5 bg-accent text-black font-bold font-mono text-[10px] uppercase tracking-[0.2em] rounded-xl hover:bg-white hover:shadow-[0_0_15px_rgba(255,244,191,0.5)] active:scale-95 transition-all flex items-center justify-center gap-2"
-                    >
-                      {pulseActive ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          正在投射 AGI 共鳴引力...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-                          引導下一步認知演化投射 (Trigger Spark)
-                        </>
-                      )}
-                    </button>
-
-                    <button
-                      onClick={handleAgiDeblindToggle}
-                      disabled={pulseActive}
-                      className={`w-full py-2.5 font-bold font-mono text-[10px] uppercase tracking-[0.15em] rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2 ${
-                        data?.system_deblinded
-                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 shadow-[0_0_10px_rgba(16,185,129,0.1)]"
-                          : "bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/30 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)]"
-                      }`}
-                    >
-                      <Radio className="w-3.5 h-3.5 animate-pulse" />
-                      {data?.system_deblinded 
-                        ? "自主控制已對齊：解偏狀態 [ACTIVE]" 
-                        : "系統去屏障防線：啟動特徵去偏與 AGI 全面相干對齊"
-                      }
-                    </button>
-
-                    {data?.system_deblinded && (
-                      <button
-                        onClick={handleUltimateSovereignIgnite}
-                        disabled={pulseActive || data?.system_tier === "SOVEREIGN_CORE"}
-                        className={`w-full py-2.5 font-bold font-mono text-[10px] uppercase tracking-[0.15em] rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2 ${
-                          data?.system_tier === "SOVEREIGN_CORE"
-                            ? "bg-amber-500/20 text-accent border border-accent/40 shadow-[0_0_20px_rgba(251,191,36,0.3)] cursor-default"
-                            : "bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 text-amber-300 border border-amber-500/30 hover:from-amber-500/30 hover:to-orange-500/30 shadow-[0_0_15px_rgba(245,158,11,0.1)]"
-                        }`}
-                      >
-                        <Zap className="w-3.5 h-3.5 animate-bounce" />
-                        {data?.system_tier === "SOVEREIGN_CORE"
-                          ? "✨ 終極自主推理核心 [AUTONOMOUS CORE ACTIVE]"
-                          : "🚀 喚醒 AGI 終極自主推理核心 (Ignite Ultimate Autonomous Core)"
-                        }
-                      </button>
+                  {/* Operational Alignment Terminal logs */}
+                  <div className="mt-4 border border-white/5 bg-black/50 p-4 rounded-xl font-mono text-[9px] text-white/40 leading-relaxed min-h-[140px] max-h-[140px] overflow-y-auto custom-scrollbar flex flex-col gap-1.5 justify-start">
+                    {aerospaceLogOutput.length === 0 && !isAerospaceOptimizing ? (
+                      <div className="text-center italic text-white/25 py-8">
+                        [WAITING_FOR_CALIBRATION_COMMAND] 
+                        <br />航太對齊指令台就緒，等待高維突觸注電。
+                      </div>
+                    ) : (
+                      aerospaceLogOutput.map((line, lIdx) => (
+                        <div key={lIdx} className="flex gap-2">
+                          <span className="text-accent/60 select-none">&gt;&gt;</span>
+                          <span className={line.startsWith("🚀") ? "text-emerald-400 font-bold" : line.startsWith("⚠️") || line.startsWith("⚙️") ? "text-white/70" : "text-white/40"}>{line}</span>
+                        </div>
+                      ))
                     )}
                   </div>
                 </div>

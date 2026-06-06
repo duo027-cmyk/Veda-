@@ -191,11 +191,47 @@ async function fetchWithRetry(url: string, options?: RequestInit, retries = 5, d
 export const vedaService = {
   socket: null as WebSocket | null,
   onStateUpdate: null as ((data: any) => void) | null,
+  connectionState: 'DISCONNECTED' as 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED',
+  connectionListeners: new Set<(state: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED') => void>(),
+  isWaitingForPong: false,
+
+  setConnectionState(state: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED') {
+    this.connectionState = state;
+    this.connectionListeners.forEach(listener => {
+      try {
+        listener(state);
+      } catch (err) {
+        console.error("[VEDA_CONNECTION_LISTENER_ERR] Error triggering connection listener:", err);
+      }
+    });
+  },
+
+  registerConnectionListener(listener: (state: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED') => void) {
+    this.connectionListeners.add(listener);
+    try {
+      listener(this.connectionState);
+    } catch {}
+    return () => this.unregisterConnectionListener(listener);
+  },
+
+  unregisterConnectionListener(listener: (state: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED') => void) {
+    this.connectionListeners.delete(listener);
+  },
+
+  isWebSocketActive(): boolean {
+    return this.socket !== null && this.socket.readyState === 1; // 1 for WebSocket.OPEN
+  },
 
   setupWebSocket(onUpdate: (data: any) => void) {
     this.onStateUpdate = onUpdate;
-    if (this.socket) return;
+    if (this.socket) {
+      if (this.socket.readyState === 1) {
+        this.setConnectionState('CONNECTED');
+      }
+      return;
+    }
     
+    this.setConnectionState('CONNECTING');
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.host;
@@ -203,17 +239,18 @@ export const vedaService = {
 
       socket.onopen = () => {
         console.log("[VEDA_SOCKET] Logic link established.");
+        this.setConnectionState('CONNECTED');
       };
 
-      socket.onmessage = (event) => {
+       socket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          if (message.type === 'VEDA_STATE_FULL' || message.type === 'VEDA_STATE_PARTIAL') {
+          if (message.type === 'PONG') {
+            this.isWaitingForPong = false;
+          } else if (message.type === 'VEDA_STATE_FULL' || message.type === 'VEDA_STATE_PARTIAL') {
             if (this.onStateUpdate) this.onStateUpdate(message.data);
           } else if (message.type === 'SYSTEM_MONOLOGUE') {
             // Handle monologue if needed, maybe trigger a notification or update logs
-          } else if (message.type === 'PONG') {
-            // Heartbeat received
           }
         } catch (e) {
           console.error("[VEDA_SOCKET_ERR] Payload disruption:", e);
@@ -223,26 +260,38 @@ export const vedaService = {
       socket.onclose = () => {
         console.warn("[VEDA_SOCKET] Logic link severed. Re-anchoring in 5s...");
         this.socket = null;
+        this.isWaitingForPong = false;
+        this.setConnectionState('DISCONNECTED');
         setTimeout(() => this.setupWebSocket(onUpdate), 5000);
       };
 
       socket.onerror = (err) => {
         console.error("[VEDA_SOCKET_ERR] Transmission fault:", err);
+        this.setConnectionState('DISCONNECTED');
       };
 
       this.socket = socket;
 
-      // Heartbeat
+      // Heartbeat with Proactive Pong Monitoring (Aerospace-grade half-open socket detection)
+      this.isWaitingForPong = false;
       const heartbeat = setInterval(() => {
-        if (this.socket?.readyState === WebSocket.OPEN) {
+        if (this.socket?.readyState === 1) {
+          if (this.isWaitingForPong) {
+            console.warn("[VEDA_SOCKET] Pong missed. Closing half-open socket to trigger corrective healing...");
+            clearInterval(heartbeat);
+            this.socket.close();
+            return;
+          }
+          this.isWaitingForPong = true;
           this.socket.send(JSON.stringify({ type: 'PING' }));
         } else {
           clearInterval(heartbeat);
         }
-      }, 30000);
+      }, 15000);
 
     } catch (e) {
       console.error("[VEDA_SOCKET_BOOT_ERR] Failed to initiate logic link:", e);
+      this.setConnectionState('DISCONNECTED');
     }
   },
 
@@ -500,14 +549,7 @@ export const vedaService = {
   },
 
   async evolve(intent: number[], text?: string): Promise<BrainData> {
-    invalidateCache("SYSTEM_STATE");
-    const res = await fetchWithRetry("/api/evolve", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ intent, text }),
-    });
-    if (!res.ok) throw new Error("Evolution failed");
-    const json = await res.json();
+    const json = await this.postAction({ action: "evolve", params: { intent, text } });
     setToCache("SYSTEM_STATE", json);
     return json;
   },
@@ -527,162 +569,82 @@ export const vedaService = {
   },
 
   async synthesize(): Promise<{ success: boolean; memory?: any; message?: string }> {
-    invalidateCache("SYSTEM_STATE");
-    const res = await fetchWithRetry("/api/synthesize", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-    });
-    return res.json();
+    const res = await this.postAction({ action: "synthesize", params: {} });
+    return {
+      success: res?.success !== false,
+      memory: res?.memory || res,
+      message: res?.message
+    };
   },
 
   async updateSensorData(data: any): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "updateSensorData", params: data }),
-    });
-    return res.json();
+    return this.postAction({ action: "updateSensorData", params: data });
   },
 
   async distill(): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "distillMemories", params: {} }),
-    });
-    return res.json();
+    return this.postAction({ action: "distillMemories", params: {} });
   },
 
   async pruneNeuralFragment(id: string): Promise<boolean> {
-    // Attempt WebSocket first
-    const self = vedaService as any;
-    if (self.socket && self.socket.readyState === 1) {
-      self.socket.send(JSON.stringify({ type: 'NEURAL_PRUNE', id }));
-      return true;
+    try {
+      const res = await this.postAction({ action: "prune", params: { id } });
+      return res?.success !== false;
+    } catch {
+      return false;
     }
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "prune", params: { id } }),
-    });
-    return res.ok;
   },
 
   async updateAxioms(axioms: string[]): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "updateAxioms", params: { axioms } }),
-    });
-    return res.json();
+    return this.postAction({ action: "updateAxioms", params: { axioms } });
   },
 
   async triggerResonance(intensity: number = 0.1): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "triggerResonance", params: { intensity } }),
-    });
-    return res.json();
+    return this.postAction({ action: "triggerResonance", params: { intensity } });
   },
 
   async nudgeArchitect(params: { mutationRate?: number; mutationStrength?: number; stabilityWeight?: number; trendWeight?: number }): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "nudgeArchitect", params }),
-    });
-    return res.json();
+    return this.postAction({ action: "nudgeArchitect", params });
   },
 
   async updateSettings(settings: any): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "updateSettings", params: settings }),
-    });
-    return res.json();
+    return this.postAction({ action: "updateSettings", params: settings });
   },
 
   async toggleLogicFreeze(): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "toggleLogicFreeze", params: {} }),
-    });
-    return res.json();
+    const res = await this.postAction({ action: "toggleLogicFreeze", params: {} });
+    return res;
   },
   
   async activateBurst(target: string = "Sovereign Optimization", intensity: number = 0.5, manualApproval: boolean = false, mode: string = "DEFENSIVE_COUNTER"): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "activateBurst", params: { target, intensity, manualApproval, mode } }),
-    });
-    return res.json();
+    return this.postAction({ action: "activateBurst", params: { target, intensity, manualApproval, mode } });
   },
 
   async approveBurst(): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "approveBurst", params: {} }),
-    });
-    return res.json();
+    return this.postAction({ action: "approveBurst", params: {} });
   },
   
   async toggleSteadyState(active: boolean): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "toggleSteadyState", params: { active } }),
-    });
-    return res.json();
+    return this.postAction({ action: "toggleSteadyState", params: { active } });
   },
 
   async toggleNanosecondSync(active: boolean): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "toggleNanosecondSync", params: { active } }),
-    });
-    return res.json();
+    return this.postAction({ action: "toggleNanosecondSync", params: { active } });
   },
 
   async deactivateBurst(reason: string = "MANUAL"): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "deactivateBurst", params: { reason } }),
-    });
-    return res.json();
+    return this.postAction({ action: "deactivateBurst", params: { reason } });
   },
 
   async ingestStream(data: string[]): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "ingestStream", params: { data } }),
-    });
-    return res.json();
+    return this.postAction({ action: "ingestStream", params: { data } });
   },
 
   async createTemporalAnchor(label: string): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "createTemporalAnchor", params: { label } }),
-    });
-    return res.json();
+    return this.postAction({ action: "createTemporalAnchor", params: { label } });
   },
 
   async timeTravel(anchorId: string): Promise<any> {
-    const res = await fetchWithRetry("/api/action", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "timeTravel", params: { anchorId } }),
-    });
-    return res.json();
+    return this.postAction({ action: "timeTravel", params: { anchorId } });
   },
 
   async getMemories(): Promise<any[]> {
@@ -790,11 +752,7 @@ export const vedaService = {
   },
 
   async dream(): Promise<any> {
-    const res = await fetchWithRetry("/api/dream", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" }
-    });
-    return res.json();
+    return this.postAction({ action: "dream", params: {} });
   },
 
   async generateMusic(prompt: string): Promise<string | null> {
@@ -853,7 +811,7 @@ export const vedaService = {
               if (msg.type === 'ACTION_RESULT' && msg.requestId === requestId) {
                 clearTimeout(timeout);
                 this.socket?.removeEventListener('message', handleSocketMessage);
-                if (msg.result.success) resolve(msg.result.data);
+                if (msg.result.success) resolve(msg.result.data !== undefined ? msg.result.data : msg.result);
                 else reject(new Error(msg.result.error || "UNKNOWN_SOCKET_ACTION_FAULT"));
               }
             } catch (e) {}

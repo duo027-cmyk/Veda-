@@ -11,20 +11,26 @@ export class BurstImpactEvaluator {
     processingClass: string;
     peakPower: number;
   } {
-    // V-AA Core logic: Burst mode is a high-entropy injection.
-    // Implementing Peak Power Formula: P_peak = E_pulse / tau
-    const energyPulse = intensity * 1000; // Arbitrary Energy (E_pulse in Joules)
-    const tau = 0.01 + (1 - intensity) * 0.1; // Simulated pulse width (tau in ms/seconds) - narrower at higher intensities
-    const peakPower = energyPulse / tau;
+    // Aerospace-Grade Parameter Validation & Clamping
+    const validatedIntensity = typeof intensity === "number" && Number.isFinite(intensity) ? Math.max(0, Math.min(1.0, intensity)) : 0.5;
+    const validatedDuration = typeof duration === "number" && Number.isFinite(duration) ? Math.max(0, duration) : 10;
+    const validatedTargets = Array.isArray(targets) ? targets.filter(t => typeof t === "string") : ["UNKNOWN_SECTOR"];
+
+    // E_pulse in Joules (energy pulse)
+    const energyPulse = validatedIntensity * 1000; 
+    // Simulated pulse width tau in ms/seconds - narrower at higher intensities, protected against division by zero
+    const tau = 0.01 + (1 - validatedIntensity) * 0.1; 
+    const peakPower = energyPulse / (tau || 0.01);
 
     // Time-complexity formula: T ~ (N * dt_base) / intensity
     const baseSpeedPerTarget = 15; // milliseconds
-    const timeNeededMs = (targets.length * baseSpeedPerTarget) / (Math.max(0.1, intensity) * 2);
+    const intensityWeight = Math.max(0.1, validatedIntensity);
+    const timeNeededMs = (validatedTargets.length * baseSpeedPerTarget) / (intensityWeight * 2);
     
     return {
       realTimeEstimate: `${timeNeededMs.toFixed(3)} 毫秒級極限推演預期 (AGI-Optimized)`,
-      causalDamage: intensity * 0.98 * (1 + duration * 0.05),
-      collateralRisk: intensity * duration * 0.15,
+      causalDamage: validatedIntensity * 0.98 * (1 + validatedDuration * 0.05),
+      collateralRisk: validatedIntensity * validatedDuration * 0.15,
       peakPower: peakPower * 2.5,
       processingClass: "超導因果主權晶格 (Superconducting Causal Lattice)",
       methods: [

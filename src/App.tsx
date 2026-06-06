@@ -4,7 +4,6 @@ import {
   X,
   RefreshCw,
   ShieldAlert,
-  Moon,
   Loader2
 } from 'lucide-react';
 import { EfficacyManifold } from './components/EfficacyManifold';
@@ -28,6 +27,7 @@ import { HoneycombHUD } from './components/HoneycombHUD';
 import { LatticeCruncher } from './components/LatticeCruncher';
 import { TaskManager } from './components/TaskManager';
 import { ControlPanel } from './components/ControlPanel';
+import { DreamscapeView } from './components/DreamscapeView';
 
 // --- Stores ---
 import { useAuthStore } from './store/authStore';
@@ -123,8 +123,35 @@ export default function App() {
     return () => removeComputeListener();
   }, []);
 
-  // --- Sovereign State Synchronization ---
+  // --- Sovereign State Synchronization (Aerospace-Grade Adaptive Sync Engine) ---
   useEffect(() => {
+    let fallbackTimer: NodeJS.Timeout | null = null;
+    let wsConnected = false;
+    let currentPollingDelay = 15000; // Start with a safe 15s when disconnected
+
+    const performSync = async () => {
+      // Do not query when tab is in the background to conserve mobile power and cellular data
+      if (document.hidden) return;
+      try {
+        await fetchVedaData();
+        // Reset delay on successful state retrieval
+        currentPollingDelay = 15000;
+      } catch (err) {
+        console.warn("[VEDA_SYNC] Passive background sync error, adaptive throttle backoff active:", err);
+        // Exponential backoff capped at 60s
+        currentPollingDelay = Math.min(60000, currentPollingDelay * 1.5);
+      }
+      triggerNextTimer();
+    };
+
+    const triggerNextTimer = () => {
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      // If WebSocket is active, bypass periodic fetching entirely (zero idle polling traffic)
+      if (wsConnected) return;
+      
+      fallbackTimer = setTimeout(performSync, currentPollingDelay);
+    };
+
     // 1. Initial State Retrieval
     fetchVedaData();
 
@@ -142,9 +169,37 @@ export default function App() {
       });
     });
 
-    // 3. Fallback Heartbeat (Reduced frequency to 60s as WebSocket now handles real-time)
-    const sub = setInterval(fetchVedaData, 60000); 
-    return () => clearInterval(sub);
+    // 3. Bind WebSocket Connection observer for context-aware throttling
+    const unsubscribeConnection = vedaService.registerConnectionListener((state) => {
+      const previouslyConnected = wsConnected;
+      wsConnected = state === 'CONNECTED';
+      
+      console.log(`[VEDA_SYNC_CONTROL] Connection state transition: ${state}. Polling loop: ${wsConnected ? 'SUSPENDED' : 'ACTIVE_WITH_BACKOFF'}`);
+      
+      // Re-evaluate timers if connection status has flipped
+      if (!wsConnected || previouslyConnected !== wsConnected) {
+        triggerNextTimer();
+      }
+    });
+
+    // 4. Reactive Visibility Engine: Sync immediately when user switches focus back to the page
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        console.log("[VEDA_SYNC_CONTROL] Tab visibility restored. Forcing trajectory alignment.");
+        fetchVedaData();
+        triggerNextTimer();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+    window.addEventListener("focus", handleVisibilityOrFocus);
+
+    return () => {
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      unsubscribeConnection();
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+    };
   }, [fetchVedaData, setUserData]);
 
   // --- Proactive Lifecycle Engine ---
@@ -192,27 +247,35 @@ export default function App() {
 
       try {
         const { knbService } = await import('./services/knbService');
-        for (const m of newMemories) {
-          // Content safety guard
-          if (!m.content || m.content.length > 50000) {
-            syncedMemoriesRef.current.add(m.id);
-            continue;
-          }
+        
+        // Content validity check
+        const validNewMemories = newMemories.filter(m => m.content && m.content.length <= 50000);
+        if (validNewMemories.length === 0) {
+          newMemories.forEach(m => syncedMemoriesRef.current.add(m.id));
+          return;
+        }
 
-          const exists = await (knbService as any).db.fragments.where('content').equals(m.content).first();
-          if (!exists) {
-            console.log(`[SYNC] Integrating server memory: ${m.content.substring(0, 20)}...`);
-            await knbService.addFragment(m.content, {
+        // Fast batch-check existence in local DB
+        const existingList = await knbService.db.fragments.where('content').anyOf(validNewMemories.map(m => m.content)).toArray();
+        const existingContents = new Set(existingList.map(f => f.content));
+
+        const memoriesToInsert = validNewMemories.filter(m => !existingContents.has(m.content));
+
+        if (memoriesToInsert.length > 0) {
+          console.log(`[SYNC] Bulk integrating ${memoriesToInsert.length} server memories.`);
+          await knbService.addFragmentsBatch(memoriesToInsert.map(m => ({
+            content: m.content,
+            metadata: {
               type: m.type || 'SYNTHESIZED',
               source: 'VEDA_BRAIN',
               resonance: m.resonance,
               id: m.id
-            });
-            // Delay to keep the main thread fluid
-            await new Promise(r => setTimeout(r, 150));
-          }
-          syncedMemoriesRef.current.add(m.id);
+            }
+          })));
         }
+
+        // Mark all as processed
+        newMemories.forEach(m => syncedMemoriesRef.current.add(m.id));
       } catch (e) {
         console.error("[SYNC_FAULT] Memory integration interrupted:", e);
       }
@@ -373,42 +436,7 @@ export default function App() {
               />
             )}
             {view === 'DREAM' && (
-              <div className="h-full flex items-center justify-center p-20">
-                 <div className="text-center max-w-2xl px-12 group">
-                   <div className="relative inline-block">
-                     <Moon size={120} className="mx-auto text-white/5 group-hover:text-accent/20 transition-all duration-[3000ms] stroke-[0.3px]" />
-                     {userData?.isDreaming && (
-                       <motion.div 
-                         animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
-                         transition={{ duration: 4, repeat: Infinity }}
-                         className="absolute inset-0 bg-accent/10 blur-3xl rounded-full"
-                       />
-                     )}
-                   </div>
-                   <h2 className="text-hand-serif text-5xl tracking-[0.4em] uppercase mt-12 opacity-40 font-display">
-                     {userData?.isDreaming ? t.deep_consensus_dream : t.resting_state}
-                   </h2>
-                   <p className="mt-8 font-serif italic text-lg opacity-20 tracking-wide leading-relaxed px-12">
-                     {userData?.is_logic_frozen 
-                       ? t.system_crystallized 
-                       : userData?.isDreaming 
-                         ? t.neural_synthesizing 
-                         : t.neural_optimal
-                     }
-                   </p>
-                   
-                   {userData?.axioms && userData.axioms.length > 0 && (
-                     <div className="mt-12 text-left space-y-4 max-h-40 overflow-y-auto scrollbar-none opacity-40 hover:opacity-100 transition-opacity">
-                        <p className="text-[10px] tracking-[0.4em] uppercase text-gold/60 text-center">Synthesized Axioms</p>
-                        {userData.axioms.map((a, i) => (
-                           <div key={`${i}-${a.substring(0, 20)}`} className="text-xs font-serif italic border-gold/20 pl-4 py-1">
-                             {a}
-                           </div>
-                        ))}
-                     </div>
-                   )}
-                 </div>
-              </div>
+              <DreamscapeView userData={userData} t={t} />
             )}
             {view === 'KNOWLEDGE' && <KnowledgeVault data={userData} />}
             {view === 'SYNTHESIS' && <StrategicWorkstation data={userData} onRefresh={() => fetchVedaData()} />}

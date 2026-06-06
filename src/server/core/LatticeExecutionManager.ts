@@ -134,10 +134,18 @@ export class LatticeExecutionManager {
           }
 
           this.callbacks.neuralLog('LATTICE_COMPUTE_FALLBACK', `Premium model failed or restricted. Re-routing query payload to high-speed auxiliary core: gemini-2.5-flash`);
-          result = await this.activeAi.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt
-          });
+          try {
+            result = await this.activeAi.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: prompt
+            });
+          } catch (auxErr: any) {
+            this.callbacks.neuralLog('LATTICE_COMPUTE_FALLBACK_FAILED', `Auxiliary core also failed: ${auxErr.message || auxErr}. Activating ultimate autonomous local fallback to preserve core execution trajectory.`);
+            if (this.callbacks.handleAiError) {
+              this.callbacks.handleAiError(auxErr);
+            }
+            return this.executeAutonomousFallback(job);
+          }
         }
 
         const content = result.text || "";

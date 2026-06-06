@@ -36,7 +36,7 @@ export class KnowledgeDatabase extends Dexie {
 }
 
 class KNBService {
-  private db: KnowledgeDatabase;
+  public db: KnowledgeDatabase;
   private oramaIndex: Orama<any> | null = null;
 
   constructor() {
@@ -151,6 +151,41 @@ class KNBService {
     }
     console.log("[KNB] Fragment synchronized to local manifold.");
     return id;
+  }
+
+  async addFragmentsBatch(items: { content: string, metadata: Record<string, any> }[]) {
+    if (items.length === 0) return;
+    
+    const itemsToInsert = await Promise.all(items.map(async (item) => {
+      const embedding = await this.generateEmbedding(item.content);
+      return {
+        content: item.content,
+        embedding,
+        metadata: item.metadata || {},
+        timestamp: Date.now()
+      };
+    }));
+
+    const lastId = await this.db.fragments.bulkAdd(itemsToInsert);
+    
+    if (this.oramaIndex) {
+      for (let i = 0; i < itemsToInsert.length; i++) {
+        const item = itemsToInsert[i];
+        try {
+          const calculatedId = (Number(lastId) - itemsToInsert.length + 1 + i).toString();
+          await insert(this.oramaIndex, {
+            id: calculatedId,
+            content: item.content,
+            type: item.metadata.type || 'UNCATEGORIZED',
+            source: item.metadata.source || 'LOCAL',
+            timestamp: item.timestamp
+          });
+        } catch (insertErr) {
+          console.warn("[KNB] Orama batch insert skip:", insertErr);
+        }
+      }
+    }
+    console.log(`[KNB] Batch of ${items.length} fragments bulk-synchronized.`);
   }
 
   async removeFragment(id: number) {
