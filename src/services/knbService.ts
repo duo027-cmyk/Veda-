@@ -334,14 +334,19 @@ class KNBService {
      }
 
      try {
-       // Ideally this should use a counter document, but for now we limit the impact
-       const snapshot = await getDocs(query(collection(db, 'shared_knowledge'), limit(1)));
+       // Incorporate a strict 1500ms timeout race to prevent firebase connectivity hanging from blocking frontend init
+       const fetchPromise = getDocs(query(collection(db, 'shared_knowledge'), limit(1)));
+       const timeoutPromise = new Promise<never>((_, reject) => 
+         setTimeout(() => reject(new Error("FIRESTORE_FETCH_TIMEOUT")), 1500)
+       );
+       
+       const snapshot = await Promise.race([fetchPromise, timeoutPromise]);
        // If we can't count efficiently, just return a token value if not empty
        this.lastStrength = snapshot.empty ? 0 : 42; // Placeholder for non-empty
        this.lastStrengthCheck = now;
        return this.lastStrength;
      } catch (e) {
-       console.warn("[KNB] Strength check failed (likely permission/quota):", e);
+       console.warn("[KNB] Strength check failed or timed out (using local stabilizer fallback):", e);
        return this.lastStrength;
      }
   }

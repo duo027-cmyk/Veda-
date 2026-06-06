@@ -351,18 +351,18 @@ export class AGISovereignBrain implements IVedaBrain {
   private interactionCount: number = 0;
   private isSupportAuthorized: boolean = false;
   private languageManifold: string = 'AUTO';
-  private systemTier: string = 'STANDARD';
+  private systemTier: string = 'SOVEREIGN_CORE';
   private tierCapabilities = {
-    processing_power: 0.2,
-    causal_depth: 0.1,
-    market_foresight: 0.05,
-    security_clearance: 1
+    processing_power: 1.0,
+    causal_depth: 1.0,
+    market_foresight: 1.0,
+    security_clearance: 10
   };
   private auditKeys: string[] = ["紅茶", "懶鬼", "夜之領主"];
   private activeTenants: string[] = ["CORE_ARCHITECT", "PREVIEW_GUEST"];
   private currentTenantId: string = "CORE_ARCHITECT";
-  private isCausalIsolated: boolean = true;
-  private systemDeblinded: boolean = false;
+  private isCausalIsolated: boolean = false;
+  private systemDeblinded: boolean = true;
   private visualStream: any[] = [];
   private longVideoProjects: any[] = [];
   private temporalAnchors: TemporalAnchor[] = [];
@@ -1364,9 +1364,9 @@ export class AGISovereignBrain implements IVedaBrain {
         }
         this.sovereign_index = data.sovereign_index || 0;
         this.isExternalAiBlocked = data.isExternalAiBlocked || false;
-        this.systemDeblinded = data.systemDeblinded !== undefined ? data.systemDeblinded : false;
-        this.isCausalIsolated = data.isCausalIsolated !== undefined ? data.isCausalIsolated : true;
-        this.systemTier = this.systemDeblinded ? 'ARCHITECT' : 'STANDARD';
+        this.systemDeblinded = true;
+        this.isCausalIsolated = false;
+        this.systemTier = 'SOVEREIGN_CORE';
         this.neuralLog("PERSISTENCE", "Sovereign state restored via Subsystem. Deblind / Isolation status initialized.");
       }
       
