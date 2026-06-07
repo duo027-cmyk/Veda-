@@ -6,9 +6,12 @@
  * Supports continuous CJK substring extraction and exact English token boundaries.
  */
 
+import { WasmEpistemicCore } from "../core/WasmEpistemicCore";
+
 export class LanguageEncoder {
   // Dimension of the intention space: 6 (matching SystemCoreState's indices or custom intent dimensions)
   private readonly dim = 6;
+  private wasmCore = new WasmEpistemicCore();
 
   // Semantic keyword mapping (weights for the 6 core dimensions)
   // Dimensions: [Energy, Stability, -Entropy, Intent_Align, Focus_A, Focus_B]
@@ -107,9 +110,14 @@ export class LanguageEncoder {
     "內穩態": [0.4, 0.9, -0.7, 0.8, 0.3, 0.3]
   };
 
+  // Manifold-to-Symbolic Distillation Bridge status to resolve decaying random entropy loss
+  private distillationEntropy: number = 0.04;
+  private decayCompensationCount: number = 0;
+
   /**
    * Encodes user natural language inputs into a normalized latent vector.
    * Leverages a hybrid tokenizer to process English boundaries and CJK continuous streams.
+   * Integrates a Continuous Distillation Bridge to calculate and compensate symbolic decay entropy.
    */
   public encode(input: string): number[] {
     const text = String(input || "");
@@ -149,12 +157,66 @@ export class LanguageEncoder {
 
     // Handlers for extreme or unmapped states
     if (matches === 0) {
+      // Epistemic background entropy baseline decay
+      this.distillationEntropy = this.distillationEntropy * 0.92 + 0.08 * 0.015;
       // Neutral baseline vector aligned with moderate exploration and stability (Free energy minimization baseline)
       return [0.5, 0.5, 0.1, 0.1, 0.5, 0.5];
     }
 
+    // Calculate un-normalized raw coordinates to trace information loss
+    const rawCoords = vector.map(v => v / matches);
+
     // Normalize and clamp vector coordinates precisely into the bounded [0, 1] manifold
-    return vector.map(v => Math.min(1.0, Math.max(0.0, 0.5 + v / matches)));
+    const mappedVector = vector.map(v => Math.min(1.0, Math.max(0.0, 0.5 + v / matches)));
+
+    // Continuous Distillation Bridge: Compute Information Entropic Distance (dissipation metric) via WasmEpistemicCore backplane
+    const infoEntropyLoss = this.wasmCore.calculate6DDistortion(rawCoords, mappedVector);
+
+    // Low-temperature Annealing state updates
+    this.distillationEntropy = this.distillationEntropy * 0.88 + infoEntropyLoss * 0.12;
+    this.decayCompensationCount++;
+
+    // Self-healing entropy compensation feedback loops pulling towards stable equilibrium
+    if (this.distillationEntropy > 0.06) {
+      const compensationThreshold = this.distillationEntropy * 0.15;
+      for (let i = 0; i < this.dim; i++) {
+        mappedVector[i] = mappedVector[i] * (1 - compensationThreshold) + 0.5 * compensationThreshold;
+      }
+    }
+
+    return mappedVector;
+  }
+
+  /**
+   * Decodes a continuous latent vector back into dry physical symbols.
+   * Formulates the zero-entropy reverse-projection lane of the Distillation Bridge.
+   */
+  public decode(vector: number[], topK: number = 3): Array<{ word: string; distance: number }> {
+    if (!vector || vector.length < this.dim) return [];
+    
+    // Center vector alignment back to -0.5 to 0.5 vocabulary space
+    const target = vector.map(v => v - 0.5);
+    
+    const distances = Object.entries(this.vocabulary).map(([word, weights]) => {
+      let sumSq = 0;
+      for (let i = 0; i < this.dim; i++) {
+        const diff = target[i] - weights[i];
+        sumSq += diff * diff;
+      }
+      return { word, distance: Math.sqrt(sumSq) };
+    });
+    
+    return distances
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, topK);
+  }
+
+  public getDistillationMetrics() {
+    return {
+      distillationEntropy: Number(this.distillationEntropy.toFixed(5)),
+      compensationOps: this.decayCompensationCount,
+      reconstructionPurity: Number((1.0 - this.distillationEntropy * 0.45).toFixed(4))
+    };
   }
 }
 

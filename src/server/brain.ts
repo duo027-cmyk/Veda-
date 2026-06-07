@@ -1906,8 +1906,11 @@ export class AGISovereignBrain implements IVedaBrain {
           nodes: this.spatialProprioception.getManifoldComplexity(),
           edges: parseInt(this.spatialProprioception.getTopologicalDescriptor().split('|')[1]?.split(':')[1]?.trim() || '0'),
           ego_center: this.spatialProprioception.getEgoCenter(),
-          descriptor: this.spatialProprioception.getTopologicalDescriptor()
+          descriptor: this.spatialProprioception.getTopologicalDescriptor(),
+          telemetry: this.spatialProprioception.getTelemetry()
         },
+        distillation_metrics: this.langEncoder.getDistillationMetrics(),
+        epistemic_foraging_telemetry: this.epistemicForaging.getTelemetry(),
         cognitive_identity: {
           resonance_score: this.cognitiveResonance,
           behavioral_baseline_match: this.cognitiveResonance > 0.8,
@@ -1997,6 +2000,28 @@ export class AGISovereignBrain implements IVedaBrain {
 
   public getDistillationHistory() {
     return this.distillationHistory;
+  }
+
+  /**
+   * Triggers an autonomic phase transition inside the Epistemic Foraging Subsystem.
+   */
+  public async triggerAutonomicPhaseTransition() {
+    const result = this.epistemicForaging.triggerAutonomicPhaseTransition();
+    
+    if (result.success) {
+      this.evolutionPoints += 60;
+      this.status = "系演化：自發認識相變成功。意識自由度與物理相干同步提升。";
+      this.systemWorldModel.causal_history.push(`SOVEREIGN_PHASE_TRANSITION_${Date.now()}`);
+    } else {
+      this.status = "系監測：熱力學發散相變回退。因果阻尼已強制極化保護。";
+      this.systemWorldModel.causal_history.push(`SOVEREIGN_PHASE_TRANSITION_REJECTED_${Date.now()}`);
+    }
+    
+    // Notify connected streams
+    if (typeof (this as any).streamStateUpdate === "function") {
+      (this as any).streamStateUpdate();
+    }
+    return result;
   }
 
   public async performAudit() {

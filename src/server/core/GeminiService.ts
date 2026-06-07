@@ -47,15 +47,9 @@ export class GeminiService {
 
       // Helper function to map/normalize models to prevent 404/400 errors
       const getNormalizedModel = (m: string): string => {
-        if (m === "gemini-3.5-flash") return "gemini-2.5-flash";
-        if (m === "gemini-2.5-flash") return "gemini-2.0-flash";
-        if (m === "gemini-2.0-flash") return "gemini-1.5-flash";
-        if (m === "gemini-1.5-flash") return "gemini-3.1-flash-lite";
-        if (m === "gemini-3.1-flash-lite") return "gemini-1.5-flash-8b";
-        if (m === "gemini-1.5-flash-8b") return "gemini-flash-latest";
-        if (m === "gemini-3.1-pro-preview" || m === "gemini-3.1-pro") return "gemini-2.5-pro";
-        if (m === "gemini-2.5-pro") return "gemini-1.5-pro";
-        if (m === "gemini-1.5-pro") return "gemini-3.5-flash";
+        if (m === "gemini-3.5-flash") return "gemini-3.1-flash-lite";
+        if (m === "gemini-3.1-flash-lite") return "gemini-flash-latest";
+        if (m === "gemini-3.1-pro-preview" || m === "gemini-3.1-pro") return "gemini-3.1-flash-lite";
         return m;
       };
 
@@ -72,14 +66,8 @@ export class GeminiService {
 
       if (!isSpecializedAudioVideoImage) {
         // Sequentially fall back across multiple solid production-grade nodes based on capability guidelines
-        modelsToTry.push("gemini-2.5-flash");
-        modelsToTry.push("gemini-2.0-flash");
-        modelsToTry.push("gemini-1.5-flash");
-        modelsToTry.push("gemini-1.5-flash-8b");
         modelsToTry.push("gemini-3.5-flash");
         modelsToTry.push("gemini-3.1-flash-lite");
-        modelsToTry.push("gemini-2.5-pro");
-        modelsToTry.push("gemini-1.5-pro");
         modelsToTry.push("gemini-flash-latest");
         modelsToTry.push("gemini-3.1-pro-preview");
       }
@@ -127,6 +115,36 @@ export class GeminiService {
             lastError = err;
             const errMsg = err?.message || String(err);
             const cleanMsg = this.cleanErrorMessage(err);
+
+            const isQuotaError = 
+              errMsg.includes("429") || 
+              errMsg.includes("RESOURCE_EXHAUSTED") || 
+              errMsg.includes("quota") || 
+              errMsg.includes("Quota") ||
+              errMsg.includes("limit") ||
+              errMsg.includes("Limit") ||
+              errMsg.includes("Resource exhausted");
+
+            const isAuthError =
+              errMsg.includes("API key not valid") || 
+              errMsg.includes("API_KEY_INVALID") ||
+              errMsg.includes("Forbidden") ||
+              errMsg.includes("Unauthorized") ||
+              errMsg.includes("invalid key");
+
+            if (isAuthError) {
+              this.logger("SECURITY_STATUS", "API key invalid or unauthorized. Triggering safe, silent offline cognitive fallback mode.");
+              this.isBlocked = true;
+              break; // exit loop immediately, do not try other models
+            }
+
+            if (isQuotaError) {
+              this.logger("RATE_LIMIT_COOLDOWN", "Gemini API rate limit or quota exceeded. Locking external requests for 5 minutes.");
+              this.rateLimitCooldownUntil = Date.now() + 300000; // 5-minute cooldown
+              this.quotaExceededUntil = Date.now() + 300000;    // 5-minute offline block
+              break; // exit loop immediately, do not try other models
+            }
+
             this.logger("WARNING", `Attempt ${attempt} failed with model ${model}: ${cleanMsg}`);
 
             // Classify error and apply rate-limits/cooldown

@@ -1,4 +1,5 @@
 // src/server/core/PhysicsInformedNeuromorphicCore.ts
+import { WasmPincCore } from "./WasmPincCore";
 /**
  * AGI Arch-Academic Protocol (卓越學術憲法)
  * Aerospace-Grade Neuromorphic Computing Core v1.2 (PINC_CORE)
@@ -114,6 +115,8 @@ export class PhysicsInformedNeuromorphicCore {
   private spikeQueueTail = 0;
   private spikeQueueCount = 0;
 
+  private wasmCore = new WasmPincCore();
+
   constructor() {
     this.initializeNeuromorphicLattice();
   }
@@ -218,7 +221,7 @@ export class PhysicsInformedNeuromorphicCore {
           if (preLastSpike >= 0) {
             const deltaT = this.currentTimeTicks - preLastSpike;
             if (deltaT > 0 && deltaT <= 15) {
-              const deltaW = this.stdpAPlus * Math.exp(-deltaT / this.stdpTauPlus);
+              const deltaW = this.stdpAPlus * this.wasmCore.fastExp(-deltaT / this.stdpTauPlus);
               this.synapseWeight[i] = Math.min(1.5, this.synapseWeight[i] + deltaW);
               this.synapseLastStdpDelta[i] = deltaW;
             }
@@ -248,7 +251,7 @@ export class PhysicsInformedNeuromorphicCore {
           if (postLastSpike >= 0) {
             const deltaT = this.currentTimeTicks - postLastSpike;
             if (deltaT > 0 && deltaT <= 15) {
-              const deltaW = -this.stdpAMinus * Math.exp(-deltaT / this.stdpTauMinus);
+              const deltaW = -this.stdpAMinus * this.wasmCore.fastExp(-deltaT / this.stdpTauMinus);
               this.synapseWeight[i] = Math.max(0.1, this.synapseWeight[i] + deltaW);
               this.synapseLastStdpDelta[i] = deltaW;
             }
@@ -265,7 +268,7 @@ export class PhysicsInformedNeuromorphicCore {
     this.currentTimeTicks++;
 
     // Free energy gating factor
-    const modulatorFactor = Math.max(0.2, Math.min(2.0, Math.exp(-0.75 * freeEnergy)));
+    const modulatorFactor = Math.max(0.2, Math.min(2.0, this.wasmCore.fastExp(-0.75 * freeEnergy)));
 
     // Predictor Inhibitory suppression feedback
     const consistencyIdx = 11; // ME_CONSIST_CHECK
@@ -285,8 +288,11 @@ export class PhysicsInformedNeuromorphicCore {
 
       this.neuronBufferMembraneTau[i] = 10.0 * modulatorFactor;
 
-      const leak = (this.neuronBufferPotential[i] - this.neuronBufferRestPotential[i]) / this.neuronBufferMembraneTau[i];
-      this.neuronBufferPotential[i] = Math.max(this.neuronBufferRestPotential[i], this.neuronBufferPotential[i] - leak);
+      this.neuronBufferPotential[i] = this.wasmCore.integrateLeak(
+        this.neuronBufferPotential[i],
+        this.neuronBufferRestPotential[i],
+        this.neuronBufferMembraneTau[i]
+      );
 
       // Simple, deterministic thermodynamic thermal noise simulation
       // Emulating pseudorandom noise safely to avoid floating-point drift

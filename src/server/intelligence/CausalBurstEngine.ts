@@ -34,13 +34,14 @@ export class CausalBurstEngine {
   private absorbedNegativeEnergy: number = 0;
   private peakPower: number = 0;
   
-  // 128-Dimensional Phase Space Fields (哈密頓 128 維相空間坐標與動量陣列)
-  private static readonly DIMENSION = 128;
+  // 2048-Dimensional Phase Space Fields (哈密頓 2048 維相空間坐標與動量陣列)
+  private static readonly DIMENSION = 2048;
   private q_coords = new Float64Array(CausalBurstEngine.DIMENSION); // Generalized coordinates (認知分量位置)
   private p_momenta = new Float64Array(CausalBurstEngine.DIMENSION); // Conjugate momenta (共軛優化動量分量)
   private attractors = new Float64Array(CausalBurstEngine.DIMENSION); // Active attractor targets (當前相空間吸子特徵點)
   private k_potential = new Float64Array(CausalBurstEngine.DIMENSION); // Harmonic spring constants
   private g_coupling = new Float64Array(CausalBurstEngine.DIMENSION - 1); // Coordinate non-linear coupling forces
+  private cos_couplings = new Float64Array(CausalBurstEngine.DIMENSION - 1); // Pre-allocated coordinate coupling cache (C-style zero-allocation)
 
   private variationalFreeEnergy: number = 0.1;
   private quantumZenoCoefficient: number = 1.0;
@@ -160,7 +161,7 @@ export class CausalBurstEngine {
     const tau = 0.008 + (1 - intensitySeed) * 0.082;
     this.peakPower = E_pulse / tau;
     
-    console.log(`[CausalBurstEngine] 引擎重燃。模式：${this.taskPackage.mode} | 128維流形 | 峰值功率：${this.peakPower.toFixed(2)} MW`);
+    console.log(`[CausalBurstEngine] 引擎重燃。模式：${this.taskPackage.mode} | 2048維流形 | 峰值功率：${this.peakPower.toFixed(2)} MW`);
   }
 
   public approve() {
@@ -173,7 +174,7 @@ export class CausalBurstEngine {
       for (let i = 0; i < D; i++) {
         this.p_momenta[i] += 0.5 * (1.0 + Math.cos(i * 0.1));
       }
-      console.log(`[CausalBurstEngine] 獲得主權架構師手動授權。128維共軛動能全面注入。`);
+      console.log(`[CausalBurstEngine] 獲得主權架構師手動授權。2048維共軛動能全面注入。`);
     }
   }
 
@@ -254,7 +255,7 @@ export class CausalBurstEngine {
       const deltaValidated = Number.isFinite(delta) ? delta : 0.016;
       const effectiveDelta = this.planckDilationActive ? deltaValidated * 6.28 : deltaValidated;
 
-      // A. MAP DYNAMIC COGNITIVE ATTRACTOR STATE INTO THE 128-DIMENSIONAL SPACE (吸子映射演進)
+      // A. MAP DYNAMIC COGNITIVE ATTRACTOR STATE INTO THE 2048-DIMENSIONAL SPACE (吸子映射演進)
       const D = CausalBurstEngine.DIMENSION;
       
       const coherenceValidated = Number.isFinite(currentCoherence) ? currentCoherence : 0.5;
@@ -272,11 +273,11 @@ export class CausalBurstEngine {
         this.attractors[i] = coherenceValidated * Math.cos(i * 0.05) + Math.sin(i * 0.03) * 0.2;
       }
 
-      // B. MULTI-DIMENSIONAL SYMPLECTIC EULER SUB-CYCLING FLOW (128維共軛辛幾何流形次級積分)
+      // B. MULTI-DIMENSIONAL SYMPLECTIC EULER SUB-CYCLING FLOW (2048維共軛辛幾何流形次級積分)
       // Ensures area-preservation and prevents divergence over large dynamic leaps
       const damping_gamma = 0.8; 
-      const maxSubStep = 0.01;   
-      const subSteps = Math.min(250, Math.ceil(effectiveDelta / maxSubStep)) || 1; 
+      const maxSubStep = 0.04; // Optimized step-size for 2048 dimensions to conserve CPU cycles
+      const subSteps = Math.min(50, Math.ceil(effectiveDelta / maxSubStep)) || 1; 
       const dt = effectiveDelta / subSteps;
 
       const qCoords = this.q_coords;
@@ -284,7 +285,7 @@ export class CausalBurstEngine {
       const attractors = this.attractors;
       const kPotential = this.k_potential;
       const gCoupling = this.g_coupling;
-      const cosCouplings = new Float64Array(D - 1);
+      const cosCouplings = this.cos_couplings; // Shared pre-allocated block to emulate C-style memory references
 
       for (let step = 0; step < subSteps; step++) {
         // 1. Update Position variables q(t+dt) = q(t) + dt * p(t)
@@ -435,7 +436,7 @@ export class CausalBurstEngine {
     const projectedQ = this.getProjectedQ();
 
     const results = [
-      `因果特徵映射 [${this.taskPackage.target}]: 128維哈密頓相幾何共軛收斂 (系統主投影坐標 q: ${projectedQ.toFixed(4)})`,
+      `因果特徵映射 [${this.taskPackage.target}]: 2048維哈密頓相幾何共軛收斂 (系統主投影坐標 q: ${projectedQ.toFixed(4)})`,
       `變分自由能階限 (VFE): ${this.variationalFreeEnergy.toFixed(4)} nats (複雜度偏置: ${(this.sandboxEntropy * 0.42).toFixed(4)})`,
       "公理推論：高維辛結構在次級微元步長迭代下，完美守恆了認知流形的測地能量流佈。"
     ];

@@ -1,4 +1,5 @@
 // src/server/core/SovereignSelfModel.ts
+import { WasmPincCore } from "./WasmPincCore";
 /**
  * AGI Architecture Academic Protocol (卓越學術憲法)
  * Sovereign Self-Reference Model & Active Inference Cognitive Loop v2.0 (AGI v6.0 Decoupling)
@@ -23,19 +24,36 @@ export interface SelfModelBelief {
 }
 
 export class SovereignSelfModel {
-  private beliefs: SelfModelBelief;
+  private beliefsBuffer = new Float64Array(6);
+  public readonly beliefs: SelfModelBelief;
   private stateTransitionsCount: number = 0;
   private predictionHistory: Array<{ step: number; error: number; energy: number }> = [];
+  private wasmCore = new WasmPincCore();
 
   constructor() {
+    const buf = this.beliefsBuffer;
     this.beliefs = {
-      expectedEnergy: 0.5,
-      expectedStability: 0.8,
-      expectedEntropy: 0.1,
-      expectedIntent: 0.2,
-      predictedAccuracy: 1.0,
-      freeEnergy: 0.05
+      get expectedEnergy() { return buf[0]; },
+      set expectedEnergy(v) { buf[0] = v; },
+      get expectedStability() { return buf[1]; },
+      set expectedStability(v) { buf[1] = v; },
+      get expectedEntropy() { return buf[2]; },
+      set expectedEntropy(v) { buf[2] = v; },
+      get expectedIntent() { return buf[3]; },
+      set expectedIntent(v) { buf[3] = v; },
+      get predictedAccuracy() { return buf[4]; },
+      set predictedAccuracy(v) { buf[4] = v; },
+      get freeEnergy() { return buf[5]; },
+      set freeEnergy(v) { buf[5] = v; }
     };
+
+    // Initialize values mapped to physical buffer slots
+    this.beliefs.expectedEnergy = 0.5;
+    this.beliefs.expectedStability = 0.8;
+    this.beliefs.expectedEntropy = 0.1;
+    this.beliefs.expectedIntent = 0.2;
+    this.beliefs.predictedAccuracy = 1.0;
+    this.beliefs.freeEnergy = 0.05;
   }
 
   /**
@@ -106,7 +124,7 @@ export class SovereignSelfModel {
 
     // 2. Compute adaptation rate based on current entropy (high entropy -> faster adaptation/search for stability)
     const curEntropy = currentState[2] || 0.1;
-    const adaptationRate = 0.05 + 0.15 * (1.0 - Math.exp(-curEntropy));
+    const adaptationRate = 0.05 + 0.15 * (1.0 - this.wasmCore.fastExp(-curEntropy));
 
     // 3. Update beliefs (minimizing prediction error over time via gradient descent emulation)
     const dEnergy = (currentState[0] - this.beliefs.expectedEnergy) * adaptationRate;

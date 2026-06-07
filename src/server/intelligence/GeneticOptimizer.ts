@@ -1,6 +1,7 @@
 export class GeneticOptimizer {
   private population: Float32Array[] = [];
-  private scores: number[] = [];
+  private nextPopulation: Float32Array[] = [];
+  private scores: Float32Array;
   private readonly popSize: number = 20;
   private genomeSize: number;
   private mutationRate: number = 0.08;
@@ -9,6 +10,7 @@ export class GeneticOptimizer {
 
   constructor(genomeSize: number) {
     this.genomeSize = genomeSize;
+    this.scores = new Float32Array(this.popSize);
     this.initialize();
   }
 
@@ -24,15 +26,27 @@ export class GeneticOptimizer {
       }
       return newGenome;
     });
+
+    this.nextPopulation = this.nextPopulation.map(() => {
+      return new Float32Array(validatedNewSize);
+    });
+
     this.genomeSize = validatedNewSize;
   }
 
   private initialize() {
-    this.scores = [];
+    this.population = [];
+    this.nextPopulation = [];
     for (let i = 0; i < this.popSize; i++) {
-      const genome = new Float32Array(this.genomeSize).map(() => Math.random());
+      const genome = new Float32Array(this.genomeSize);
+      const nextGenome = new Float32Array(this.genomeSize);
+      for (let j = 0; j < this.genomeSize; j++) {
+        genome[j] = Math.random();
+        nextGenome[j] = 0;
+      }
       this.population.push(genome);
-      this.scores.push(0);
+      this.nextPopulation.push(nextGenome);
+      this.scores[i] = 0;
     }
   }
 
@@ -52,10 +66,14 @@ export class GeneticOptimizer {
   }
 
   private calculateConvergence(): number {
-    const safeScores = this.scores.map(s => Number.isFinite(s) ? s : 0);
-    if (safeScores.length < 2) return 1.0;
-    const max = Math.max(...safeScores);
-    const min = Math.min(...safeScores);
+    if (this.scores.length < 2) return 1.0;
+    let max = -Infinity;
+    let min = Infinity;
+    for (let i = 0; i < this.popSize; i++) {
+      const s = this.scores[i];
+      if (s > max) max = s;
+      if (s < min) min = s;
+    }
     const maxAbs = Math.abs(max);
     const denominator = (Number.isFinite(maxAbs) ? maxAbs : 0) + 0.001;
     return max === min ? 1.0 : 1 - (max - min) / denominator;
@@ -71,19 +89,14 @@ export class GeneticOptimizer {
     }
   }
 
-  private crossover(p1: Float32Array, p2: Float32Array): Float32Array {
-    const child = new Float32Array(this.genomeSize);
-    const safeP1 = p1 instanceof Float32Array && p1.length >= this.genomeSize ? p1 : new Float32Array(this.genomeSize).map(() => Math.random());
-    const safeP2 = p2 instanceof Float32Array && p2.length >= this.genomeSize ? p2 : new Float32Array(this.genomeSize).map(() => Math.random());
-    
+  private crossover(p1: Float32Array, p2: Float32Array, outChild: Float32Array) {
     const point = Math.floor(Math.random() * this.genomeSize);
     if (point > 0) {
-      child.set(safeP1.subarray(0, point), 0);
+      outChild.set(p1.subarray(0, point), 0);
     }
     if (point < this.genomeSize) {
-      child.set(safeP2.subarray(point), point);
+      outChild.set(p2.subarray(point), point);
     }
-    return child;
   }
 
   public evolve() {
@@ -96,38 +109,47 @@ export class GeneticOptimizer {
     });
 
     const index0 = indices[0] !== undefined ? indices[0] : 0;
-    const bestGenome = this.population[index0] || new Float32Array(this.genomeSize).map(() => Math.random());
-    const elite = new Float32Array(bestGenome);
+    const bestGenome = this.population[index0] || this.population[0];
+    this.nextPopulation[0].set(bestGenome);
 
     const topCount = Math.max(1, Math.floor(this.popSize * 0.4));
-    const survivors = indices.slice(0, topCount)
-      .map(i => this.population[i])
-      .filter(genome => genome instanceof Float32Array);
+    const survivors: Float32Array[] = [];
+    for (let i = 0; i < topCount; i++) {
+      const idx = indices[i];
+      if (idx !== undefined && this.population[idx]) {
+        survivors.push(this.population[idx]);
+      }
+    }
 
     if (survivors.length === 0) {
-      survivors.push(elite);
+      survivors.push(this.nextPopulation[0]);
     }
 
     const convergence = this.calculateConvergence();
     const safeConvergence = Number.isFinite(convergence) ? Math.max(0, Math.min(1.0, convergence)) : 0.5;
     this.mutationRate = 0.02 + (0.1 * (1 - safeConvergence));
     this.mutationStrength = 0.05 + (0.2 * (1 - safeConvergence));
-    const newPopulation: Float32Array[] = [elite];
-    while (newPopulation.length < this.popSize) {
+
+    let newCount = 1;
+    while (newCount < this.popSize) {
+      const child = this.nextPopulation[newCount];
       if (Math.random() < 0.4 && survivors.length >= 2) {
         const p1 = survivors[Math.floor(Math.random() * survivors.length)];
         const p2 = survivors[Math.floor(Math.random() * survivors.length)];
-        const child = this.crossover(p1, p2);
+        this.crossover(p1, p2, child);
         this.mutate(child);
-        newPopulation.push(child);
       } else {
-        const parent = survivors[Math.floor(Math.random() * survivors.length)] || elite;
-        const child = new Float32Array(parent);
+        const parent = survivors[Math.floor(Math.random() * survivors.length)] || this.nextPopulation[0];
+        child.set(parent);
         this.mutate(child);
-        newPopulation.push(child);
       }
+      newCount++;
     }
-    this.population = newPopulation;
+
+    // Swap buffers (zero memory allocation)
+    const temp = this.population;
+    this.population = this.nextPopulation;
+    this.nextPopulation = temp;
   }
 
   public getBest(): Float32Array {
@@ -138,17 +160,22 @@ export class GeneticOptimizer {
       return scoreB - scoreA;
     });
     const index0 = indices[0] !== undefined ? indices[0] : 0;
-    return this.population[index0] || new Float32Array(this.genomeSize);
+    return this.population[index0] || this.population[0];
   }
 
   public getPopulationData() {
-    const safeScores = this.scores.map(s => Number.isFinite(s) ? s : 0);
-    const avg = safeScores.length > 0 ? safeScores.reduce((a, b) => a + b, 0) / this.popSize : 0;
-    const best = safeScores.length > 0 ? Math.max(...safeScores) : 0;
+    let sum = 0;
+    let best = -Infinity;
+    for (let i = 0; i < this.popSize; i++) {
+      const s = this.scores[i];
+      sum += s;
+      if (s > best) best = s;
+    }
+    const avg = sum / this.popSize;
     return {
       generation: this.generation,
       avgScore: Number((avg || 0).toFixed(5)),
-      bestScore: Number((best || 0).toFixed(5)),
+      bestScore: Number((best === -Infinity ? 0 : best).toFixed(5)),
       convergence: this.calculateConvergence(),
       mutationRate: this.mutationRate,
       mutationStrength: this.mutationStrength

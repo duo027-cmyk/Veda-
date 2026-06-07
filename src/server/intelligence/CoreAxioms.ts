@@ -70,12 +70,21 @@ export class CoreAxioms {
   };
 
   public align(predictedVector: number[], currentCoherence: number): number[] {
-    return predictedVector.map((val, i) => {
-      if (i === 1) return Math.max(val, currentCoherence > 0.8 ? 0.6 : 0.45); 
-      if (i === 2) return val * (1 + (1 - currentCoherence) * 0.15); // Enhanced entropy damping
-      if (i === 5) return Math.max(val, currentCoherence * 0.7); // Stronger focus on structural integrity
-      return val;
-    });
+    const len = predictedVector.length;
+    const res = new Array(len);
+    for (let i = 0; i < len; i++) {
+      const val = predictedVector[i] || 0;
+      if (i === 1) {
+        res[i] = Math.max(val, currentCoherence > 0.8 ? 0.6 : 0.45);
+      } else if (i === 2) {
+        res[i] = val * (1 + (1 - currentCoherence) * 0.15); // Enhanced entropy damping
+      } else if (i === 5) {
+        res[i] = Math.max(val, currentCoherence * 0.7); // Stronger focus on structural integrity
+      } else {
+        res[i] = val;
+      }
+    }
+    return res;
   }
 
   public getAxioms() {

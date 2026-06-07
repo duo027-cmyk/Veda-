@@ -25,6 +25,7 @@
 import { PhysicsInformedNeuromorphicCore } from "./PhysicsInformedNeuromorphicCore";
 import { CausalNexus } from "./CausalNexus";
 import { CoreAxioms } from "../intelligence/CoreAxioms";
+import { WasmPincCore } from "./WasmPincCore";
 
 export interface DistillationBridgeConfig {
   sigmoidGain?: number;          // Beta multiplier for sigmoid gating
@@ -36,6 +37,7 @@ export class CognitiveDistillationBridge {
   private config: Required<DistillationBridgeConfig>;
   private historyOfInhibitedConflictsCount: number = 0;
   private totalStimulationsDampedCount: number = 0;
+  private wasmCore = new WasmPincCore();
 
   constructor(
     private pincCore: PhysicsInformedNeuromorphicCore,
@@ -137,7 +139,7 @@ export class CognitiveDistillationBridge {
     // Map metrics to bounded sub-threshold micro-currents using a sigmoid gating transfer function:
     // f(x) = I_max * (2 / (1 + exp(-beta * x)) - 1)
     const computeSigmoidCurrent = (val: number): number => {
-      const e_term = Math.exp(-this.config.sigmoidGain * val);
+      const e_term = this.wasmCore.fastExp(-this.config.sigmoidGain * val);
       const scaled = (2 / (1 + e_term)) - 1; // Maps 0..1 into 0..scaled_max
       return Number((scaled * this.config.maxNeuronStimulus).toFixed(4));
     };

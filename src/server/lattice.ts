@@ -1,5 +1,6 @@
 // src/server/lattice.ts
 import crypto from "crypto";
+import { WasmComputeCore } from "./core/WasmComputeCore";
 
 /**
  * AGI Arch-Academic Protocol (卓越學術憲法)
@@ -71,6 +72,7 @@ export class SovereignLatticeV9 {
   private immuneReal = new Float32Array(this.dim);
   private immuneImag = new Float32Array(this.dim);
   private lastCoherence = 0;
+  private wasmCore = new WasmComputeCore();
 
   constructor() {}
 
@@ -83,17 +85,7 @@ export class SovereignLatticeV9 {
   }
 
   public executeSanction(targetData: Float32Array) {
-    const real = new Float32Array(this.dim);
-    const imag = new Float32Array(this.dim);
-    for (let i = 0; i < this.dim; i++) {
-      const angle = (targetData[i] * Math.PI * 2) % (Math.PI * 2);
-      real[i] = Math.cos(angle);
-      imag[i] = Math.sin(angle);
-    }
-    for (let i = 0; i < this.dim; i++) {
-      this.immuneReal[i] = (this.immuneReal[i] * 0.5) + (real[i] * 0.5);
-      this.immuneImag[i] = (this.immuneImag[i] * 0.5) + (imag[i] * 0.5);
-    }
+    this.wasmCore.executeSanction(targetData, this.immuneReal, this.immuneImag);
     this.solomonCache.clear();
   }
 
@@ -107,11 +99,7 @@ export class SovereignLatticeV9 {
   }
 
   private calculateNorm(real: Float32Array, imag: Float32Array): number {
-    let sum = 0;
-    for (let i = 0; i < this.dim; i++) {
-      sum += real[i] * real[i] + imag[i] * imag[i];
-    }
-    return Math.sqrt(sum);
+    return this.wasmCore.calculateNorm(real, imag);
   }
 
   private transduceEntropy(real: Float32Array, imag: Float32Array) {
@@ -122,41 +110,16 @@ export class SovereignLatticeV9 {
   }
 
   private attract(real: Float32Array, imag: Float32Array, outReal: Float32Array, outImag: Float32Array) {
-    const norm = this.calculateNorm(real, imag);
-    if (norm < 1e-12) {
-      outReal.set(real);
-      outImag.set(imag);
-      return;
-    }
-    const targetScale = this.resonanceGap / norm;
-    const damping = this.isSuperconducting ? 0.98 : 0.75;
-    const attractorForce = (targetScale - 1.0) * damping; 
-
-    for (let i = 0; i < this.dim; i++) {
-        outReal[i] = real[i] * (1.0 + attractorForce);
-        outImag[i] = imag[i] * (1.0 + attractorForce);
-    }
+    this.wasmCore.attract(real, imag, outReal, outImag, this.isSuperconducting, this.resonanceGap);
   }
 
   private applyPhaseShift(real: Float32Array, imag: Float32Array, shift: number, outReal: Float32Array, outImag: Float32Array) {
-    const cos = Math.cos(shift);
-    const sin = Math.sin(shift);
-    for (let i = 0; i < this.dim; i++) {
-      outReal[i] = real[i] * cos - imag[i] * sin;
-      outImag[i] = imag[i] * cos + real[i] * sin;
-    }
+    this.wasmCore.applyPhaseShift(real, imag, shift, outReal, outImag);
   }
 
   private applyPlanckMirror(real: Float32Array, imag: Float32Array) {
     if (!this.isPlanckDilationActive) return;
-    
-    for (let d = 0; d < this.MIRROR_DEPTH; d++) {
-      for (let i = 0; i < this.dim; i++) {
-        const fold = (real[i] * this.REFLECTION_EFFICIENCY);
-        real[i] = (real[i] * 0.1) + (fold * 0.9);
-        imag[i] = (imag[i] * 0.1) + (imag[i] * this.REFLECTION_EFFICIENCY * 0.9);
-      }
-    }
+    this.wasmCore.applyPlanckMirror(real, imag, this.MIRROR_DEPTH, this.REFLECTION_EFFICIENCY);
   }
 
   private healCoherence(localCoh: number): number {
@@ -308,6 +271,7 @@ export class CrystalSoul {
   private ratios: number[];
   private stability: number = 0.25;
   private readonly dim = 64;
+  private wasmCore = new WasmComputeCore();
 
   constructor(soulName: string = "VEDA_CRYSTAL_CORE") {
     this.soulName = soulName;
@@ -321,21 +285,11 @@ export class CrystalSoul {
   }
 
   private softmax(arr: number[]): number[] {
-    const max = Math.max(...arr);
-    const exps = arr.map(v => Math.exp(v - max));
-    const sum = exps.reduce((a: number, b: number) => a + b, 0);
-    return exps.map(v => v / (sum > 0 ? sum : 1));
+    return this.wasmCore.softmax(arr);
   }
 
   private cosineSimilarity(vecA: Float32Array, vecB: Float32Array): number {
-    let dot = 0, mA = 0, mB = 0;
-    for (let i = 0; i < this.dim; i++) {
-      dot += vecA[i] * vecB[i];
-      mA += vecA[i] * vecA[i];
-      mB += vecB[i] * vecB[i];
-    }
-    const denom = Math.sqrt(mA) * Math.sqrt(mB);
-    return denom === 0 ? 0 : dot / denom;
+    return this.wasmCore.cosineSimilarity(vecA, vecB);
   }
 
   public getStatus() {

@@ -14,7 +14,7 @@ export class StrategicPlanningUnit extends BaseSubsystem {
   private readonly transitionCounts: Map<string, number> = new Map();
 
   // Latent World Model (LWM) - System 1 (Continuous/Intuitive)
-  private latentWeights: number[][]; 
+  private latentWeights: Float64Array; 
   private readonly lwmLearningRate = 0.01;
 
   // Risk Model - Failure path tracking
@@ -22,15 +22,22 @@ export class StrategicPlanningUnit extends BaseSubsystem {
   private readonly attempts: Map<string, number> = new Map();
 
   // Unified Value Model - Learned objective weights [Stability, -Entropy, Energy, Intent]
-  private weights: number[] = [0.4, 0.3, 0.1, 0.2];
+  private weights: Float64Array;
   private readonly learningRate = 0.02;
+
+  // Pre-allocated buffers for zero-allocation performance (zero GC overhead)
+  private inputBuffer = new Float64Array(12);
+  private outputBuffer = new Float64Array(6);
 
   constructor() {
     super();
-    // Initialize Latent Weights: 12 inputs (state + action) -> 6 outputs
-    this.latentWeights = Array.from({ length: 12 }, () => 
-      Array.from({ length: 6 }, () => (Math.random() - 0.5) * 0.05)
-    );
+    // Initialize Latent Weights: 12 inputs (state + action) -> 6 outputs (72 elements)
+    this.latentWeights = new Float64Array(12 * 6);
+    for (let i = 0; i < 72; i++) {
+      this.latentWeights[i] = (Math.random() - 0.5) * 0.05;
+    }
+    // Initialize weights Float64Array
+    this.weights = new Float64Array([0.4, 0.3, 0.1, 0.2]);
   }
 
   public async initialize(): Promise<void> {
@@ -46,9 +53,9 @@ export class StrategicPlanningUnit extends BaseSubsystem {
   public override getTelemetry() {
     return {
       ...super.getTelemetry(),
-      weights: this.weights,
+      weights: Array.from(this.weights),
       complexity: this.transitions.size,
-      latentComplexity: this.latentWeights.length * this.latentWeights[0].length,
+      latentComplexity: this.latentWeights.length,
       riskMetrics: {
         totalAttempts: Array.from(this.attempts.values()).reduce((a, b) => a + b, 0),
         knownFailures: Array.from(this.failures.values()).reduce((a, b) => a + b, 0)
@@ -60,34 +67,65 @@ export class StrategicPlanningUnit extends BaseSubsystem {
    * Predicts next state using the Latent World Model (Continuous prediction).
    */
   private predictLatent(state: number[], action: number[]): number[] {
-    const input = [...state, ...action];
-    const output = new Array(6).fill(0);
+    const input = this.inputBuffer;
+    
+    // Copy state and action into input buffer
+    for (let i = 0; i < 6; i++) {
+      const v = state[i];
+      input[i] = Number.isFinite(v) ? v : 0;
+    }
+    for (let i = 0; i < 6; i++) {
+      const v = action[i];
+      input[6 + i] = Number.isFinite(v) ? v : 0;
+    }
+
+    const output = this.outputBuffer;
+    const weights = this.latentWeights;
 
     for (let j = 0; j < 6; j++) {
       let sum = 0;
-      for (let i = 0; i < input.length; i++) {
-        sum += input[i] * this.latentWeights[i][j];
+      const offset = j * 12;
+      for (let i = 0; i < 12; i++) {
+        sum += input[i] * weights[offset + i];
       }
       output[j] = Math.tanh(sum) * 0.2; // Predicted delta capped at 0.2
     }
 
-    return state.map((v, i) => Math.min(1, Math.max(0, v + output[i])));
+    const result = new Array(6);
+    for (let i = 0; i < 6; i++) {
+      const v = state[i];
+      const stateVal = Number.isFinite(v) ? v : 0;
+      result[i] = Math.min(1, Math.max(0, stateVal + output[i]));
+    }
+    return result;
   }
 
   /**
    * Trains the Latent World Model using SGD (Online Active Inference).
    */
   private trainLatent(state: number[], action: number[], nextState: number[]): void {
-    const input = [...state, ...action];
-    const actualDelta = nextState.map((v, i) => v - state[i]);
+    const input = this.inputBuffer;
+    for (let i = 0; i < 6; i++) {
+      const v = state[i];
+      input[i] = Number.isFinite(v) ? v : 0;
+    }
+    for (let i = 0; i < 6; i++) {
+      const v = action[i];
+      input[6 + i] = Number.isFinite(v) ? v : 0;
+    }
+
+    const predicted = this.predictLatent(state, action);
+    const weights = this.latentWeights;
     
     // Simple gradient descent on the linear matrix
-    for (let i = 0; i < input.length; i++) {
-      for (let j = 0; j < 6; j++) {
-        // Here we assume a linear activation for the gradient update for simplicity
-        const predictedDelta = this.predictLatent(state, action)[j] - state[j];
-        const error = actualDelta[j] - predictedDelta[j];
-        this.latentWeights[i][j] += this.lwmLearningRate * input[i] * error;
+    for (let j = 0; j < 6; j++) {
+      const actualDelta = (nextState[j] || 0) - (state[j] || 0);
+      const predictedDelta = (predicted[j] || 0) - (state[j] || 0);
+      const error = actualDelta - predictedDelta;
+      
+      const offset = j * 12;
+      for (let i = 0; i < 12; i++) {
+        weights[offset + i] += this.lwmLearningRate * input[i] * error;
       }
     }
   }
@@ -145,14 +183,21 @@ export class StrategicPlanningUnit extends BaseSubsystem {
    * Computes the "Sovereign Value" of a state.
    */
   public evaluateState(state: number[]): number {
-    const features = [
-      state[1],           // Stability
-      1.0 - state[2],     // Negative Entropy (Order)
-      state[0],           // Energy
-      state[3]            // Intent Alignment
-    ];
+    const s0 = state[0] || 0;
+    const s1 = state[1] || 0;
+    const s2 = state[2] || 0;
+    const s3 = state[3] || 0;
 
-    return features.reduce((acc, val, i) => acc + val * this.weights[i], 0);
+    // features: [Stability, -Entropy, Energy, Intent]
+    const f0 = s1;
+    const f1 = 1.0 - s2;
+    const f2 = s0;
+    const f3 = s3;
+
+    return f0 * this.weights[0] +
+           f1 * this.weights[1] +
+           f2 * this.weights[2] +
+           f3 * this.weights[3];
   }
 
   /**
@@ -164,18 +209,33 @@ export class StrategicPlanningUnit extends BaseSubsystem {
     const currentValue = this.evaluateState(current);
     
     // Temporal Difference / Reward Proxy
-    const reward = currentValue - prevValue + (current[1] > 0.6 ? 0.05 : -0.05);
+    const reward = currentValue - prevValue + ((current[1] || 0) > 0.6 ? 0.05 : -0.05);
 
-    const features = [current[1], 1.0 - current[2], current[0], current[3]];
+    const c0 = current[0] || 0;
+    const c1 = current[1] || 0;
+    const c2 = current[2] || 0;
+    const c3 = current[3] || 0;
+
+    const f0 = c1;
+    const f1 = 1.0 - c2;
+    const f2 = c0;
+    const f3 = c3;
     
-    // Stochastic Gradient Descent on Weight Space
-    for (let i = 0; i < this.weights.length; i++) {
-      this.weights[i] += this.learningRate * reward * features[i];
-    }
+    // SGD directly on weights
+    this.weights[0] += this.learningRate * reward * f0;
+    this.weights[1] += this.learningRate * reward * f1;
+    this.weights[2] += this.learningRate * reward * f2;
+    this.weights[3] += this.learningRate * reward * f3;
 
     // Resilience Constrain: Ensure weights stay within bound and normalized
-    const magnitude = Math.sqrt(this.weights.reduce((a, b) => a + b * b, 0)) || 1;
-    this.weights = this.weights.map(w => Math.max(0.01, w / magnitude));
+    let squareSum = 0;
+    for (let i = 0; i < 4; i++) {
+      squareSum += this.weights[i] * this.weights[i];
+    }
+    const magnitude = Math.sqrt(squareSum) || 1;
+    for (let i = 0; i < 4; i++) {
+      this.weights[i] = Math.max(0.01, this.weights[i] / magnitude);
+    }
   }
 
   /**
@@ -219,13 +279,15 @@ export class StrategicPlanningUnit extends BaseSubsystem {
       
       // Predicted next state: Blend LWM intuition with linear projection
       const lwmPrediction = this.predictLatent(current, action);
-      const linearProjection = current.map((v, idx) => {
-        const delta = (action[idx] || 0) * 0.1 / i;
-        return Math.min(1, Math.max(0, v + delta));
-      });
-
-      // Gradually trust linear/LWM more depending on depth or state confidence
-      const next = lwmPrediction.map((v, idx) => v * 0.7 + linearProjection[idx] * 0.3);
+      
+      const next = new Array(6);
+      for (let idx = 0; idx < 6; idx++) {
+        const linearDelta = ((action[idx] || 0) * 0.1) / i;
+        const currentVal = current[idx] || 0;
+        const linearProjectionVal = Math.min(1, Math.max(0, currentVal + linearDelta));
+        const lwmPredictionVal = lwmPrediction[idx] || 0;
+        next[idx] = lwmPredictionVal * 0.7 + linearProjectionVal * 0.3;
+      }
 
       // 1. Pragmatic Utility (Instrumental Value): Preference alignment toward high coherence & stability
       const pragmaticUtility = this.evaluateState(next);
@@ -235,12 +297,18 @@ export class StrategicPlanningUnit extends BaseSubsystem {
       // Shifting to actions with lower visit counts resolves predictive uncertainty (intrinsic foraging)
       const noveltyBonus = 1.0 / (Math.sqrt(keyAttempts + 1.0));
       const transitionMap = this.transitions.get(key);
-      const transitionEntropy = transitionMap 
-        ? -Array.from(transitionMap.values()).reduce((acc, count) => {
-            const p = count / keyAttempts;
-            return acc + p * Math.log2(p);
-          }, 0)
-        : 1.0; // Max uncertainty for novel transitions
+      
+      let transitionEntropy = 1.0;
+      if (transitionMap) {
+        let entropySum = 0;
+        for (const count of transitionMap.values()) {
+          const p = count / keyAttempts;
+          if (p > 0) {
+            entropySum += p * Math.log2(p);
+          }
+        }
+        transitionEntropy = -entropySum;
+      }
       
       const epistemicUtility = noveltyBonus * 0.6 + transitionEntropy * 0.4;
 
@@ -259,9 +327,9 @@ export class StrategicPlanningUnit extends BaseSubsystem {
 
   public getStatus(): any {
     return {
-      weights: this.weights,
+      weights: Array.from(this.weights),
       complexity: this.transitions.size,
-      latentComplexity: this.latentWeights.length * this.latentWeights[0].length,
+      latentComplexity: this.latentWeights.length,
       riskMetrics: {
         totalAttempts: Array.from(this.attempts.values()).reduce((a, b) => a + b, 0),
         knownFailures: Array.from(this.failures.values()).reduce((a, b) => a + b, 0)

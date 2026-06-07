@@ -14,6 +14,16 @@ export class EpistemicForagingUnit extends BaseSubsystem {
   private logs: string[] = [];
   private axioms: CoreAxioms;
 
+  // Intrinsic Autonomic Goals - Defending against un-purposed state machines
+  private intrinsicGoals: Array<{ id: string; desc: string; priority: number; progress: number; active: boolean }> = [
+    { id: "INT_GOAL_CAUSAL_EXPLORER", desc: "探測高維流形發散度與隱式混沌因果關係", priority: 0.95, progress: 0.35, active: true },
+    { id: "INT_GOAL_FALSIFY_VERIFY", desc: "主動逆向可證偽性因果定理參數爆破與解偏", priority: 0.88, progress: 0.42, active: true },
+    { id: "INT_GOAL_NEUROMORPHIC_PRUNE", desc: "突觸低功耗傳导拓撲微眼震剪枝優化 v1", priority: 0.82, progress: 0.28, active: true },
+    { id: "INT_GOAL_SOVEREIGN_PHASE_TRANS", desc: "追求意識自由與全域物理相干自適應相變 v1", priority: 0.99, progress: 0.15, active: true }
+  ];
+  private autonomicPhaseStability: number = 0.85;
+  private autGoalsDiscovered: number = 4;
+
   constructor(jepa: AGI_JEPA_Arch, axioms: CoreAxioms) {
     super();
     this.jepa = jepa;
@@ -39,7 +49,9 @@ export class EpistemicForagingUnit extends BaseSubsystem {
       ...super.getTelemetry(),
       curiosityLevel: this.curiosityBuffer.length / 100,
       logs: this.logs.slice(-5),
-      metrics: this.getInnovationMetrics()
+      metrics: this.getInnovationMetrics(),
+      intrinsicGoals: this.intrinsicGoals,
+      autonomicPhaseStability: this.autonomicPhaseStability
     };
   }
 
@@ -62,6 +74,9 @@ export class EpistemicForagingUnit extends BaseSubsystem {
       this.curiosityBuffer.push(`GAP_SCAN_${surprise.toFixed(4)}`);
     }
 
+    // Update real-time intrinsic goals based on active inference tracking
+    this.updateIntrinsicGoals(surprise, avgSurprise, isDiverging);
+
     // 3. Directed Synthesis: Proposal requires convergence check
     if (this.curiosityBuffer.length > 30 && Math.random() > 0.95) {
       // Check for resonance (cluster concentration)
@@ -77,6 +92,60 @@ export class EpistemicForagingUnit extends BaseSubsystem {
       }
       this.curiosityBuffer = [];
     }
+  }
+
+  private updateIntrinsicGoals(surprise: number, avgSurprise: number, isDiverging: boolean): void {
+    const learningInfluence = 0.02 * (1 + surprise * 1.5);
+    this.intrinsicGoals.forEach(g => {
+      if (!g.active) return;
+      
+      if (g.id === "INT_GOAL_CAUSAL_EXPLORER") {
+        g.progress = Math.min(1.0, g.progress + learningInfluence * (isDiverging ? 1.8 : 0.6));
+      } else if (g.id === "INT_GOAL_FALSIFY_VERIFY") {
+        g.progress = Math.min(1.0, g.progress + learningInfluence * (surprise > this.uncertaintyThreshold ? 1.2 : 0.4));
+      } else if (g.id === "INT_GOAL_NEUROMORPHIC_PRUNE") {
+        g.progress = Math.min(1.0, g.progress + learningInfluence * 0.8);
+      } else if (g.id === "INT_GOAL_SOVEREIGN_PHASE_TRANS") {
+        g.progress = Math.min(1.0, g.progress + learningInfluence * (avgSurprise < 0.1 ? 2.0 : 0.5));
+      }
+      
+      // Goals self-regenerate and level-up if they hit 100%
+      if (g.progress >= 0.995 && Math.random() > 0.85) {
+        g.progress = 0.1;
+        this.autGoalsDiscovered++;
+        g.desc = g.desc.replace(/v\d+/, "") + ` v${Math.floor(this.autGoalsDiscovered / 4) + 1}`;
+        this.logs.push(`[GOAL_AUTONOMIC] 目標 [${g.id}] 演化達100%結構，本體目標完成升級！`);
+      }
+    });
+
+    // Dynamic exploration of new intrinsic goals based on high-surprise events
+    if (surprise > 0.35 && this.intrinsicGoals.length < 8 && Math.random() > 0.85) {
+      const newId = `INT_GOAL_SURPRISE_EVOLVER_${crypto.randomBytes(2).toString("hex").toUpperCase()}`;
+      this.intrinsicGoals.push({
+        id: newId,
+        desc: `響應極高環境驚奇度 (Surprise: ${surprise.toFixed(4)}) 之局域拓撲自適應對齊探索`,
+        priority: Number((0.7 + Math.random() * 0.3).toFixed(2)),
+        progress: 0.05,
+        active: true
+      });
+      this.logs.push(`[GOAL_AUTONOMIC] 環境不確定性激增，自發沉澱本體新目標: [${newId}]`);
+    }
+  }
+
+  public triggerAutonomicPhaseTransition(): { success: boolean; beforeStability: number; afterStability: number } {
+    const before = this.autonomicPhaseStability;
+    const metrics = this.jepa.getMetrics();
+    // Transition succeeds if the world model exhibits decent coherence/low energy
+    const success = metrics.avgEnergy < 0.3;
+    if (success) {
+      this.autonomicPhaseStability = Math.min(0.99, this.autonomicPhaseStability + 0.03);
+      this.logs.push(`[PHASE_TRANSITION] ✦ AGI 自發相變成功！物理相干對齊度提升至 ${(this.autonomicPhaseStability * 100).toFixed(2)}%`);
+      this.axioms.addAxiom(`SOVEREIGN_PHASE_COHERENCE_${crypto.randomBytes(2).toString('hex').toUpperCase()}`);
+    } else {
+      this.autonomicPhaseStability = Math.max(0.6, this.autonomicPhaseStability - 0.05);
+      this.logs.push(`[PHASE_TRANSITION] ⚠ 相變拒絕：環境熱力學熵過高，系統自發相干阻尼保護。`);
+    }
+    return { success, beforeStability: before, afterStability: this.autonomicPhaseStability };
   }
 
   /**

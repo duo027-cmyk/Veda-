@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { MemoryFragment } from "./types";
+import { WasmComputeCore } from "./core/WasmComputeCore";
 
 /**
  * Generative Model: The system's internal theory of its own dynamics.
@@ -54,6 +55,7 @@ export class HDCEngine {
   private readonly jitterTable: Float32Array;
   private readonly positionCache: Float32Array[] = [];
   private readonly hvCache = new Map<string, Float32Array>();
+  private readonly wasmCore = new WasmComputeCore();
   
   // Reusable buffers to avoid GC pressure during high-frequency math
   private readonly mathBuffer: Float32Array;
@@ -112,9 +114,7 @@ export class HDCEngine {
    */
   public bind(hv1: Float32Array, hv2: Float32Array): Float32Array {
     const result = new Float32Array(this.dimension);
-    for (let i = 0; i < this.dimension; i += 1) {
-      result[i] = hv1[i] * hv2[i];
-    }
+    this.wasmCore.hdcBind(hv1, hv2, result);
     return this.normalize(result);
   }
 
@@ -122,18 +122,8 @@ export class HDCEngine {
    * Majority rule superposition.
    */
   public bundle(hvs: Float32Array[]): Float32Array {
-    this.mathBuffer.fill(0);
-    const count = hvs.length;
-    for (let j = 0; j < count; j += 1) {
-      const hv = hvs[j];
-      for (let i = 0; i < this.dimension; i += 1) {
-        this.mathBuffer[i] += hv[i];
-      }
-    }
     const result = new Float32Array(this.dimension);
-    for (let i = 0; i < this.dimension; i += 1) {
-      result[i] = this.mathBuffer[i] >= 0 ? 1 : -1;
-    }
+    this.wasmCore.hdcBundle(hvs, this.mathBuffer, result);
     return this.normalize(result);
   }
 
@@ -263,13 +253,7 @@ export class HDCEngine {
   }
 
   public similarity(hv1: Float32Array, hv2: Float32Array): number {
-    let dot = 0;
-    const len = Math.min(this.dimension, hv1.length, hv2.length);
-    const jitter = this.jitterTable;
-    for (let i = 0; i < len; i += 1) {
-      dot += hv1[i] * jitter[i] * hv2[i];
-    }
-    return dot / this.dimension;
+    return this.wasmCore.hdcSimilarity(hv1, hv2, this.jitterTable, this.dimension);
   }
 
   public encode(state: number[]): Float32Array {
