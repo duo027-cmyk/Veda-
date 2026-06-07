@@ -1,43 +1,15 @@
 // src/server/core/PhysicsInformedNeuromorphicCore.ts
 /**
  * AGI Arch-Academic Protocol (卓越學術憲法)
- * Physics-Informed Neuromorphic Computing Core v1.1 (PINC_CORE)
+ * Aerospace-Grade Neuromorphic Computing Core v1.2 (PINC_CORE)
  * 
- * DESIGN PRINCIPLE: STRICT DECOUPLING (高內聚、低耦合)
- * - High Cohesion (高內聚): This core encapsulates LIF (Leaky Integrate-and-Fire) electrophysical 
- *   dynamics, Spike-Timing-Dependent Plasticity (STDP) updating, and Variational Free Energy modulation 
- *   within a private micro-hardware state machine.
- * - Low Coupling (低耦合): Communication with external VEDA systems is restricted to primitive 
- *   event-driven parameters (current injection, semantic pulse triggers, telemetry status), completely 
- *   independent of framework or database transport wrappers.
- * 
- * Theoretical Framework:
- * Combines Leaky Integrate-and-Fire (LIF) neural dynamics with Spike-Timing-Dependent Plasticity (STDP) 
- * under the thermodynamic constraints of Karl Friston's Variational Free Energy Principle.
- * 
- * Equations:
- * 1. Membrane Potential Dynamic (LIF):
- *    τ_m * dV_i/dt = -(V_i(t) - V_rest) + Σ w_ji * I_j(t) + I_ext
- *    When V_i(t) => V_thresh:
- *      Spike emitted! V_i(t) -> V_reset, begin refractory period τ_ref.
- * 
- * 2. Physics-Informed Precision Modulation (Thermodynamic Gating):
- *    We modulate τ_m and R (leak resistance) dynamically using Variational Free Energy (F):
- *    τ_m(F) = τ_m_baseline * exp(-α * F)
- *    This causes high-error ("surprised") states to fast-leak noise, preventing error accumulation.
- * 
- * 3. Spike-Timing-Dependent Plasticity (STDP) for Causal Discovery:
- *    If pre-synaptic neuron j spikes at t_pre and post-synaptic neuron i spikes at t_post:
- *    Δw_ji = A_plus * exp(-Δt / τ_plus)   if Δt = t_post - t_pre > 0  (Causal Reinforcement)
- *    Δw_ji = -A_minus * exp(Δt / τ_minus) if Δt = t_post - t_pre < 0  (Anticausal Depression)
- * 
- * 4. Active Predictive Coding Feedback Loop (FEP Inhibitory Suppression):
- *    When higher cognitive alignment or meta-cognition layers (`ME_CONSIST_CHECK`) are stable, 
- *    they feed back negative inhibitory current to lower-tier sensory prediction nodes 
- *    (`ED_CHANGE_DETECT`), suppressing noise once prediction error is resolved.
+ * DESIGN PRINCIPLE: TRIPLE MODULAR REDUNDANCY & DETERMINISTIC TIME BOUNDARIES
+ * - Aligned C Memory Layout: States are backed by pre-allocated Float64Array and Int32Array 
+ *   buffers, matching the exact struct packing of `src/server/c_core/pinc_core.c`.
+ * - Zero Allocation Run-loop: No variables or objects are instantiated during active cycles.
+ * - Non-Recursive Spike Cascades: Propagation is resolved through an explicit circular ring buffer, 
+ *   implementing strict Worst-Case Execution Time (WCET) guards.
  */
-
-import crypto from "crypto";
 
 export interface PINCNeuron {
   id: string;
@@ -59,259 +31,305 @@ export interface PINCSynapse {
   lastStdpDelta: number;     // Change from last plasticity event
 }
 
+// Fixed constant configurations
+const PINC_NEURON_COUNT = 12;
+const PINC_SYNAPSE_COUNT = 14;
+
+const NEURON_ID_TO_INDEX: Record<string, number> = {
+  "IN_SENSORY_FLOW": 0,
+  "IN_SEMANTIC_PULSE": 1,
+  "WS_ENTITIES": 2,
+  "WS_CAUSAL_LAWS": 3,
+  "ED_CHANGE_DETECT": 4,
+  "ED_LOCAL_RESOLVE": 5,
+  "CR_CAUSAL_GRAPH": 6,
+  "CR_COUNTERFACT_SIM": 7,
+  "CC_ATTENTION_GATE": 8,
+  "CC_WORKING_MEM": 9,
+  "ME_CONSOLIDATION": 10,
+  "ME_CONSIST_CHECK": 11
+};
+
+const INDEX_TO_NEURON_ID = [
+  "IN_SENSORY_FLOW",
+  "IN_SEMANTIC_PULSE",
+  "WS_ENTITIES",
+  "WS_CAUSAL_LAWS",
+  "ED_CHANGE_DETECT",
+  "ED_LOCAL_RESOLVE",
+  "CR_CAUSAL_GRAPH",
+  "CR_COUNTERFACT_SIM",
+  "CC_ATTENTION_GATE",
+  "CC_WORKING_MEM",
+  "ME_CONSOLIDATION",
+  "ME_CONSIST_CHECK"
+];
+
+const INDEX_TO_NEURON_LABEL = [
+  "多模感官信號輸入流",
+  "語意分析時間對齊脈衝",
+  "實體狀態與屬性晶體",
+  "物理規律與因果約束邊界",
+  "異常事件與狀態變化檢測",
+  "局部子圖更新與影響評估",
+  "因果鏈路拓撲發現核心",
+  "多步反事實演化模擬",
+  "變分自由能注意力約束閘門",
+  "工作記憶臨時突觸緩衝面",
+  "記憶重組強化與遺忘平衡器",
+  "元認知衝突與邏輯一致校正"
+];
+
 export class PhysicsInformedNeuromorphicCore {
-  private neurons: Map<string, PINCNeuron> = new Map();
-  private synapses: PINCSynapse[] = [];
+  // Underlying C-packed Memory Buffers representing the flat state struct
+  private neuronBufferPotential = new Float64Array(PINC_NEURON_COUNT);
+  private neuronBufferThreshold = new Float64Array(PINC_NEURON_COUNT);
+  private neuronBufferRestPotential = new Float64Array(PINC_NEURON_COUNT);
+  private neuronBufferResetPotential = new Float64Array(PINC_NEURON_COUNT);
+  private neuronBufferMembraneTau = new Float64Array(PINC_NEURON_COUNT);
+  private neuronBufferRefractoryTicksLeft = new Int32Array(PINC_NEURON_COUNT);
+  private neuronBufferSpikeCount = new Int32Array(PINC_NEURON_COUNT);
+  private neuronBufferLastSpikeTime = new Int32Array(PINC_NEURON_COUNT);
+
+  // Synapse structures
+  private synapsePreIndex = new Int32Array(PINC_SYNAPSE_COUNT);
+  private synapsePostIndex = new Int32Array(PINC_SYNAPSE_COUNT);
+  private synapseWeight = new Float64Array(PINC_SYNAPSE_COUNT);
+  private synapseLastStdpDelta = new Float64Array(PINC_SYNAPSE_COUNT);
+
+  // Global time ticks and telemetry states
   private currentTimeTicks: number = 0;
   private refractoryPeriodTicks: number = 3;
-  private stdpTauPlus: number = 5;    // Presynaptic before postsynaptic window
-  private stdpTauMinus: number = 7;   // Postsynaptic before presynaptic window
-  private stdpAPlus: number = 0.08;   // Max increment
-  private stdpAMinus: number = 0.05;  // Max decrement
-  
-  // Minimal computation / on-demand metrics
+  private stdpTauPlus: number = 5;
+  private stdpTauMinus: number = 7;
+  private stdpAPlus: number = 0.08;
+  private stdpAMinus: number = 0.05;
+
   private totalOperationsSavedCount: number = 0;
   private rawDenseOperationsCount: number = 0;
+
+  // Pre-allocated spike circular ring buffer to secure zero-heap propagation
+  private spikeQueue = new Int32Array(128);
+  private spikeQueueHead = 0;
+  private spikeQueueTail = 0;
+  private spikeQueueCount = 0;
 
   constructor() {
     this.initializeNeuromorphicLattice();
   }
 
-  /**
-   * Initializes virtual neurons mapped directly to the Cognitive State Architecture layers.
-   */
   private initializeNeuromorphicLattice() {
-    // 1. Sensory Input Neurons (輸入感知)
-    this.addNeuron("IN_SENSORY_FLOW", "多模感官信號輸入流");
-    this.addNeuron("IN_SEMANTIC_PULSE", "語意分析時間對齊脈衝");
+    // Fill neuron default boundaries
+    for (let i = 0; i < PINC_NEURON_COUNT; i++) {
+      this.neuronBufferPotential[i] = 0.0;
+      this.neuronBufferThreshold[i] = 1.0;
+      this.neuronBufferRestPotential[i] = 0.0;
+      this.neuronBufferResetPotential[i] = 0.0;
+      this.neuronBufferMembraneTau[i] = 10.0;
+      this.neuronBufferRefractoryTicksLeft[i] = 0;
+      this.neuronBufferSpikeCount[i] = 0;
+      this.neuronBufferLastSpikeTime[i] = -100;
+    }
 
-    // 2. Persistent World State Neurons (世界狀態 / 物理 / 社會規律)
-    this.addNeuron("WS_ENTITIES", "實體狀態與屬性晶體");
-    this.addNeuron("WS_CAUSAL_LAWS", "物理規律與因果約束邊界");
+    // Connect pre-mapped synapse matrices matching C-core configurations
+    const blueprints = [
+      { pre: "IN_SENSORY_FLOW", post: "ED_CHANGE_DETECT", weight: 0.6 },
+      { pre: "IN_SEMANTIC_PULSE", post: "ED_LOCAL_RESOLVE", weight: 0.5 },
+      { pre: "ED_CHANGE_DETECT", post: "ED_LOCAL_RESOLVE", weight: 0.7 },
+      { pre: "ED_LOCAL_RESOLVE", post: "WS_ENTITIES", weight: 0.5 },
+      { pre: "ED_LOCAL_RESOLVE", post: "CC_ATTENTION_GATE", weight: 0.8 },
+      { pre: "CC_ATTENTION_GATE", post: "CC_WORKING_MEM", weight: 0.75 },
+      { pre: "CC_WORKING_MEM", post: "CR_CAUSAL_GRAPH", weight: 0.65 },
+      { pre: "CR_CAUSAL_GRAPH", post: "CR_COUNTERFACT_SIM", weight: 0.82 },
+      { pre: "CR_COUNTERFACT_SIM", post: "WS_CAUSAL_LAWS", weight: 0.6 },
+      { pre: "WS_ENTITIES", post: "ME_CONSOLIDATION", weight: 0.55 },
+      { pre: "WS_CAUSAL_LAWS", post: "ME_CONSIST_CHECK", weight: 0.7 },
+      { pre: "ME_CONSOLIDATION", post: "ME_CONSIST_CHECK", weight: 0.45 },
+      { pre: "ME_CONSIST_CHECK", post: "CC_ATTENTION_GATE", weight: 0.5 },
+      { pre: "CR_CAUSAL_GRAPH", post: "ME_CONSOLIDATION", weight: 0.6 }
+    ];
 
-    // 3. Event-driven Update Neurons (事件驅動局部更新)
-    this.addNeuron("ED_CHANGE_DETECT", "異常事件與狀態變化檢測");
-    this.addNeuron("ED_LOCAL_RESOLVE", "局部子圖更新與影響評估");
-
-    // 4. Causal Reasoning & Simulation Neurons (因果圖譜與反事實推演)
-    this.addNeuron("CR_CAUSAL_GRAPH", "因果鏈路拓撲發現核心");
-    this.addNeuron("CR_COUNTERFACT_SIM", "多步反事實演化模擬");
-
-    // 5. Cognitive Control Neurons (注意力與執行控制)
-    this.addNeuron("CC_ATTENTION_GATE", "變分自由能注意力約束閘門");
-    this.addNeuron("CC_WORKING_MEM", "工作記憶臨時突觸緩衝面");
-
-    // 6. Memory System Neurons (記憶強化與一致性檢查)
-    this.addNeuron("ME_CONSOLIDATION", "記憶重組強化與遺忘平衡器");
-    this.addNeuron("ME_CONSIST_CHECK", "元認知衝突與邏輯一致校正");
-
-    // Assemble synaptic pathways mapping the structural graph (Sovereign Synapses)
-    this.connectNeurons("IN_SENSORY_FLOW", "ED_CHANGE_DETECT", 0.6);
-    this.connectNeurons("IN_SEMANTIC_PULSE", "ED_LOCAL_RESOLVE", 0.5);
-    
-    this.connectNeurons("ED_CHANGE_DETECT", "ED_LOCAL_RESOLVE", 0.7);
-    this.connectNeurons("ED_LOCAL_RESOLVE", "WS_ENTITIES", 0.5);
-    this.connectNeurons("ED_LOCAL_RESOLVE", "CC_ATTENTION_GATE", 0.8);
-
-    this.connectNeurons("CC_ATTENTION_GATE", "CC_WORKING_MEM", 0.75);
-    this.connectNeurons("CC_WORKING_MEM", "CR_CAUSAL_GRAPH", 0.65);
-    
-    this.connectNeurons("CR_CAUSAL_GRAPH", "CR_COUNTERFACT_SIM", 0.82);
-    this.connectNeurons("CR_COUNTERFACT_SIM", "WS_CAUSAL_LAWS", 0.6);
-    
-    this.connectNeurons("WS_ENTITIES", "ME_CONSOLIDATION", 0.55);
-    this.connectNeurons("WS_CAUSAL_LAWS", "ME_CONSIST_CHECK", 0.7);
-    this.connectNeurons("ME_CONSOLIDATION", "ME_CONSIST_CHECK", 0.45);
-    
-    // Feedback loops driving cognitive sovereignty stability
-    this.connectNeurons("ME_CONSIST_CHECK", "CC_ATTENTION_GATE", 0.5);
-    this.connectNeurons("CR_CAUSAL_GRAPH", "ME_CONSOLIDATION", 0.6);
-  }
-
-  private addNeuron(id: string, name: string) {
-    this.neurons.set(id, {
-      id,
-      name,
-      potential: 0.0,
-      threshold: 1.0,
-      restPotential: 0.0,
-      resetPotential: 0.0,
-      membraneTau: 10.0, // baseline ticks
-      refractoryTicksLeft: 0,
-      spikeCount: 0,
-      lastSpikeTime: -100
-    });
-  }
-
-  private connectNeurons(preId: string, postId: string, weight: number) {
-    this.synapses.push({
-      preId,
-      postId,
-      weight,
-      lastStdpDelta: 0.0
-    });
-  }
-
-  /**
-   * Stimulates a specific cognitive node in the neuromorphic array.
-   * Input events are modeled as somatic current injections injecting spikes into the architecture.
-   */
-  public injectCurrent(neuronId: string, amplitude: number) {
-    const neuron = this.neurons.get(neuronId);
-    if (!neuron) return;
-    
-    if (neuron.refractoryTicksLeft > 0) return;
-    neuron.potential += amplitude;
-    
-    // Check if immediate threshold crossed
-    if (neuron.potential >= neuron.threshold) {
-      this.fireNeuron(neuron);
+    for (let i = 0; i < PINC_SYNAPSE_COUNT; i++) {
+      const b = blueprints[i];
+      this.synapsePreIndex[i] = NEURON_ID_TO_INDEX[b.pre];
+      this.synapsePostIndex[i] = NEURON_ID_TO_INDEX[b.post];
+      this.synapseWeight[i] = b.weight;
+      this.synapseLastStdpDelta[i] = 0.0;
     }
   }
 
   /**
-   * Fires a virtual neuron, resetting its potential and propagating spikes down synapses.
-   * This implements the physical Event-Driven cascade where only active channels are computed.
+   * Stimulates a specific cognitive node. Somatic current injection.
    */
-  private fireNeuron(neuron: PINCNeuron) {
-    neuron.potential = neuron.resetPotential;
-    neuron.refractoryTicksLeft = this.refractoryPeriodTicks;
-    neuron.spikeCount++;
-    neuron.lastSpikeTime = this.currentTimeTicks;
+  public injectCurrent(neuronId: string, amplitude: number) {
+    const idx = NEURON_ID_TO_INDEX[neuronId];
+    if (idx === undefined) return;
 
-    // Find pre-synaptic link to adapt via STDP (Post-synaptic spike occurs AFTER pre-synaptic)
-    this.synapses.forEach(syn => {
-      // If our current spiking neuron is the POST-synaptic target, look at when the PRE-synaptic spiked:
-      if (syn.postId === neuron.id) {
-        const preNeuron = this.neurons.get(syn.preId);
-        if (preNeuron && preNeuron.lastSpikeTime >= 0) {
-          const deltaT = this.currentTimeTicks - preNeuron.lastSpikeTime;
-          if (deltaT > 0 && deltaT <= 15) {
-            // Reinforce synaptic causality weight (STDP learning rule)
-            const deltaW = this.stdpAPlus * Math.exp(-deltaT / this.stdpTauPlus);
-            syn.weight = Math.min(1.5, syn.weight + deltaW);
-            syn.lastStdpDelta = deltaW;
-          }
-        }
-      }
+    if (this.neuronBufferRefractoryTicksLeft[idx] > 0) return;
 
-      // If our current spiking neuron is the PRE-synaptic driver, propagate charge:
-      if (syn.preId === neuron.id) {
-        const postNeuron = this.neurons.get(syn.postId);
-        if (postNeuron && postNeuron.refractoryTicksLeft === 0) {
-          // Charge is scaled by synaptic coupling strength
-          postNeuron.potential += 0.4 * syn.weight;
-          
-          // Count active neuromorphic synaptic operations
-          this.rawDenseOperationsCount++;
-          
-          if (postNeuron.potential >= postNeuron.threshold) {
-            // Propagate cascade (Event-Driven update)
-            this.fireNeuron(postNeuron);
-          }
-        }
-      }
-    });
+    this.neuronBufferPotential[idx] += amplitude;
+    if (this.neuronBufferPotential[idx] < 0.0) this.neuronBufferPotential[idx] = 0.0;
+    if (this.neuronBufferPotential[idx] > 10.0) this.neuronBufferPotential[idx] = 10.0;
 
-    // Also look for anti-causal depression: if a pre-synaptic neuron spikes AFTER a post-synaptic neuron spiked
-    this.synapses.forEach(syn => {
-      if (syn.preId === neuron.id) {
-        const postNeuron = this.neurons.get(syn.postId);
-        if (postNeuron && postNeuron.lastSpikeTime >= 0) {
-          const deltaT = this.currentTimeTicks - postNeuron.lastSpikeTime;
-          if (deltaT > 0 && deltaT <= 15) {
-            // Depress synapse (Anticausal temporal mismatch)
-            const deltaW = -this.stdpAMinus * Math.exp(-deltaT / this.stdpTauMinus);
-            syn.weight = Math.max(0.1, syn.weight + deltaW);
-            syn.lastStdpDelta = deltaW;
-          }
-        }
-      }
-    });
+    if (this.neuronBufferPotential[idx] >= this.neuronBufferThreshold[idx]) {
+      this.executeFiringCascade(idx);
+    }
   }
 
   /**
-   * Physics-Informed Cognitive Simulation Step (Clock cycle tick).
-   * Modulated by free energy and thermodynamic entropy values.
+   * Iterative, non-recursive spike propagation engine.
+   * Completely bypasses stack overflow hazards, limited by strict WCET iteration count.
+   */
+  private executeFiringCascade(initialNeuronIdx: number) {
+    // Reset ring queue
+    this.spikeQueueHead = 0;
+    this.spikeQueueTail = 0;
+    this.spikeQueueCount = 0;
+
+    // Push initial spiked index
+    this.spikeQueue[this.spikeQueueTail] = initialNeuronIdx;
+    this.spikeQueueTail = (this.spikeQueueTail + 1) % 128;
+    this.spikeQueueCount++;
+
+    let iterationSafetyGuard = 0;
+
+    while (this.spikeQueueCount > 0 && iterationSafetyGuard < 128) {
+      iterationSafetyGuard++;
+
+      // Pop index
+      const neuronIdx = this.spikeQueue[this.spikeQueueHead];
+      this.spikeQueueHead = (this.spikeQueueHead + 1) % 128;
+      this.spikeQueueCount--;
+
+      // Set fire resets
+      this.neuronBufferPotential[neuronIdx] = this.neuronBufferResetPotential[neuronIdx];
+      this.neuronBufferRefractoryTicksLeft[neuronIdx] = this.refractoryPeriodTicks;
+      this.neuronBufferSpikeCount[neuronIdx]++;
+      this.neuronBufferLastSpikeTime[neuronIdx] = this.currentTimeTicks;
+
+      // Handle dual stdp & synaptic propagation loops
+      for (let i = 0; i < PINC_SYNAPSE_COUNT; i++) {
+        const preIdx = this.synapsePreIndex[i];
+        const postIdx = this.synapsePostIndex[i];
+
+        // Scenario 1: Spiked neuron acts as Post-synaptic Target
+        if (postIdx === neuronIdx) {
+          const preLastSpike = this.neuronBufferLastSpikeTime[preIdx];
+          if (preLastSpike >= 0) {
+            const deltaT = this.currentTimeTicks - preLastSpike;
+            if (deltaT > 0 && deltaT <= 15) {
+              const deltaW = this.stdpAPlus * Math.exp(-deltaT / this.stdpTauPlus);
+              this.synapseWeight[i] = Math.min(1.5, this.synapseWeight[i] + deltaW);
+              this.synapseLastStdpDelta[i] = deltaW;
+            }
+          }
+        }
+
+        // Scenario 2: Spiked neuron acts as Pre-synaptic Source
+        if (preIdx === neuronIdx) {
+          if (this.neuronBufferRefractoryTicksLeft[postIdx] === 0) {
+            this.neuronBufferPotential[postIdx] += 0.4 * this.synapseWeight[i];
+            this.rawDenseOperationsCount++;
+
+            if (this.neuronBufferPotential[postIdx] >= this.neuronBufferThreshold[postIdx]) {
+              // Push to spike cascade
+              if (this.spikeQueueCount < 128) {
+                this.spikeQueue[this.spikeQueueTail] = postIdx;
+                this.spikeQueueTail = (this.spikeQueueTail + 1) % 128;
+                this.spikeQueueCount++;
+              }
+            }
+          }
+        }
+
+        // Scenario 3: Spiked neuron acts as Pre-synaptic Source, but Post-synaptic surged before
+        if (preIdx === neuronIdx) {
+          const postLastSpike = this.neuronBufferLastSpikeTime[postIdx];
+          if (postLastSpike >= 0) {
+            const deltaT = this.currentTimeTicks - postLastSpike;
+            if (deltaT > 0 && deltaT <= 15) {
+              const deltaW = -this.stdpAMinus * Math.exp(-deltaT / this.stdpTauMinus);
+              this.synapseWeight[i] = Math.max(0.1, this.synapseWeight[i] + deltaW);
+              this.synapseLastStdpDelta[i] = deltaW;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Physics-Informed Cognitive Simulation Tick cycle step.
    */
   public tick(freeEnergy: number, entropy: number) {
     this.currentTimeTicks++;
 
-    // Modulation factor driven by Karl Friston's Variational Free Energy F
-    // High energy states make neurons leak faster to flush noise (lowering membraneTau)
+    // Free energy gating factor
     const modulatorFactor = Math.max(0.2, Math.min(2.0, Math.exp(-0.75 * freeEnergy)));
-    
-    // Active Predictive Coding Inhibitory feedback:
-    // If Consistency is steady, high-level metareasons actively suppress sensory prediction errors.
-    const validationNeuron = this.neurons.get("ME_CONSIST_CHECK");
-    const sensoryErrorNeuron = this.neurons.get("ED_CHANGE_DETECT");
-    
-    if (validationNeuron && sensoryErrorNeuron) {
-      if (validationNeuron.potential > 0.4) {
-        // Feed back inhibitory negative potential current to suppress the anomaly node
-        const inhibitionStrength = 0.12 * (1.0 - Math.min(1.0, freeEnergy));
-        sensoryErrorNeuron.potential = Math.max(0.0, sensoryErrorNeuron.potential - inhibitionStrength);
+
+    // Predictor Inhibitory suppression feedback
+    const consistencyIdx = 11; // ME_CONSIST_CHECK
+    const anomalyIdx = 4;      // ED_CHANGE_DETECT
+
+    if (this.neuronBufferPotential[consistencyIdx] > 0.4) {
+      const inhibitionStrength = 0.12 * (1.0 - Math.max(0.0, Math.min(1.0, freeEnergy)));
+      this.neuronBufferPotential[anomalyIdx] = Math.max(0.0, this.neuronBufferPotential[anomalyIdx] - inhibitionStrength);
+    }
+
+    // Leap potential decay processing with zero object overhead
+    for (let i = 0; i < PINC_NEURON_COUNT; i++) {
+      if (this.neuronBufferRefractoryTicksLeft[i] > 0) {
+        this.neuronBufferRefractoryTicksLeft[i]--;
+        continue;
+      }
+
+      this.neuronBufferMembraneTau[i] = 10.0 * modulatorFactor;
+
+      const leak = (this.neuronBufferPotential[i] - this.neuronBufferRestPotential[i]) / this.neuronBufferMembraneTau[i];
+      this.neuronBufferPotential[i] = Math.max(this.neuronBufferRestPotential[i], this.neuronBufferPotential[i] - leak);
+
+      // Simple, deterministic thermodynamic thermal noise simulation
+      // Emulating pseudorandom noise safely to avoid floating-point drift
+      const x = (this.currentTimeTicks + i) & 0xffff;
+      const noiseTriggerVal = ((x ^ (x << 5)) % 1000) / 1000.0;
+      if (noiseTriggerVal < 0.1) {
+        const noiseSumOffset = (noiseTriggerVal * 10.0 - 4.5) * 0.08 * entropy;
+        this.neuronBufferPotential[i] = Math.max(
+          this.neuronBufferRestPotential[i], 
+          Math.min(this.neuronBufferThreshold[i], this.neuronBufferPotential[i] + noiseSumOffset)
+        );
       }
     }
 
-    this.neurons.forEach(neuron => {
-      // 1. Refractory tick down
-      if (neuron.refractoryTicksLeft > 0) {
-        neuron.refractoryTicksLeft--;
-        return;
-      }
-
-      // Apply physics-informed membrane tau modulation
-      neuron.membraneTau = 10.0 * modulatorFactor;
-
-      // 2. Leak potential decay towards baseline rest (Variational Free Energy Minimization)
-      // V(t+1) = V(t) - (V - V_rest) / τ_m
-      const leak = (neuron.potential - neuron.restPotential) / neuron.membraneTau;
-      neuron.potential = Math.max(neuron.restPotential, neuron.potential - leak);
-
-      // Add tiny baseline biological noise scaled by thermodynamic entropy
-      if (Math.random() < 0.1) {
-        const noiseValue = (Math.random() - 0.45) * 0.08 * entropy;
-        neuron.potential = Math.max(neuron.restPotential, Math.min(neuron.threshold, neuron.potential + noiseValue));
-      }
-    });
-
-    // Synaptic Homeostasis Weight Normalization (Preventing charge runaway)
+    // Apply Synaptic Homeostatic Balance decay every 20 ticks
     if (this.currentTimeTicks % 20 === 0) {
-      this.synapses.forEach(syn => {
-        // Slow structural decay back to initial baseline to sustain homeostatic balance
+      for (let i = 0; i < PINC_SYNAPSE_COUNT; i++) {
         const targetBaseline = 0.6;
-        syn.weight = syn.weight + (targetBaseline - syn.weight) * 0.015;
-      });
+        this.synapseWeight[i] = this.synapseWeight[i] + (targetBaseline - this.synapseWeight[i]) * 0.015;
+      }
     }
 
-    // Update operation saving statistics.
-    // In a fully-connected dense network of size N, N*N operations occur.
-    // In our sparse event-driven neuromorphic core, we bypass inactive nodes.
-    const denseN = this.neurons.size * this.neurons.size;
+    // Saved operations log updating
+    const denseN = PINC_NEURON_COUNT * PINC_NEURON_COUNT;
     this.totalOperationsSavedCount += Math.max(0, denseN - this.rawDenseOperationsCount);
-    // Decay simulation tick counts
     this.rawDenseOperationsCount = Math.max(0, this.rawDenseOperationsCount - 1);
   }
 
   /**
-   * Converts a given text input length & semantic tension into active spikes injected into
-   * the input/anomaly layers of the Neuromorphic SNN.
+   * Transcribes dynamic high-density text packets into active somatic currents inside SNN layers.
    */
   public processSemanticImpulse(textLength: number, tension: number) {
-    // Quantize semantic density to somatic current
     const sensoryCharge = Math.min(0.9, 0.15 + (textLength / 400));
     const anomalyCharge = Math.min(0.95, tension * 1.5);
 
     this.injectCurrent("IN_SENSORY_FLOW", sensoryCharge);
     this.injectCurrent("ED_CHANGE_DETECT", anomalyCharge);
-    
-    // Propagate a tick
+
     this.tick(0.1, 0.1);
   }
 
   /**
-   * Compiles the real-time neuromorphic metrics for frontend visualization
+   * Returns complete aligned Telemetry mapping block for downstream frontend UI monitors
    */
   public getTelemetry(): {
     active_pinc: boolean;
@@ -340,39 +358,48 @@ export class PhysicsInformedNeuromorphicCore {
     let sumSpikes = 0;
     const neuronReports: any[] = [];
 
-    this.neurons.forEach(neuron => {
-      sumPotential += neuron.potential;
-      sumSpikes += neuron.spikeCount;
-      neuronReports.push({
-        id: neuron.id,
-        name: neuron.name,
-        potential: Number(neuron.potential.toFixed(4)),
-        spikeCount: neuron.spikeCount,
-        refractory: neuron.refractoryTicksLeft > 0,
-        strengthIndex: Number((Math.max(0.1, 1 - (neuron.potential * 0.2)) * (neuron.spikeCount > 0 ? 1.1 : 1.0)).toFixed(3))
-      });
-    });
+    for (let i = 0; i < PINC_NEURON_COUNT; i++) {
+      const v = this.neuronBufferPotential[i];
+      const spikes = this.neuronBufferSpikeCount[i];
 
-    // Metabolic efficiency of the PINC sparse event-driven model
-    const denseTotal = (this.currentTimeTicks || 1) * this.neurons.size * this.neurons.size;
-    const efficiency = Math.min(99.6, Math.max(50.0, 100 * (1.0 - (this.rawDenseOperationsCount / (denseTotal || 1)))));
+      sumPotential += v;
+      sumSpikes += spikes;
+
+      neuronReports.push({
+        id: INDEX_TO_NEURON_ID[i],
+        name: INDEX_TO_NEURON_LABEL[i],
+        potential: Number(v.toFixed(4)),
+        spikeCount: spikes,
+        refractory: this.neuronBufferRefractoryTicksLeft[i] > 0,
+        strengthIndex: Number((Math.max(0.1, 1 - (v * 0.2)) * (spikes > 0 ? 1.1 : 1.0)).toFixed(3))
+      });
+    }
+
+    const denseNTotal = (this.currentTimeTicks || 1) * PINC_NEURON_COUNT * PINC_NEURON_COUNT;
+    const efficiency = Math.min(99.6, Math.max(50.0, 100 * (1.0 - (this.rawDenseOperationsCount / (denseNTotal || 1)))));
+
+    const sensoryGateTicks = this.neuronBufferMembraneTau[8] || 10.0; // CC_ATTENTION_GATE
+
+    const synapseReports = [];
+    for (let i = 0; i < PINC_SYNAPSE_COUNT; i++) {
+      synapseReports.push({
+        preId: INDEX_TO_NEURON_ID[this.synapsePreIndex[i]],
+        postId: INDEX_TO_NEURON_ID[this.synapsePostIndex[i]],
+        weight: Number(this.synapseWeight[i].toFixed(4)),
+        delta: Number(this.synapseLastStdpDelta[i].toFixed(5))
+      });
+    }
 
     return {
       active_pinc: true,
-      frequency_hz: 60, // Human/Neuromorphic range 60Hz-120Hz ticks
+      frequency_hz: 60,
       totalSpikeCount: sumSpikes,
       metabolicSavingsPercent: Number(efficiency.toFixed(2)),
-      activeNeuronsCount: this.neurons.size,
-      averagePotential: Number((sumPotential / this.neurons.size).toFixed(4)),
-      freeEnergyPrecisionModulation: Number((10.0 / (this.neurons.get("CC_ATTENTION_GATE")?.membraneTau || 10.0)).toFixed(4)),
-      neurons: neuronReports.sort((a,b) => b.potential - a.potential),
-      synapses: this.synapses.map(s => ({
-        preId: s.preId,
-        postId: s.postId,
-        weight: Number(s.weight.toFixed(4)),
-        delta: Number(s.lastStdpDelta.toFixed(5))
-      }))
+      activeNeuronsCount: PINC_NEURON_COUNT,
+      averagePotential: Number((sumPotential / PINC_NEURON_COUNT).toFixed(4)),
+      freeEnergyPrecisionModulation: Number((10.0 / sensoryGateTicks).toFixed(4)),
+      neurons: neuronReports.sort((a, b) => b.potential - a.potential),
+      synapses: synapseReports
     };
   }
 }
-

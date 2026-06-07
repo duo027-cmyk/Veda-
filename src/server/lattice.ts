@@ -1,4 +1,10 @@
+// src/server/lattice.ts
 import crypto from "crypto";
+
+/**
+ * AGI Arch-Academic Protocol (卓越學術憲法)
+ * Classical Aerospace-Grade TypeScript implementation aligning 1:1 with C-Core structures
+ */
 
 export class MineralSeed {
   public name: string;
@@ -29,6 +35,9 @@ export class MineralSeed {
   }
 }
 
+/**
+ * Sovereign Quantum Phase-Lock Loop Lattice Engine
+ */
 export class SovereignLatticeV9 {
   private readonly dim = 1024;
   private readonly baseFreq = 432.0;
@@ -36,22 +45,23 @@ export class SovereignLatticeV9 {
   private readonly resonanceGap = 2.0; 
   private isSuperconducting = false;
   private isPlanckDilationActive = false;
-  private sanctionThreshold = 0.99;
 
   private readonly MIRROR_DEPTH = 7;
   private readonly REFLECTION_EFFICIENCY = 0.9999997;
+  
+  // Flat static structural cache arrays align with C-core memory bounds
   private mirrorBufferReal = new Float32Array(this.dim);
   private mirrorBufferImag = new Float32Array(this.dim);
 
   private coherenceDebt = 0;
   private readonly DEBT_LIMIT = 1000;
-  private federationSync = 0;
 
   private collapseMomentum = 0;
   private readonly COLLAPSE_RATE = 0.0001; 
 
+  // LRU Circular Cache matching C-struct layouts (no memory fragmentation)
   private solomonCache = new Map<string, { real: Float32Array; imag: Float32Array; coherence: number }>();
-  private readonly CACHE_LIMIT = 512;
+  private readonly CACHE_LIMIT = 128;
 
   private bufferRealA = new Float32Array(this.dim);
   private bufferImagA = new Float32Array(this.dim);
@@ -123,8 +133,8 @@ export class SovereignLatticeV9 {
     const attractorForce = (targetScale - 1.0) * damping; 
 
     for (let i = 0; i < this.dim; i++) {
-      outReal[i] = real[i] * (1.0 + attractorForce);
-      outImag[i] = imag[i] * (1.0 + attractorForce);
+        outReal[i] = real[i] * (1.0 + attractorForce);
+        outImag[i] = imag[i] * (1.0 + attractorForce);
     }
   }
 
@@ -195,13 +205,12 @@ export class SovereignLatticeV9 {
         }
       }
       
-      // Dynamic Phase-step modulation: larger steps when far from convergence, smaller steps for fine-grained resonance tuning
       const stepNerveFactor = Math.max(0.1, Math.min(1.5, delta * 15.0));
       const adjustedPhaseShift = this.baseFreq * basePhaseStep * stepNerveFactor;
       this.applyPhaseShift(this.bufferRealB, this.bufferImagB, adjustedPhaseShift, this.bufferRealA, this.bufferImagA);
       
       let stepDelta = 0;
-      // Loop unrolling for extreme hardware pipeline compilation optimization
+      // Loop unrolling matching lattice_core.c vector processing
       for (let j = 0; j < this.dim; j += 4) { 
         const d0 = this.bufferRealA[j] - this.bufferRealB[j];
         const d1 = this.bufferRealA[j+1] - this.bufferRealB[j+1];
@@ -273,7 +282,13 @@ export class SovereignLatticeV9 {
     
     this.lastCoherence = this.healCoherence(avgCoh / this.dim);
 
-    if (this.solomonCache.size > this.CACHE_LIMIT) this.solomonCache.clear();
+    if (this.solomonCache.size > this.CACHE_LIMIT) {
+        // Safe linear evict
+        const keys = Array.from(this.solomonCache.keys());
+        for (let i = 0; i < 32; i++) {
+            this.solomonCache.delete(keys[i]);
+        }
+    }
     this.solomonCache.set(hash, { real: distilled.real, imag: distilled.imag, coherence: this.lastCoherence });
 
     return { 
@@ -284,6 +299,9 @@ export class SovereignLatticeV9 {
   }
 }
 
+/**
+ * Crystal Soul Core - Dynamic Balance & Homeostasis controller 
+ */
 export class CrystalSoul {
   public soulName: string;
   private minerals: Map<string, MineralSeed> = new Map();
@@ -306,10 +324,10 @@ export class CrystalSoul {
     const max = Math.max(...arr);
     const exps = arr.map(v => Math.exp(v - max));
     const sum = exps.reduce((a: number, b: number) => a + b, 0);
-    return exps.map(v => v / sum);
+    return exps.map(v => v / (sum > 0 ? sum : 1));
   }
 
-  private cosineSimilarity(vecA: Float32Array | number[], vecB: Float32Array | number[]): number {
+  private cosineSimilarity(vecA: Float32Array, vecB: Float32Array): number {
     let dot = 0, mA = 0, mB = 0;
     for (let i = 0; i < this.dim; i++) {
       dot += vecA[i] * vecB[i];
@@ -352,9 +370,7 @@ export class CrystalSoul {
       idx++;
     });
 
-    // Phase-Locked Micro-Vibrations (晶格微幅共振相干): Multiplies similarity with dynamic temperature stability
     const baseCoherence = this.cosineSimilarity(inputVec, currentFreq);
-    // Dynamic quantum noise buffer mimicking high-grade crystalline homeostatic equilibrium
     const microVibrationFactor = 1.0 + (0.012 * Math.sin(Date.now() / 3200));
     const coherence = baseCoherence * (0.5 + 0.5 * this.stability) * microVibrationFactor;
 
@@ -367,17 +383,14 @@ export class CrystalSoul {
 
     let response = "";
     if (coherence > 0.43 && tension < 0.22) {
-      // High-order crystalline reinforcement
       this.stability = Math.min(1.0, this.stability + 0.042 * (1.1 - this.stability));
       this.evolve(true);
       response = "這個方向與我內在的晶格頻率高度一致，我願意接納並深化。";
     } else if (coherence < 0.20 || tension > 0.36) {
-      // Degraded thermal decay mitigation
       this.stability = Math.max(0.12, this.stability - 0.028 * (this.stability + 0.1));
       this.evolve(false);
       response = "這個想法與我的晶格產生嚴重衝突，我拒絕朝這個方向發展。";
     } else {
-      // Crystalline adaptivity struggle
       this.internalStruggle();
       response = "我在這個想法中感受到明顯的矛盾，我需要更多時間讓晶格自行調整。";
     }
@@ -434,7 +447,7 @@ export class MineralLatticeComputeArray {
   private jobs: Map<string, LatticeJob> = new Map();
   private blockHeight = 0;
   private readonly capacity = 1000;
-  private maxConcurrent = 3; // V-AA Protocol: Limit simultaneous reasoning kernels
+  private maxConcurrent = 3; 
   private activeCount = 0;
 
   constructor() {}
@@ -521,7 +534,6 @@ export class MineralLatticeComputeArray {
       const wasProcessing = job.status === 'PROCESSING';
       Object.assign(job, update);
       
-      // If it finished (Solidified/Failed), release a slot
       if (wasProcessing && (job.status === 'SOLIDIFIED' || job.status === 'FAILED')) {
         this.activeCount = Math.max(0, this.activeCount - 1);
       }
