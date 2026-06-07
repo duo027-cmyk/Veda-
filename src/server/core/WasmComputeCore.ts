@@ -288,6 +288,10 @@ export class WasmComputeCore {
 
   /**
    * Apply Planck Mirror over a dual-layer holographic folding limit
+   * OPTIMIZATION (Chief of Staff Protocol):
+   * Mathematically reduced from O(mirrorDepth * len) to O(len).
+   * Since each step is real[i] = real[i] * (0.1 + 0.9 * reflectionEfficiency),
+   * d iterations is equivalent to multiplying by factor^d.
    */
   public applyPlanckMirror(
     real: Float32Array,
@@ -296,17 +300,20 @@ export class WasmComputeCore {
     reflectionEfficiency: number
   ): void {
     const len = real.length;
-    for (let d = 0; d < mirrorDepth; d++) {
-      for (let i = 0; i < len; i++) {
-        const fold = real[i] * reflectionEfficiency;
-        real[i] = (real[i] * 0.1) + (fold * 0.9);
-        imag[i] = (imag[i] * 0.1) + (imag[i] * reflectionEfficiency * 0.9);
-      }
+    const stepFactor = 0.1 + 0.9 * reflectionEfficiency;
+    const factor = Math.pow(stepFactor, mirrorDepth);
+    
+    for (let i = 0; i < len; i++) {
+      real[i] *= factor;
+      imag[i] *= factor;
     }
   }
 
   /**
    * High performance angular immune realignment to block stochastic deviations
+   * OPTIMIZATION (Chief of Staff Protocol):
+   * Pre-calculated constant TWO_PI and removed costly floating-point modulo (%)
+   * since sin/cos are naturally periodic on 2 * PI.
    */
   public executeSanction(
     targetData: Float32Array,
@@ -314,8 +321,9 @@ export class WasmComputeCore {
     immuneImag: Float32Array
   ): void {
     const len = targetData.length;
+    const TWO_PI = Math.PI * 2;
     for (let i = 0; i < len; i++) {
-      const angle = (targetData[i] * Math.PI * 2) % (Math.PI * 2);
+      const angle = targetData[i] * TWO_PI;
       const r = Math.cos(angle);
       const img = Math.sin(angle);
       immuneReal[i] = (immuneReal[i] * 0.5) + (r * 0.5);
