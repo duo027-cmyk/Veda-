@@ -386,7 +386,7 @@ export class WasmComputeCore {
       mA += a * a;
       mB += b * b;
     }
-    const denom = Math.sqrt(mA) * Math.sqrt(mB);
+    const denom = Math.sqrt(mA * mB);
     return denom === 0 ? 0.0 : dot / denom;
   }
 
