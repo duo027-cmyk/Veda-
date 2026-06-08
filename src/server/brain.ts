@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import path from "path";
+import fs from "fs";
 import { create, insert, search, save, load, type Orama } from "@orama/orama";
 import { WebSocket } from "ws";
 import { doc, setDoc, collection, addDoc, serverTimestamp, Timestamp } from "firebase/firestore";
@@ -284,7 +285,7 @@ export class AGISovereignBrain implements IVedaBrain {
   private validator: FormalValidator = new FormalValidator();
   private solomonKing: SolomonKingEngineV3 = new SolomonKingEngineV3();
   private auditSystem: AuditSubsystem = new AuditSubsystem();
-  private persistenceSystem: PersistenceSubsystem = new PersistenceSubsystem(process.cwd());
+  private persistenceSystem!: PersistenceSubsystem;
   private databaseSubsystem: DatabaseSubsystem = new DatabaseSubsystem();
   private counterfactualEngine: CounterfactualEngine = new CounterfactualEngine();
   private lastCounterfactualReport: any = null;
@@ -375,7 +376,9 @@ export class AGISovereignBrain implements IVedaBrain {
   private readyPromise: Promise<void>;
   private resolveReady!: () => void;
 
-  constructor() {
+  constructor(tenantId: string = "CORE_ARCHITECT") {
+    this.currentTenantId = tenantId;
+    this.persistenceSystem = new PersistenceSubsystem(process.cwd(), tenantId);
     this.readyPromise = new Promise(resolve => {
       this.resolveReady = resolve;
     });
@@ -1281,17 +1284,14 @@ export class AGISovereignBrain implements IVedaBrain {
       // Save to Firestore
       const cleanedData = this.cleanUndefined(data);
       if (this.isAdminOperational()) {
-        this.adminDb.collection("system").doc("state").set({
+        this.adminDb.collection("users").doc(this.currentTenantId).collection("system").doc("state").set({
           ...cleanedData,
           updatedAt: new Date()
         }).catch((e: any) => this.handleAdminFirebaseError(e, "system_state_save"));
       } 
       
-      if (this.db) {
-        setDoc(doc(this.db, "system", "state"), {
-          ...cleanedData,
-          updatedAt: serverTimestamp()
-        }).catch(e => handleFirestoreError(e, OperationType.WRITE, "system/state"));
+      if (this.db && !this.isAdminOperational()) {
+        this.neuralLog("PERSISTENCE_INFO", `Firestore client write skipped for users/${this.currentTenantId}/system/state: Admin SDK is not active.`);
       }
 
       // Save memories
@@ -1314,9 +1314,56 @@ export class AGISovereignBrain implements IVedaBrain {
     await this.persistenceSystem.saveIndex(this.causalIndex);
   }
 
+  public getPersistenceSettings(): any {
+    try {
+      const safeTenantId = this.currentTenantId.replace(/[^a-zA-Z0-9_\-]/g, "_");
+      const PERSISTENCE_PATH = path.join(process.cwd(), `veda_persistence_${safeTenantId}.json`);
+      if (fs.existsSync(PERSISTENCE_PATH)) {
+        const content = fs.readFileSync(PERSISTENCE_PATH, "utf-8");
+        const parsed = JSON.parse(content);
+        return parsed.settings || {};
+      }
+    } catch (e) {
+      console.warn(`[PERSISTENCE_WARN] Failed to read settings from persistence file for ${this.currentTenantId}:`, e);
+    }
+    return {};
+  }
+
   private async loadState() {
     try {
-      const data = await this.persistenceSystem.loadState();
+      let data = await this.persistenceSystem.loadState();
+      
+      if (!data) {
+        this.neuralLog("PERSISTENCE", `Local state not found for ${this.currentTenantId}. Attempting Firestore recovery...`);
+        if (this.isAdminOperational()) {
+          try {
+            const docSnap = await this.adminDb.collection("users").doc(this.currentTenantId).collection("system").doc("state").get();
+            if (docSnap.exists) {
+              data = docSnap.data() as any;
+              this.neuralLog("PERSISTENCE", `Sovereign state successfully recovered from Firestore Admin for ${this.currentTenantId}.`);
+              await this.persistenceSystem.saveState(data as any);
+            }
+          } catch (adminErr) {
+            console.warn(`[VEDA_FS_RECOVER_WARN] Firestore Admin recovery failed for ${this.currentTenantId}:`, adminErr);
+          }
+        }
+        
+        if (!data && this.db) {
+          try {
+            const { getDoc } = await import("firebase/firestore");
+            const docRef = doc(this.db, "users", this.currentTenantId, "system", "state");
+            const docSnap = await getDoc(docRef);
+            if (docSnap.exists()) {
+              data = docSnap.data() as any;
+              this.neuralLog("PERSISTENCE", `Sovereign state successfully recovered from Firestore Client for ${this.currentTenantId}.`);
+              await this.persistenceSystem.saveState(data as any);
+            }
+          } catch (fsErr) {
+            console.warn(`[VEDA_FS_RECOVER_WARN] Firestore Client recovery failed for ${this.currentTenantId}:`, fsErr);
+          }
+        }
+      }
+
       if (data) {
         this.state = data.state || this.state;
         this.computeMode = data.computeMode || 'precision';
@@ -2592,16 +2639,8 @@ ${textToDemystify}
     } 
     
     // Always attempt client-side logging if admin fails or as double-entry for development
-    if (this.db) {
-      addDoc(collection(this.db, "chat_logs"), {
-        text,
-        role,
-        demystifiedText: extra?.demystifiedText || "",
-        showDemystified: extra?.showDemystified || false,
-        timestamp: serverTimestamp(),
-        mode: (this as any).lastReasoningMode || 'UNKNOWN',
-        confidence: (this as any).lastSovereignConfidence || 0
-      }).catch(e => handleFirestoreError(e, OperationType.CREATE, "chat_logs"));
+    if (this.db && !this.isAdminOperational()) {
+      this.neuralLog("PERSISTENCE_INFO", "Firestore client write skipped for chat_logs: Admin SDK is not active.");
     }
     
     // Reality Feedback Layer tracking
@@ -2767,6 +2806,8 @@ ${textToDemystify}
 
     if (this.isExternalAiBlocked || isForceOfflineRequested) {
       const recalled = this.getCausalRecall(text);
+      const persistenceSettings = this.getPersistenceSettings();
+      const isDeepThinking = !!persistenceSettings.isDeepThinking;
       const payload = {
         worldModelSnapshot: this.systemWorldModel?.snapshot || {},
         distilledSummary: this.distilledChatContext?.summary || "",
@@ -2777,7 +2818,8 @@ ${textToDemystify}
         globalEntropy: this.getGlobalEntropy(),
         energyLevel: this.energyLevel,
         recentHistory: this.chatHistory,
-        counterfactualReport: this.lastCounterfactualReport
+        counterfactualReport: this.lastCounterfactualReport,
+        isDeepThinking
       };
       
       // Perform autonomous web foraging & thinking ONLY when genuinely required
@@ -2811,7 +2853,9 @@ ${textToDemystify}
         demystifiedText,
         showDemystified: true,
         confidence: 0.88,
-        distilled_version: this.distilledChatContext.version
+        distilled_version: this.distilledChatContext.version,
+        thought_trace: this.inferenceEngine.getLastThoughtTrace(),
+        reasoning_mode: "LOCAL_SOVEREIGN_CORE"
       };
     }
 
@@ -2835,6 +2879,8 @@ ${textToDemystify}
         });
       }
 
+      const persistenceSettings = this.getPersistenceSettings();
+      const isDeepThinking = !!persistenceSettings.isDeepThinking;
       const payload = {
         worldModelSnapshot: this.systemWorldModel?.snapshot || {},
         distilledSummary: this.distilledChatContext?.summary || "",
@@ -2846,7 +2892,8 @@ ${textToDemystify}
         energyLevel: this.energyLevel,
         recentHistory: this.chatHistory,
         searchResults: searchResults.length > 0 ? searchResults : undefined,
-        counterfactualReport: this.lastCounterfactualReport
+        counterfactualReport: this.lastCounterfactualReport,
+        isDeepThinking
       };
 
       const responseText = await this.inferenceEngine.performSovereignInference(text, payload);
@@ -2918,7 +2965,9 @@ ${textToDemystify}
         demystifiedText,
         showDemystified: true,
         confidence: 0.85,
-        error: "EXTERNAL_INFERENCE_OFFLINE"
+        error: "EXTERNAL_INFERENCE_OFFLINE",
+        thought_trace: this.inferenceEngine.getLastThoughtTrace(),
+        reasoning_mode: "LOCAL_SOVEREIGN_CORE"
       };
     }
   }
@@ -3021,15 +3070,8 @@ ${textToDemystify}
           }).catch((e: any) => this.handleAdminFirebaseError(e, "memory_log_mineral"));
         } 
         
-        if (this.db) {
-          addDoc(collection(this.db, "memories"), {
-            id: memory.id,
-            content: snippet,
-            coherence: integrity.coherence,
-            type: "MINERAL",
-            timestamp: serverTimestamp(),
-            metadata: memory.metadata
-          }).catch(e => handleFirestoreError(e, OperationType.CREATE, "memories"));
+        if (this.db && !this.isAdminOperational()) {
+          this.neuralLog("PERSISTENCE_INFO", "Firestore client write skipped for memories (MINERAL): Admin SDK is not active.");
         }
       } else {
         this.provisionalZone.set(memory.id, memory);
@@ -3116,18 +3158,8 @@ ${textToDemystify}
           );
         } 
         
-        if (this.db) {
-          const memoryPayload = {
-            id: fragment.id,
-            type: fragment.type || 'SYNTHESIS',
-            content: fragment.content,
-            resonance: fragment.resonance,
-            timestamp: new Date().toISOString(),
-            hypervector: Array.from(fragment.hypervector as any)
-          };
-          addDoc(collection(this.db, "memories"), memoryPayload).catch(e => 
-            console.error("[VEDA_FIRESTORE] Memory persistence failed:", e)
-          );
+        if (this.db && !this.isAdminOperational()) {
+          this.neuralLog("PERSISTENCE_INFO", "Firestore client write skipped for memories (SYNTHESIS): Admin SDK is not active.");
         }
     }
     
@@ -4240,25 +4272,30 @@ ${axiomInstructions || "無特定約束"}
     };
 
     // Immutably snapshot this baseline to Firestore if db is ready
-    if (this.db) {
-      const snapId = `snap-${projectId}`;
-      setDoc(doc(this.db, "baselines", snapId), {
-        id: snapId,
-        version: baselineVersion,
-        worldAxioms: newProject.worldAxioms,
-        visualAnchors: newProject.visualAnchors.map((a: any) => ({
-          id: a.id,
-          label: a.label,
-          description: a.description,
-          type: a.type || 'DYNAMIC',
-          causal_weight: a.causal_weight || 1.0
-        })),
-        metadata: {
-          creatorId: "VEDA_ARCHITECT",
-          timestamp: new Date().toISOString(),
-          protocol: "V-AA_CINEMA_ANCHOR"
-        }
-      }).catch(e => console.error("[VEDA_FIRESTORE] Baseline snapshot failed:", e));
+    const snapId = `snap-${projectId}`;
+    const baselineData = {
+      id: snapId,
+      version: baselineVersion,
+      worldAxioms: newProject.worldAxioms,
+      visualAnchors: newProject.visualAnchors.map((a: any) => ({
+        id: a.id,
+        label: a.label,
+        description: a.description,
+        type: a.type || 'DYNAMIC',
+        causal_weight: a.causal_weight || 1.0
+      })),
+      metadata: {
+        creatorId: "VEDA_ARCHITECT",
+        timestamp: new Date().toISOString(),
+        protocol: "V-AA_CINEMA_ANCHOR"
+      }
+    };
+
+    if (this.isAdminOperational()) {
+      this.adminDb.collection("baselines").doc(snapId).set(baselineData)
+        .catch((e: any) => this.handleAdminFirebaseError(e, "baseline_persistence"));
+    } else if (this.db) {
+      this.neuralLog("PERSISTENCE_INFO", "Firestore client write skipped for baselines: Admin SDK is not active.");
     }
 
     if (!this.longVideoProjects) this.longVideoProjects = [];
@@ -4782,16 +4819,8 @@ ${contextPostText || "None (Last sequence node)"}
         }).catch((e: any) => this.handleAdminFirebaseError(e, "axiom_persistence"));
       } 
       
-      if (this.db) {
-        const snapshotId = `AXIOM-${fragment.id}`;
-        setDoc(doc(this.db, "memories", snapshotId), {
-          id: fragment.id,
-          type: "DISTILLED_AXIOM",
-          content: fragment.content,
-          resonance: fragment.resonance,
-          timestamp: new Date().toISOString(),
-          hypervector: Array.from(fragment.hypervector as any)
-        }).catch(e => console.error("[VEDA_FIRESTORE] Axiom persistence failed:", e));
+      if (this.db && !this.isAdminOperational()) {
+        this.neuralLog("PERSISTENCE_INFO", "Firestore client write skipped for memories (AXIOM): Admin SDK is not active.");
       }
       
       // Simple Axiom Promotion: If a key concept appears across history, suggest it

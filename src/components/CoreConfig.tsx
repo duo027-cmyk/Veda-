@@ -7,7 +7,8 @@ import {
   Unlock,
   Eye,
   Shield,
-  Network
+  Network,
+  Brain
 } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { BrainData } from '../types';
@@ -43,6 +44,11 @@ export const CoreConfig = ({ data, onUpdate }: { data: BrainData | null, onUpdat
 
   const toggleFocus = async () => {
     await vedaService.updatePersistence({ settings: { isFocusMode: !data?.settings?.isFocusMode } });
+    onUpdate();
+  };
+
+  const toggleDeepThinking = async () => {
+    await vedaService.updatePersistence({ settings: { isDeepThinking: !data?.settings?.isDeepThinking } });
     onUpdate();
   };
 
@@ -142,6 +148,20 @@ export const CoreConfig = ({ data, onUpdate }: { data: BrainData | null, onUpdat
                    <span className="data-label opacity-40">{t.minimal_noise}</span>
                 </div>
                 {data?.settings?.isFocusMode ? <Shield className="text-gold" size={18} /> : <Eye className="opacity-20" size={18} />}
+             </button>
+
+             <button 
+               onClick={toggleDeepThinking}
+               className={cn(
+                 "p-6 flex items-center justify-between ghibli-glass mano-border transition-all group",
+                 data?.settings?.isDeepThinking ? "border-sky-500/40 bg-sky-500/5 group-hover:bg-sky-500/10" : "hover:bg-white/5"
+               )}
+             >
+                <div className="flex flex-col items-start gap-1">
+                   <span className="text-xs tracking-[0.2em] font-mono text-white/80 uppercase">COGNITIVE DEPTH MODE</span>
+                   <span className="data-label opacity-40">主權認知深度思考模式 (Gemini 3.1 Reasoning)</span>
+                </div>
+                {data?.settings?.isDeepThinking ? <Brain className="text-sky-400 animate-pulse" size={18} /> : <Brain className="opacity-20" size={18} />}
              </button>
           </div>
         </div>

@@ -30,13 +30,39 @@ import { IVedaBrain } from "./src/server/types";
 import { ActionResolver } from "./src/server/core/ActionResolver";
 import { GoogleGenAI } from "@google/genai";
 
-// Initialize Sovereign Brain
-const brain: IVedaBrain = new AGISovereignBrain();
-const actionResolver = new ActionResolver(brain);
-
 // Load Firebase Config
 const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
 let db: any = null;
+let adminDb: any = null;
+
+// Initialize Sovereign Brain Map
+const brains = new Map<string, IVedaBrain>();
+
+function getBrainForTenant(tenantId: string = "CORE_ARCHITECT"): IVedaBrain {
+  if (!brains.has(tenantId)) {
+    console.log(`[SYS_ARCH] Creating new isolated AGISovereignBrain instance for tenant [${tenantId}]`);
+    const newBrain = new AGISovereignBrain(tenantId);
+    if (db) {
+      newBrain.setDatabase(db);
+    }
+    if (adminDb) {
+      newBrain.setAdminDatabase(adminDb);
+    }
+    brains.set(tenantId, newBrain);
+  }
+  return brains.get(tenantId)!;
+}
+
+const getTenantContext = (req: express.Request) => {
+  const tenantId = (req.headers["x-veda-uid"] as string) || "CORE_ARCHITECT";
+  const tenantBrain = getBrainForTenant(tenantId);
+  const tenantActionResolver = new ActionResolver(tenantBrain);
+  return { tenantId, brain: tenantBrain, actionResolver: tenantActionResolver };
+};
+
+// Keep defaults for compatibility
+const brain: IVedaBrain = getBrainForTenant("CORE_ARCHITECT");
+const actionResolver = new ActionResolver(brain);
 
 // Initialize Firebase SDK
 if (fs.existsSync(firebaseConfigPath)) {
@@ -60,7 +86,7 @@ if (fs.existsSync(firebaseConfigPath)) {
       adminApp = admin.app();
     }
     
-    let adminDb;
+    // use global adminDb
     const requestedDbId = firebaseConfig.firestoreDatabaseId || "(default)";
     try {
       adminDb = (requestedDbId !== '(default)')
@@ -69,7 +95,12 @@ if (fs.existsSync(firebaseConfigPath)) {
       console.log(`[VEDA_ADMIN] Admin SDK linked to database: ${requestedDbId}`);
     } catch (e) {
       console.warn(`[VEDA_ADMIN_WARNING] Failed to link to ${requestedDbId}, falling back to (default).`, e);
-      adminDb = getAdminFirestore(adminApp);
+      try {
+        adminDb = getAdminFirestore(adminApp);
+      } catch (innerErr) {
+        console.error("[VEDA_ADMIN_FATAL] Admin SDK absolute fallback failed:", innerErr);
+        adminDb = null;
+      }
     }
     
     // Silence internal SDK logs early
@@ -122,8 +153,13 @@ if (fs.existsSync(firebaseConfigPath)) {
       }
     }
 
+    // Propagate database connections to all active brains and future tenant brains
     brain.setDatabase(db);
     brain.setAdminDatabase(adminDb);
+    for (const activeBrain of brains.values()) {
+      activeBrain.setDatabase(db);
+      activeBrain.setAdminDatabase(adminDb);
+    }
     console.log(`[FIREBASE] VEDA Persistent Memory Interface Online. Database: ${firebaseConfig.firestoreDatabaseId || "(default)"}`);
     
     // Safety: Global Process Guard
@@ -221,6 +257,7 @@ async function startServer() {
     // Standard health check handler declared early for highest priority binding
     const healthHandler = (req: express.Request, res: express.Response) => {
       console.log(`[NET_TRACE] Service health check received.`);
+      const { brain } = getTenantContext(req);
       res.json({
         status: "ONLINE",
         brain_id: brain.getSystemID(),
@@ -342,7 +379,8 @@ async function startServer() {
     // v-AA Protocol: Unified state handler
     const stateHandler = async (req: express.Request, res: express.Response) => {
       try {
-        console.log(`[VEDA_STATE_REQUEST] ${req.query.fast === 'true' ? 'FAST' : 'FULL'}`);
+        const { brain } = getTenantContext(req);
+        console.log(`[VEDA_STATE_REQUEST] ${req.query.fast === 'true' ? 'FAST' : 'FULL'} for template token ${brain.getSystemID()}`);
         const stateBuffer = brain.getTelemetryBuffer();
         if (!stateBuffer || stateBuffer === "null") {
           return res.status(200).json({ status: "INIT", message: "EPIMETIC_ENGINE_CALIBRATING" });
@@ -392,6 +430,7 @@ async function startServer() {
 
     api.get("/v1/export", (req, res) => {
       try {
+        const { brain } = getTenantContext(req);
         const data = brain.getResearchExport();
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Content-Disposition', 'attachment; filename=veda_research_export.json');
@@ -405,6 +444,7 @@ async function startServer() {
       try {
         const { action, params } = req.body;
         console.log(`[VEDA_ACTION] Executing decoupled resolution: ${action}`);
+        const { actionResolver } = getTenantContext(req);
         const result = await actionResolver.executeAction(action, params);
         res.json(result);
       } catch (e: any) {
@@ -423,6 +463,7 @@ async function startServer() {
     
     api.get("/strategic", async (req, res) => {
       try {
+        const { brain } = getTenantContext(req);
         console.log(`[VEDA_OS] Serving strategic metrics...`);
         const report = brain.generateStrategicReport();
         if (!report) {
@@ -446,6 +487,7 @@ async function startServer() {
     api.post("/recall", (req, res) => {
       try {
         const { query } = req.body;
+        const { brain } = getTenantContext(req);
         const memories = brain.getCausalRecall(query || "");
         res.json(memories);
       } catch (e) {
@@ -455,15 +497,19 @@ async function startServer() {
 
     api.post("/reset-chat", async (req, res) => {
       try {
+        const { brain } = getTenantContext(req);
         await brain.resetChatHistory();
         res.json({ status: "SUCCESS" });
       } catch (e) {
         res.status(500).json({ error: "RESET_ERROR" });
       }
     });
+
     api.get("/persistence", async (req, res) => {
-      const PERSISTENCE_PATH = path.join(process.cwd(), "veda_persistence.json");
       try {
+        const { tenantId } = getTenantContext(req);
+        const safeTenantId = tenantId.replace(/[^a-zA-Z0-9_\-]/g, "_");
+        const PERSISTENCE_PATH = path.join(process.cwd(), `veda_persistence_${safeTenantId}.json`);
         if (fs.existsSync(PERSISTENCE_PATH)) {
           const data = await fsPromises.readFile(PERSISTENCE_PATH, "utf-8");
           res.json(JSON.parse(data));
@@ -476,8 +522,10 @@ async function startServer() {
     });
 
     api.post("/persistence", async (req, res) => {
-      const PERSISTENCE_PATH = path.join(process.cwd(), "veda_persistence.json");
       try {
+        const { tenantId } = getTenantContext(req);
+        const safeTenantId = tenantId.replace(/[^a-zA-Z0-9_\-]/g, "_");
+        const PERSISTENCE_PATH = path.join(process.cwd(), `veda_persistence_${safeTenantId}.json`);
         const data = req.body;
         let existing = {};
         if (fs.existsSync(PERSISTENCE_PATH)) {
@@ -493,6 +541,7 @@ async function startServer() {
 
     api.get("/memories", (req, res) => {
       try {
+        const { brain } = getTenantContext(req);
         const memories = brain.getAllMemories();
         res.json(memories);
       } catch (e) {
@@ -503,6 +552,7 @@ async function startServer() {
     api.post("/feedback", async (req, res) => {
       try {
         const { memoryId, score } = req.body;
+        const { brain } = getTenantContext(req);
         await brain.submitFeedback(memoryId, score);
         res.json({ success: true });
       } catch (e) {
@@ -512,6 +562,7 @@ async function startServer() {
 
     api.get("/graph", (req, res) => {
       try {
+        const { brain } = getTenantContext(req);
         const data = brain.getGraphData();
         res.json(data);
       } catch (e) {
@@ -660,78 +711,80 @@ async function startServer() {
     // Mount API with completely populated routing stack to prevent routing bypasses
     app.use("/api", api);
 
-    console.log("[VEDA] Waiting for Sovereign Brain synchronization (non-blocking server)...");
-    brain.isReady().then(() => {
-      console.log("[VEDA] Sovereign Brain synchronized. Starting background tickers.");
-      
-      // --- Background Operations ---
-      const runTicker = () => {
-        try {
-          brain.tick();
-          const pulse = brain.getSovereignPulse();
-
-          if (wss.clients.size > 0) {
-            const stateBuffer = brain.getTelemetryBuffer();
-            if (stateBuffer) {
-              const s = JSON.parse(stateBuffer);
-              broadcast({
-                type: "VEDA_STATE_PARTIAL",
-                data: {
-                  global_coherence: s.global_coherence,
-                  phi: s.phi,
-                  energy: s.energy,
-                  energy_level: s.energy_level,
-                  tension: s.tension,
-                  entropy: s.entropy,
-                  status_code: s.status_code,
-                  is_bursting: s.is_bursting,
-                  is_logic_frozen: s.is_logic_frozen,
-                  msg: s.msg
-                }
-              });
-            }
+    console.log("[VEDA] Initializing cognitive background processes (non-blocking)...");
+    
+    // --- Background Operations ---
+    const runTicker = () => {
+      try {
+        for (const [tenantId, tenantBrain] of brains.entries()) {
+          tenantBrain.tick();
+          const stateBuffer = tenantBrain.getTelemetryBuffer();
+          if (stateBuffer && wss.clients.size > 0) {
+            const s = JSON.parse(stateBuffer);
+            wss.clients.forEach((c: any) => {
+              if (c.readyState === WebSocket.OPEN && c.tenantId === tenantId) {
+                c.send(JSON.stringify({
+                  type: "VEDA_STATE_PARTIAL",
+                  data: {
+                    global_coherence: s.global_coherence,
+                    phi: s.phi,
+                    energy: s.energy,
+                    energy_level: s.energy_level,
+                    tension: s.tension,
+                    entropy: s.entropy,
+                    status_code: s.status_code,
+                    is_bursting: s.is_bursting,
+                    is_logic_frozen: s.is_logic_frozen,
+                    msg: s.msg
+                  }
+                }));
+              }
+            });
           }
-          setTimeout(runTicker, Math.max(100, pulse));
-        } catch (e) {
-          console.error("[TICK_FAULT]", e);
-          setTimeout(runTicker, 1000);
         }
-      };
-      runTicker();
+        setTimeout(runTicker, 300); // stable tick step space
+      } catch (e) {
+        console.error("[GLOBAL_TICK_FAULT]", e);
+        setTimeout(runTicker, 1000);
+      }
+    };
+    runTicker();
 
-      const runTelemetrySync = async () => {
-        try {
-          await brain.syncTelemetryCache();
-        } catch (e) {
-          console.error("[TELEMETRY_SYNC_FAULT]", e);
+    const runTelemetrySync = async () => {
+      try {
+        for (const tenantBrain of brains.values()) {
+          await tenantBrain.syncTelemetryCache();
         }
-        setTimeout(runTelemetrySync, 10000);
-      };
-      runTelemetrySync();
+      } catch (e) {
+        console.error("[GLOBAL_TELEMETRY_SYNC_FAULT]", e);
+      }
+      setTimeout(runTelemetrySync, 10000);
+    };
+    runTelemetrySync();
 
-      const runEvolution = async () => {
-        try {
-          const result = await brain.autoEvolve();
+    const runEvolution = async () => {
+      try {
+        for (const [tenantId, tenantBrain] of brains.entries()) {
+          const result = await tenantBrain.autoEvolve();
           if (result.log) {
             const payload = JSON.stringify({
               type: "SYSTEM_MONOLOGUE",
               message: result.log,
               adjustment: result.adjustment
             });
-            wss.clients.forEach(c => c.readyState === WebSocket.OPEN && c.send(payload));
+            wss.clients.forEach((c: any) => {
+              if (c.readyState === WebSocket.OPEN && c.tenantId === tenantId) {
+                c.send(payload);
+              }
+            });
           }
-          const coherence = brain.getGlobalCoherence();
-          const delay = Math.max(20000, 60000 * (1 - coherence));
-          setTimeout(runEvolution, delay);
-        } catch (e) {
-          console.error("[EVOLUTION_FAULT]", e);
-          setTimeout(runEvolution, 45000);
         }
-      };
-      runEvolution();
-    }).catch(err => {
-      console.error("[VEDA_BRAIN_READY_FAULT] Failed to synchronize brain state:", err);
-    });
+      } catch (e) {
+        console.error("[GLOBAL_EVOLUTION_FAULT]", e);
+      }
+      setTimeout(runEvolution, 120000); // slower interval for sustainable multi-tenant performance
+    };
+    setTimeout(runEvolution, 10000);
 
     // --- Vite / Static Assets ---
     if (process.env.NODE_ENV !== "production") {
@@ -769,11 +822,18 @@ async function startServer() {
       });
     };
 
-    wss.on("connection", (ws) => {
-      console.log(`[VEDA_SOCKET] New logic link established. Active clients: ${wss.clients.size}`);
+    wss.on("connection", (ws, req) => {
+      const urlParams = new URL(req?.url || "", `http://${req?.headers.host || "localhost"}`).searchParams;
+      const tenantId = urlParams.get("uid") || "CORE_ARCHITECT";
+      (ws as any).tenantId = tenantId;
+      
+      const tenantBrain = getBrainForTenant(tenantId);
+      const tenantActionResolver = new ActionResolver(tenantBrain);
+
+      console.log(`[VEDA_SOCKET] New logic link established for tenant [${tenantId}]. Active clients: ${wss.clients.size}`);
       
       // Initial state push
-      const stateBuffer = brain.getTelemetryBuffer();
+      const stateBuffer = tenantBrain.getTelemetryBuffer();
       if (stateBuffer) {
         ws.send(JSON.stringify({ type: "VEDA_STATE_FULL", data: JSON.parse(stateBuffer) }));
       }
@@ -781,15 +841,15 @@ async function startServer() {
       ws.on("message", async (msg) => {
         try {
           const data = JSON.parse(msg.toString());
-          if (data.type === "RESONANCE_PULSE") brain.triggerResonance(data.intensity || 0.1);
-          if (data.type === "UPDATE_AXIOMS") brain.updateAxioms({ axioms: data.axioms });
+          if (data.type === "RESONANCE_PULSE") tenantBrain.triggerResonance(data.intensity || 0.1);
+          if (data.type === "UPDATE_AXIOMS") tenantBrain.updateAxioms({ axioms: data.axioms });
           if (data.type === "PING") ws.send(JSON.stringify({ type: "PONG", ts: Date.now() }));
           
           if (data.type === "EXECUTE_ACTION") {
             const { action, params, requestId } = data;
-            console.log(`[VEDA_SOCKET_ACTION] Executing ${action} via WebSocket Link.`);
+            console.log(`[VEDA_SOCKET_ACTION - Tenant: ${tenantId}] Executing ${action} via WebSocket Link.`);
             try {
-              const result = await actionResolver.executeAction(action, params);
+              const result = await tenantActionResolver.executeAction(action, params);
               ws.send(JSON.stringify({ type: "ACTION_RESULT", requestId, result }));
             } catch (err) {
               console.error(`[VEDA_SOCKET_ACTION_ERR] Fail: ${action}`, err);
@@ -802,7 +862,7 @@ async function startServer() {
       });
 
       ws.on("close", () => {
-        console.log(`[VEDA_SOCKET] Logic link severed.`);
+        console.log(`[VEDA_SOCKET] Logic link severed for tenant [${tenantId}].`);
       });
     });
 

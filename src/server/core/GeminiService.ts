@@ -48,8 +48,9 @@ export class GeminiService {
       // Helper function to map/normalize models to prevent 404/400 errors
       const getNormalizedModel = (m: string): string => {
         if (m === "gemini-3.5-flash") return "gemini-3.1-flash-lite";
+        if (m === "gemini-2.5-flash") return "gemini-3.5-flash";
         if (m === "gemini-3.1-flash-lite") return "gemini-flash-latest";
-        if (m === "gemini-3.1-pro-preview" || m === "gemini-3.1-pro") return "gemini-3.1-flash-lite";
+        if (m === "gemini-3.1-pro-preview" || m === "gemini-3.1-pro" || m === "gemini-2.5-pro") return "gemini-3.5-flash";
         return m;
       };
 
@@ -67,9 +68,10 @@ export class GeminiService {
       if (!isSpecializedAudioVideoImage) {
         // Sequentially fall back across multiple solid production-grade nodes based on capability guidelines
         modelsToTry.push("gemini-3.5-flash");
+        modelsToTry.push("gemini-3.1-pro-preview");
         modelsToTry.push("gemini-3.1-flash-lite");
         modelsToTry.push("gemini-flash-latest");
-        modelsToTry.push("gemini-3.1-pro-preview");
+        modelsToTry.push("gemini-2.5-flash");
       }
 
       // Deduplicate fallback chain and prioritize non-degraded models first
@@ -139,10 +141,10 @@ export class GeminiService {
             }
 
             if (isQuotaError) {
-              this.logger("RATE_LIMIT_COOLDOWN", "Gemini API rate limit or quota exceeded. Locking external requests for 5 minutes.");
-              this.rateLimitCooldownUntil = Date.now() + 300000; // 5-minute cooldown
-              this.quotaExceededUntil = Date.now() + 300000;    // 5-minute offline block
-              break; // exit loop immediately, do not try other models
+              const cd = (errMsg.includes("limit: 0") || errMsg.includes("FreeTier")) ? 86400000 : 120000;
+              this.degradedModels.set(model, Date.now() + cd);
+              this.logger("RATE_LIMIT_COOLDOWN", `Gemini API rate limit/quota hit for ${model}. Registering localized model degradation for ${cd}ms. Switching immediately to next available fallback model.`);
+              break; // exit current model's attempt loop to gracefully switch to the next fallback model
             }
 
             this.logger("WARNING", `Attempt ${attempt} failed with model ${model}: ${cleanMsg}`);
@@ -367,9 +369,9 @@ export class GeminiService {
       errMsg.includes("Resource exhausted")
     ) {
       if (isGlobalBlocked) {
-        this.logger("RATE_LIMIT", "Quota boundary hit. Imposing an adaptive 5-minute offline block to prevent endpoint noise and allow recovery.");
-        this.rateLimitCooldownUntil = Date.now() + 300000; // 5-minute cooldown for general rate-limit
-        this.quotaExceededUntil = Date.now() + 300000;    // 5-minute offline block
+        this.logger("RATE_LIMIT", "Quota boundary hit across all domains. Imposing an adaptive 15-second offline block to allow endpoint recovery.");
+        this.rateLimitCooldownUntil = Date.now() + 15000; // 15-second cooldown for general rate-limit
+        this.quotaExceededUntil = Date.now() + 15000;    // 15-second offline block
       } else {
         this.logger("RATE_LIMIT", "Model-specific quota exhausted. Registering localized degradation to try adjacent fallback nodes.");
       }

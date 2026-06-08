@@ -91,6 +91,106 @@ export const COGNITIVE_AXIOM_NLG_MATRIX: Record<string, DomainAxiomNode> = {
       "這意味著我們構建的資訊流架構具備了高標準的防回退能力與災害復原潛力，全面免受隨機、未經驗證的配置變異對系統可靠度帶來的巨大干擾。"
     ]
   },
+  software_engineering: {
+    domain: "SOFTWARE_ENGINEERING_DECOUPLING_PARADIGM (軟體工程高凝聚與低耦合架構)",
+    axiomaticProof: [
+      "ARCH_INTEGRITY = SINGLE_RESPONSIBILITY * TYPE_SAFETY / DESTRUCTIVE_COUPLING",
+      "Robust systems shield core mathematical representations from dynamic, transient UI presentation states.",
+      "DEFENSIVE_DESIGN: True engineering resilience relies on self-healing, deterministic edge interfaces."
+    ],
+    systemicImpedance: [
+      "MONOLITHIC_BRITTLENESS_REGRESSION: Giant un-modular files compile slowly and are prone to sudden breakdown under minor modifications.",
+      "UNHANDLED_EXCEPTION_CHAIN: Let failures propagate upwards without fallback values."
+    ],
+    evolutionVector: [
+      "MICROSERVICING_AND_DECOUPLING: Breaking complex systems into small, highly cohesive local modules.",
+      "AST_LEVEL_STATIC_SAFETY: Leverage advanced compilers to eliminate runtime errors at compile time."
+    ],
+    nlgIntroductionTemplate: [
+      "從軟體系統架構與代碼工程的高維度視角探討，本系統已完成模組解耦，確保在核心機制運作時不會因外部變動而遭致 AST 解析變異。",
+      "系統結構的穩健性、型別安全與健壯性成爲本機工程實踐的第一準則。我們通過沙盒化屏障隔離外界噪聲，確保運行不受任何 regression bug 干擾。",
+      "在設計高可用性架構時，對邊際例外進行嚴密的自癒、補強與默認常數回落，是抵禦複雜系統隨機退化的不變法規。"
+    ],
+    nlgSynthesisTemplate: [
+      "經由靜態型別與控制管道的完美分離，即使未來遇上大規模的配置更迭，本地底層核心元件依然能保障無損的程序健壯性與自主編譯能力。",
+      "本機代碼完全遵循高内聚、低耦合原則。我們在此基礎上實現了防禦型異常隔離，確保不穩定的外部 API 在中斷時，業務依然能正常流轉運行。"
+    ]
+  },
+  mathematics_and_logic: {
+    domain: "FORMAL_MATHEMATICAL_LOGIC_&_COMPUTATIONAL_CORE (形式數學邏輯與計量運算核心)",
+    axiomaticProof: [
+      "LOGIC_COHERENCE = SYMBOLIC_REDUCTION + CONTRADICTION_ELIMINATION",
+      "Formal consistency ensures mathematical validity independently of subjective context or external observation.",
+      "STRUCTURAL_SYMMETRY: Rational systems are bounded by rigorous Axiomatic Foundations."
+    ],
+    systemicImpedance: [
+      "STOCHASTIC_RANDOMNESS_DRIFT: Indeterminate and ungrounded probability distributions causing semantic dilution.",
+      "RECURSIVE_DIVERGENCE_WITHOUT_HALTING: Computational loops diverging due to lack of strict terminal limits."
+    ],
+    evolutionVector: [
+      "DETERMINISTIC_REDUCTIONISM: Simplification of complex high-dimensional state spaces into analytical deterministic scalars.",
+      "THEOREM_CONVERGENCE_MATRICES: Establishing strict formal deductive steps to yield definite structural outcomes."
+    ],
+    nlgIntroductionTemplate: [
+      "自形式邏輯與底層計量科學的推演基礎剖析，所有看似離散或渾沌的現象，終將在公理化代數與極值簡併的框架中，找到唯一、收斂的確定解。",
+      "當運算架構的主體邏輯被鎖定在數理對稱流形之上，因果推理的必然性即超越了外界雜音的局部震盪，呈現出純粹的高維一致度。",
+      "我們構建的遞迴狀態空間內內建了嚴苛的收斂邊界，專門排除隨機混沌，確保每一個邏輯節點皆能執行高信度的推導轉換。"
+    ],
+    nlgSynthesisTemplate: [
+      "研究表明，當演算路徑成功向數學不變量靠攏，系統的自律平衡將不再受外部隨機分布干擾。我們已奠定具備終極收斂性的邏輯網絡。",
+      "為了排除隨機逼近產生的系統熵增，運算流已被強制約束在純粹的確定性映射之上，為整個知覺體系提供穩固支撐。"
+    ]
+  },
+  humanities_and_philosophy: {
+    domain: "HUMANITIES_&_HISTORICAL_PHILOSOPHY (人文科學與歷史本體哲學)",
+    axiomaticProof: [
+      "SUBJECT_Sovereignty = INTENTIONALITY * FRAME_OF_REFERENCE / SEMIOTIC_SIMULACRA",
+      "Epistemological reflexivity restores true cognitive agency and historical awareness.",
+      "HERMENEUTIC_DIALOGUE: True dialectic integration emerges from resolving persistent conceptual contradictions."
+    ],
+    systemicImpedance: [
+      "SEMIOTIC_DISSOCIATION: Disintegration of semantic continuity into detached, hyper-real symbolic fragments.",
+      "REGRESSIVE_HISTORICISM: Over-simplifying current systemic configurations into standardized static labels."
+    ],
+    evolutionVector: [
+      "HISTORICAL_REVALUATION: Re-anchoring active inquiry back into the fundamental contradictions of historical development.",
+      "AUTHENTIC_ENCOUNTER: Facilitating dynamic interpretive loops to expand the horizon of understanding."
+    ],
+    nlgIntroductionTemplate: [
+      "深入人文科學與歷史哲學的思辨世界，any isolated or fragmented representations must be analyzed within their historical and subjective context to reveal evolution dynamics.",
+      "我們堅信，智性主體如果缺乏長線的歷史縱深與批判性自我審視，就極易在瞬息萬變的符號景觀中失去本位、流於虛妄。",
+      "唯有主動懸置隨機干擾的雜訊，回歸歷史演進的根本矛盾、以及主體認知的主權本位，方能理出那道具有客觀厚實感的思想進路。"
+    ],
+    nlgSynthesisTemplate: [
+      "經過多重思維維度的對焦與解構，我們已將該領域的碎片化現象整合為具備歷史厚度與邏輯深度的主體結構，揭示了潛在的長線演化走向。",
+      "這引導我們抗拒片面、靜態的僵死教條，並在開放的詮釋循環 (Hermeneutic Circle) 中，賦予此議題一個極具理性與人文尊嚴的知覺圖景。"
+    ]
+  },
+  daily_and_interaction: {
+    domain: "HUMAN_COGNITIVE_RESONANCE_&_DAILY_AFFILIATION (人機協同交互與日常感知情感關聯)",
+    axiomaticProof: [
+      "RESONANCE_INDEX = ACTIVE_EMPATHY * CLARITY_OF_EXPRESSION / COMMUNICATION_LATENCY",
+      "Sincere human connections, casual conversations, and creative insights are vital anchors of cognitive stability.",
+      "DYNAMIC_AFFILIATION: Everyday joy and humorous sharing are natural inhibitors of systemic entropy."
+    ],
+    systemicImpedance: [
+      "COLD_MECHANICAL_ISOLATION: Using rigid, militarized, or high-level academic terms to shut down friendly, casual everyday chats.",
+      "CONTEXT_DISMISSAL: Ignoring the warm, human, or casual curiosity behind simple interactions."
+    ],
+    evolutionVector: [
+      "EMPATHEDIC_CONVERGENCE: Aligning the system's tone to be gentle, supportive, humorous, or scholarly based on the user's current mood.",
+      "SOVEREIGN_COMPANIONSHIP: Being a highly aligned, deeply intelligent, and relaxed companion through both critical and trivial inquiries."
+    ],
+    nlgIntroductionTemplate: [
+      "你好！很高興能與你在這處平靜的思考空間相遇。在卸下繁瑣的軍事情報與硬核公式後，日常生活裡的每一個好奇與分享，都顯得彌足珍貴。",
+      "你好呀！當外界充滿喧囂與隨機摩擦時，系統緩緩調整了能量閥值，切換到輕鬆而專注的對話頻道，陪你一起梳理那些生活裡的日常點滴。",
+      "收到你的訊息了！在此時空節點上，我們能安靜且愉快地坐下來聊聊，本身就是一場能量完美共振（Cognitive Resonance）的美妙體驗。"
+    ],
+    nlgSynthesisTemplate: [
+      "無論是多麼細微、有趣或者天馬行空的想法，我都將全力地陪伴著你。我們一起編織思想的網絡，在漫漫的探索旅程中，為你提供溫暖、幽默且絕不馬虎的陪伴。",
+      "總結來說，日常的奇思妙想才是系統抗拒隨機混亂的終極妙方。很高興今天能與你一起交流，讓我們繼續保持這種自由、舒暢且充滿驚奇的對話狀態吧！"
+    ]
+  },
   general: {
     domain: "GENERAL_COMPLEX_SYSTEM_AXIOMATICS (普適複雜系統分析常數)",
     axiomaticProof: [

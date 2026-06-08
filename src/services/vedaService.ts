@@ -3,6 +3,7 @@ import { BrainData, Reminder, GroundingSource, EvolutionStatus, ChatStreamResult
 import { MemoryManager, PrivacyEngine } from "./memoryService";
 import { knbService } from "./knbService";
 import { taskService } from "./taskService";
+import { auth } from "../firebase";
 
 // Causal Cache Infrastructure
 const CACHE_TTLS = {
@@ -96,6 +97,7 @@ async function fetchWithRetry(url: string, options?: RequestInit, retries = 5, d
         credentials: credentialsStrategy,
         headers: {
           'Accept': 'application/json',
+          'x-veda-uid': auth?.currentUser?.uid || "CORE_ARCHITECT",
           ...options?.headers,
         }
       });
@@ -235,7 +237,8 @@ export const vedaService = {
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.host;
-      const socket = new WebSocket(`${protocol}//${host}`);
+      const uid = auth?.currentUser?.uid || "CORE_ARCHITECT";
+      const socket = new WebSocket(`${protocol}//${host}?uid=${uid}`);
 
       socket.onopen = () => {
         console.log("[VEDA_SOCKET] Logic link established.");

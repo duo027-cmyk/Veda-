@@ -4,7 +4,6 @@ import { promises as fsPromises } from "fs";
 import path from "path";
 import { save } from "@orama/orama";
 import { BaseSubsystem } from "./Subsystem";
-import { STATE_PATH } from "./constants";
 
 export interface ISystemState {
   state: number[];
@@ -16,11 +15,14 @@ export class PersistenceSubsystem extends BaseSubsystem {
   private lastSavedHash: string = "";
   private readonly MEMORIES_PATH: string;
   private readonly INDEX_PATH: string;
+  private readonly STATE_PATH: string;
 
-  constructor(stateDir: string) {
+  constructor(stateDir: string, tenantId: string = "CORE_ARCHITECT") {
     super();
-    this.MEMORIES_PATH = path.join(stateDir, "veda_memories.json");
-    this.INDEX_PATH = path.join(stateDir, "veda_orama_index.json");
+    const safeTenantId = tenantId.replace(/[^a-zA-Z0-9_\-]/g, "_");
+    this.MEMORIES_PATH = path.join(stateDir, `veda_memories_${safeTenantId}.json`);
+    this.INDEX_PATH = path.join(stateDir, `veda_orama_index_${safeTenantId}.json`);
+    this.STATE_PATH = path.join(stateDir, `veda_brain_state_${safeTenantId}.json`);
   }
 
   public async initialize(): Promise<void> {
@@ -41,9 +43,9 @@ export class PersistenceSubsystem extends BaseSubsystem {
         return true;
       }
 
-      const tempPath = `${STATE_PATH}.tmp`;
+      const tempPath = `${this.STATE_PATH}.tmp`;
       await fsPromises.writeFile(tempPath, content, "utf-8");
-      await fsPromises.rename(tempPath, STATE_PATH);
+      await fsPromises.rename(tempPath, this.STATE_PATH);
       this.lastSavedHash = currentHash;
       return true;
     } catch (e) {
@@ -78,14 +80,14 @@ export class PersistenceSubsystem extends BaseSubsystem {
 
   public async loadState(): Promise<ISystemState | null> {
     try {
-      if (fs.existsSync(STATE_PATH)) {
-        const raw = await fsPromises.readFile(STATE_PATH, "utf-8");
+      if (fs.existsSync(this.STATE_PATH)) {
+        const raw = await fsPromises.readFile(this.STATE_PATH, "utf-8");
         try {
           return JSON.parse(raw);
         } catch (rawError) {
           this.log('FAULT', `State file corrupted during parse: ${rawError}. Backing up file.`);
           try {
-            await fsPromises.rename(STATE_PATH, `${STATE_PATH}.corrupted.${Date.now()}`);
+            await fsPromises.rename(this.STATE_PATH, `${this.STATE_PATH}.corrupted.${Date.now()}`);
           } catch {}
           return null;
         }
