@@ -54,7 +54,8 @@ export class LatticeExecutionManager {
       if (job.status === 'PENDING' && !job.isPaused && this.latticeComputeArray.canExecute()) {
         this.latticeComputeArray.setExecuting(job.id);
         this.executeLatticeTask(job).catch((err) => {
-          this.callbacks.neuralLog('LATTICE_FAULT', `Task ${job.id} failed: ${err.message}`);
+          const errMsg = err?.message || String(err || "Unknown error");
+          this.callbacks.neuralLog('LATTICE_FAULT', `Task ${job.id} failed: ${errMsg}`);
           this.latticeComputeArray.updateJob(job.id, { status: 'FAILED' });
         });
       }
@@ -102,10 +103,10 @@ export class LatticeExecutionManager {
           prompt = job.payload.prompt;
         }
 
-        let targetModel = 'gemini-2.5-flash';
+        let targetModel = 'gemini-3.5-flash';
         // Auto-select premium reasoning model for advanced academic synthesis
         if (['STRATEGIC_OUTLINE', 'REPORT_SECTION_SYNTHESIS', 'STRATEGIC_PREDICTION'].includes(job.type)) {
-          targetModel = 'gemini-2.5-pro';
+          targetModel = 'gemini-3.1-pro-preview';
         }
 
         let result;
@@ -133,14 +134,15 @@ export class LatticeExecutionManager {
             return this.executeAutonomousFallback(job);
           }
 
-          this.callbacks.neuralLog('LATTICE_COMPUTE_FALLBACK', `Premium model failed or restricted. Re-routing query payload to high-speed auxiliary core: gemini-2.5-flash`);
+          this.callbacks.neuralLog('LATTICE_COMPUTE_FALLBACK', `Premium model failed or restricted. Re-routing query payload to high-speed auxiliary core: gemini-3.5-flash`);
           try {
             result = await this.activeAi.models.generateContent({
-              model: 'gemini-2.5-flash',
+              model: 'gemini-3.5-flash',
               contents: prompt
             });
           } catch (auxErr: any) {
-            this.callbacks.neuralLog('LATTICE_COMPUTE_FALLBACK_FAILED', `Auxiliary core also failed: ${auxErr.message || auxErr}. Activating ultimate autonomous local fallback to preserve core execution trajectory.`);
+            const auxErrMsg = auxErr?.message || String(auxErr || "Unknown auxiliary error");
+            this.callbacks.neuralLog('LATTICE_COMPUTE_FALLBACK_FAILED', `Auxiliary core also failed: ${auxErrMsg}. Activating ultimate autonomous local fallback to preserve core execution trajectory.`);
             if (this.callbacks.handleAiError) {
               this.callbacks.handleAiError(auxErr);
             }
@@ -158,7 +160,8 @@ export class LatticeExecutionManager {
         await this.solidifyLatticeJob({ jobId: job.id, result: parsedResult, coherence: 0.98 });
       }
     } catch (err: any) {
-      this.callbacks.neuralLog('LATTICE_FAULT', `Lattice execution error: ${err.message || err}`);
+      const errMsg = err?.message || String(err || "Unknown execution error");
+      this.callbacks.neuralLog('LATTICE_FAULT', `Lattice execution error: ${errMsg}`);
       if (this.callbacks.handleAiError) {
         this.callbacks.handleAiError(err);
       }

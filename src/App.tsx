@@ -183,11 +183,16 @@ export default function App() {
     });
 
     // 4. Reactive Visibility Engine: Sync immediately when user switches focus back to the page
+    let lastVisibilityFetched = 0;
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'visible') {
-        console.log("[VEDA_SYNC_CONTROL] Tab visibility restored. Forcing trajectory alignment.");
-        fetchVedaData();
-        triggerNextTimer();
+        const now = Date.now();
+        if (now - lastVisibilityFetched > 3000) {
+          lastVisibilityFetched = now;
+          console.log("[VEDA_SYNC_CONTROL] Tab visibility restored. Forcing trajectory alignment.");
+          fetchVedaData();
+          triggerNextTimer();
+        }
       }
     };
 

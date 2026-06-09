@@ -140,23 +140,6 @@ export class GeminiService {
               break; // exit loop immediately, do not try other models
             }
 
-            if (isQuotaError) {
-              const cd = (errMsg.includes("limit: 0") || errMsg.includes("FreeTier")) ? 86400000 : 120000;
-              this.degradedModels.set(model, Date.now() + cd);
-              this.logger("RATE_LIMIT_COOLDOWN", `Gemini API rate limit/quota hit for ${model}. Registering localized model degradation for ${cd}ms. Switching immediately to next available fallback model.`);
-              break; // exit current model's attempt loop to gracefully switch to the next fallback model
-            }
-
-            this.logger("WARNING", `Attempt ${attempt} failed with model ${model}: ${cleanMsg}`);
-
-            // Classify error and apply rate-limits/cooldown
-            this.handleError(err, false);
-            if (this.isBlocked) {
-              this.logger("SECURITY", "Fatal security condition detected during generation loop. Aborting fallback.");
-              throw err;
-            }
-
-            // If model is experiencing high demand (503), do not retry on this overloaded model. Immediately switch!
             const isModelOverloaded = 
               errMsg.includes("503") || 
               errMsg.includes("UNAVAILABLE") || 
@@ -164,7 +147,6 @@ export class GeminiService {
               errMsg.includes("temporary") || 
               errMsg.includes("overloaded");
 
-            // If model is rate-limited or quota exceeded (429), do not retry on this model either. Immediately try next available model!
             const isModelQuotaExceeded = 
               errMsg.includes("429") || 
               errMsg.includes("RESOURCE_EXHAUSTED") || 
@@ -174,7 +156,6 @@ export class GeminiService {
               errMsg.includes("Limit") ||
               errMsg.includes("Resource exhausted");
 
-            // If model is not found or invalid (400), do not retry either! Immediately try next available model.
             const isModelNotFoundOrInvalid =
               errMsg.includes("400") ||
               errMsg.includes("not found") ||
@@ -203,8 +184,17 @@ export class GeminiService {
               }
               
               this.degradedModels.set(model, Date.now() + cooldownDuration);
-              this.logger("PROACTIVE_FAILOVER", `Model ${model} is ${reason}. Registering degradation for ${cooldownDuration}ms. Moving immediately to adjacent node.`);
-              break; // break the attempt loop to try the next model
+              this.logger("PROACTIVE_FAILOVER", `Model ${model} is ${reason}. Registering degradation for ${cooldownDuration}ms. Switching immediately to next available fallback model.`);
+              break; // exit current model's attempt loop to gracefully switch to the next fallback model
+            }
+
+            this.logger("WARNING", `Attempt ${attempt} failed with model ${model}: ${cleanMsg}`);
+
+            // Classify error and apply rate-limits/cooldown
+            this.handleError(err, false);
+            if (this.isBlocked) {
+              this.logger("SECURITY", "Fatal security condition detected during generation loop. Aborting fallback.");
+              throw err;
             }
 
             if (attempt < maxAttempts) {
@@ -312,6 +302,7 @@ export class GeminiService {
    * into a clean, concise, academic-grade system diagnostic message.
    */
   public cleanErrorMessage(err: any): string {
+    if (!err) return "Unknown entity failure";
     const errMsg = err?.message || String(err);
     if (
       errMsg.includes("429") || 

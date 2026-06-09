@@ -101,6 +101,7 @@ export interface StrategicReport {
   createdAt: number;
   updatedAt: number;
   expertiseAssessment?: any;
+  grade?: string;
 }
 
 export interface IVedaBrain {

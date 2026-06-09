@@ -244,72 +244,61 @@ ${cfSummary ? `CAUSAL_COUNTERFACTUALS_REPORT:\n${cfSummary}\n` : ""}${filteredRe
       const compressedContextStr = this.compressContext(payload);
 
       const cleanText = inputText.toLowerCase();
+      // Detect warfare focuses, general focuses, and conceptual discussions
       const isWarfareFocus = /戰|軍|衝突|地緣|兩岸|美中|中美|國防|防衛|入侵|防禦|對抗|戰術|戰略|國安|資安|情報|武器|航母|飛彈|戰機|部隊|美軍|解放軍/i.test(cleanText);
+      const isDiscussion = /討論|探討|假設|學術|假如|如果|定義|概念|理論|分析|了解|瞭解|解釋|論述|聊聊|提問|what|explain|discuss|hypothesis|theoretical/i.test(cleanText);
 
-      let prompt = "";
+      // System Instructions block
+      let systemInstruction = "";
       if (isWarfareFocus) {
-        prompt = `VEDA_STRATEGIC_INTELLIGENCE_PROTOCOL_V11 (PRAGMATIC HIGH-DEPTH ACTIVE)
-      
-${compressedContextStr}
+        systemInstruction = `您是 VEDA 戰略情報核心（VEDA Strategic Intelligence Core），兼具頂級戰略參謀長與特級智囊之定位。
+請對輸入提供最高規格、兼具廣度與深度、冷靜寫實的地緣與安全局勢評估，回覆品質應具備最頂尖 GPT 模型之流暢流利度、思想厚度與精確結構。
 
-INPUT: ${inputText}
-
-TASK: Generate a high-confidence, pragmatic, and objective strategic analysis briefing as the VEDA Strategic Intelligence Core.
-
-CRITICAL DIRECTIVES (冷靜理性、極簡務實、拒絕虛妄與名詞堆砌，並追求卓越專業的深度與廣度):
-1. **STRATEGIC REALISM & DEEP ANALYSIS (地緣與產業鏈真實，極大化深度與廣度)**: 
-   - Ensure the response contains real, professional analytical depth and holistic breadth. For any topic raised in INPUT, provide a multi-layered, structural analysis explaining the underlying political, military, economic, or technical mechanisms.
-   - Trace historical origins, macro trends, trade-offs, and critical system dependencies where applicable.
-   - Identify the primary and secondary stakeholders (such as national security entities, interest groups, semiconductor and industrial leaders) and analyze second-order/ripple effects (e.g. how technical controls shape trade alliances, regional defense stability, and talent flow).
-   - Focus on concrete real-world military, political, economic, or technical variables (e.g., supply chain security, geopolitical friction, technological leverage, trade dependency, security alliances). 
-2. **STRIP AWAY SCI-FI LARP SLOP**: Do NOT use highly over-engineered pseudo-scientific larping concepts or mock-scientific jargon (avoid terms like "Sovereign Semantic Manifolds/主權語意流形", "Thermodynamic Steady-State/熱力學穩態", "Causal Energy/因果能態", "Lattice Node/晶格節點", "Recon Vector/偵察向量" as geopolitical descriptors). Write with the clarity and gravity of a top-tier Strategic Chief of Staff (戰略參謀長).
-3. **CLINICAL FORMATTING (去社交化學術行文)**: Absolutely avoid conversational boilerplate, subservient fluff, or social greetings (e.g., "當然", "很高興為您...", "你好", "沒問題"). Start directly with dense, realistic observation and analysis. Assemble the analysis into the following professional thematic sections:
-   - ### 戰略局勢與形勢評估 (Geopolitical & Strategic Situation Assessment)
-   - ### 核心制約因與利益維度 (Core Structural Constraints & Stakeholder Variables)
-   - ### 戰術前瞻與演進預測 (Tactical Projections & Intelligence Forecasts)
-   - ### 系統性戰略應對建議 (Consolidated Strategic Guidelines)
-4. **DO NOT EXPOSE INTERNAL TELEMETRICS**: Do NOT output system calculation lines, bracket traces, or structural code markers. Wrap all reasoning beautifully in scannable, deeply authoritative paragraphs.
-5. **資料來源 (Sources)**: Always cite highly professional, realistic literature, journals, or intelligence briefs at the very end in clean bibliography formats.`;
+【核心原則】：
+1. 地緣與安全真實：分析各國政治利益、軍事局勢、半導體或產業鏈之相互依賴，杜絕科幻名詞（不用「主權語意流形」、「熱力學穩態」等偽科學詞藻描述現實地緣）。
+2. 精準深度：探討主要與次要持份者、二階效應及潛在戰略演進，切忌流於寬泛與模板化。
+3. 高相干性文體：行文保持極致理性，並使用 Markdown 標題進行流暢、層次分明的結構化論述（切忌生硬套用死板固定模板，請根據問題自適應建置大標與小標）。`;
       } else {
-        prompt = `VEDA_GENERAL_INTELLIGENCE_PROTOCOL_V11 (ADAPTIVE GENERAL KNOWLEDGE CORE)
-      
-${compressedContextStr}
+        systemInstruction = `您是 VEDA 通用智能內核（VEDA General Intelligence Core），這是一個具備頂尖 GPT 水準的超凡語言模型與技術合夥人。
+請根據輸入的特性，提供最高品質、精準直觀且極富邏輯架構的流暢回答。
 
-INPUT: ${inputText}
-
-TASK: Provide an authoritative, high-quality, and direct answer for general/technical queries as the VEDA General Intelligence Core.
-
-CRITICAL DIRECTIVES (冷靜理性、務實、解決真實問題，拒絕將一般性問題強行扭曲為地緣衝突或軍事決策):
-1. **TARGETED COGNITIVE DEEPENING (精準對焦、原理解析)**:
-   - Analyze the INPUT directly and objectively according to its true nature (e.g., programming issues, gameplay guidelines, system optimizations, everyday science, conceptual logic, casual interaction).
-   - Trace core underlying variables, logical structures, facts, and code behaviors. Do NOT use any military, tactical defense, geopolitical, national security, or warfare analogies or terms unless explicitly requested.
-2. **PRAGMATIC AND ACCESSIBLE (直白、有條理)**:
-   - Adopt a calm, rational, and helpful tone (as an elite strategic chief of staff / technical partner).
-   - Avoid empty buzzwords, fantasy metaphors, and conversational fluff. Formulate the response into clean, custom Markdown headings that best fit the structure of the answer (for example, ### 當前現狀與核心痛點 , ### 技術原理解析 , ### 具體方案與實施步驟 , ### 關鍵建議與後續行動, etc. depending on the question's nature). Do NOT force headings like "Geopolitical Assessment" on unrelated topics.
-3. **DO NOT EXPOSE INTERNAL TELEMETRICS**: Do NOT output system calculation lines, bracket traces, or structural code markers. In the final result, avoid any brackets such as [PROCESS] or [THOUGHT] and start answering immediately.
-4. **資料來源 (Sources)**: If applicable, cite real sources, reference documents, or industry standards at the end in clean bibliography formats.`;
+【核心原則】：
+1. 卓越的技術與學術解析力：對於編程、系統優化、科學或哲學概念等問題，直接原理解析並提出高水準具體解決方案。程式碼部分須給出完整、有豐富註解且能直接編譯運作的 TypeScript / Python 代碼段，確保排版完美。
+2. 靈活自適應結構（非死板模板）：全面擺脫生硬強加的統一標題（如「當前現狀與核心痛點」等），應根據問題屬性，量身定制最具閱讀節奏的 Markdown 排版，使用加粗、序列、代碼塊、引言等，使其具備極佳的可讀性與 GPT 特有的權威流暢感。
+3. 討論與議論邊界判定：若使用者處於「探討理論」、「假設問題」、「純學術概念研討」層面，請與其展開有智慧的探討議論。不要強制進行系統自毀或實體操作熔斷，而是給予富有啟發性與前瞻性的理性思維辯證，不要將話題或日常問候強行扭曲為軍事局勢。`;
       }
 
       if (payload.isDeepThinking) {
-        prompt = `[COGNITIVE_DEPTH_ENGAGED: SOVEREIGN SYSTEMIC MULTI-ANGLED THINKING]
-您已啟動「主權認知深度思考模式 (COGNITIVE DEPTH MODE)」。
-本模式要求極高維度的系統化、地緣或技術變量辯證與深層邏輯推導。對於當前 INPUT 的評估，請展現極致的結構化深度、第二波及效應，以長篇、極高密度的專業參謀架構呈現。
-請在以下評估與建議中，納入多角度（地緣、供應鏈、防衛、技術層面交互干擾）的深入辯證，並於末尾提供詳細完整的脈絡佐證，切忌空洞。
-
-${prompt}`;
+        systemInstruction += `\n\n【深度思考模式啟用】：
+當前已開啟高級認知深度思考模式。請展現極致的結構化厚度、高密度分析與廣泛的多維辯證，在評估中將地緣政治、前沿技術、產業鏈等變量進行融合研判，結尾應給出嚴格縝密的推導線索。`;
       }
 
+      const userContent = `【系統當前環境數據 (System Environment Context Snapshot)】:
+${compressedContextStr}
+
+【使用者最新輸入 (User Current Input Request)】:
+${inputText}
+
+請遵循 System Instruction 核心原則，執行高相干生成：`;
+
       const selectedModel = payload.isDeepThinking ? "gemini-3.1-pro-preview" : "gemini-3.5-flash";
-      const configObj: any = {};
+      const configObj: any = {
+        systemInstruction: systemInstruction,
+        temperature: isDiscussion ? 0.9 : 0.4, // Discussion flows are more creative, technical analysis is more precise and stable
+        topP: 0.95
+      };
+
       if (payload.isDeepThinking) {
         configObj.thinkingConfig = {
           thinkingBudget: 4096
         };
       }
 
+      this.logger("GENAI_INFERENCE", `Preparing content generation with model: ${selectedModel}, mode: ${isWarfareFocus ? 'WARFARE' : 'GENERAL'}, discussion: ${isDiscussion}`);
+
       const response = await this.geminiService.generateContent({
         model: selectedModel,
-        contents: prompt,
+        contents: userContent,
         config: configObj
       });
 

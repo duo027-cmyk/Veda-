@@ -572,6 +572,7 @@ async function startServer() {
 
     api.post("/evolve", async (req, res) => {
       try {
+        const { brain } = getTenantContext(req);
         const { intent, text } = req.body;
         const result = await brain.processEvolution(intent, null, text);
         res.json(result);
@@ -582,6 +583,7 @@ async function startServer() {
 
     api.post("/verify", (req, res) => {
       try {
+        const { brain } = getTenantContext(req);
         const { key } = req.body;
         const result = brain.verifyAuditKeys([key]);
         if (result.verified) {
@@ -596,6 +598,7 @@ async function startServer() {
 
     api.post("/synthesize", async (req, res) => {
       try {
+        const { brain } = getTenantContext(req);
         const fragment = await brain.synthesizeMemory();
         res.json({ success: true, memory: fragment });
       } catch (e) {
@@ -605,29 +608,11 @@ async function startServer() {
 
     api.post("/dream", async (req, res) => {
       try {
+        const { brain } = getTenantContext(req);
         brain.runDreamCycle(wss).catch(e => console.error("Dream failed", e));
         res.json({ status: "DREAMING_STARTED" });
       } catch (e) {
         res.status(500).json({ error: "DREAM_ERROR" });
-      }
-    });
-
-    api.post("/recall", (req, res) => {
-      try {
-        const { query } = req.body;
-        const memories = brain.getCausalRecall(query || "");
-        res.json(memories);
-      } catch (e) {
-        res.status(500).json({ error: "RECALL_ERROR" });
-      }
-    });
-
-    api.post("/reset-chat", async (req, res) => {
-      try {
-        await brain.resetChatHistory();
-        res.json({ status: "SUCCESS", message: "EPISTEMIC_RESET_COMPLETE" });
-      } catch (e) {
-        res.status(500).json({ error: "RESET_ERROR" });
       }
     });
 
@@ -641,6 +626,7 @@ async function startServer() {
 
     api.post("/v1/toggle-freeze", async (req, res) => {
       try {
+        const { brain } = getTenantContext(req);
         const result = brain.toggleLogicFreeze();
         res.json({ success: true, is_frozen: result });
       } catch (e) {
@@ -650,6 +636,7 @@ async function startServer() {
 
     api.post("/v1/upgrade", async (req, res) => {
       try {
+        const { brain } = getTenantContext(req);
         const { stat } = req.body;
         const result = await brain.setSystemTier(stat === 'ARCHITECT' ? 'ARCHITECT' : 'STRATEGIC'); 
         res.json({ success: true, ...result });
@@ -660,6 +647,7 @@ async function startServer() {
 
     api.post("/v1/lattice/pause", async (req, res) => {
       try {
+        const { brain } = getTenantContext(req);
         const { id, isPaused } = req.body;
         if (!id) {
           return res.status(400).json({ error: "Missing job id" });
@@ -676,6 +664,7 @@ async function startServer() {
 
     api.post("/v1/lattice/reorder", async (req, res) => {
       try {
+        const { brain } = getTenantContext(req);
         const { id, direction } = req.body;
         if (!id || (direction !== 'up' && direction !== 'down')) {
           return res.status(400).json({ error: "Missing required parameters: id or direction ('up'|'down')" });
@@ -692,6 +681,7 @@ async function startServer() {
 
     api.post("/v1/federation/join", async (req, res) => {
       try {
+        const { brain } = getTenantContext(req);
         const { nodeId, nodeUrl, coherence } = req.body;
         if (!nodeId || !nodeUrl) {
           return res.status(400).json({ error: "Missing required parameters: nodeId or nodeUrl" });

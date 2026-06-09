@@ -63,6 +63,9 @@ const getInitialView = (): ViewMode => {
   return 'DIALOGUE';
 };
 
+// Module-scoped promise to deduplicate simultaneous/parallel fetch Veda data calls
+let activeFetchPromise: Promise<void> | null = null;
+
 export const useSovereignStore = create<SovereignState>((set, get) => ({
   // Auth state
   user: null,
@@ -147,56 +150,66 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
   setIsPulsing: (isPulsing) => set({ isPulsing }),
 
   fetchVedaData: async () => {
-    try {
-      const [d, strength] = await Promise.all([
-        vedaService.getData().catch(err => {
-          console.warn("[VEDA_SYNC_SYSTEM] getData err (using background healing fallback):", err);
-          return null;
-        }),
-        knbService.getCollectiveStrength().catch(err => {
-          console.warn("[KNB] Strength check failed - ignoring for stability", err);
-          return 0;
-        })
-      ]);
-
-      const currentData = get().userData;
-      let safeData = null;
-
-      if (d) {
-        safeData = {
-          ...d,
-          collectiveStrength: strength,
-          innovation_manifold: d.innovation_manifold || {
-            innovationIndex: 0,
-            experienceSum: 0,
-            leapPotential: 0,
-            alignmentIndex: 0,
-            protocol: 'INITIALIZING',
-            uncertaintyVariance: 0
-          }
-        };
-      } else if (currentData) {
-        // 自癒：重用先前成功的內存狀態
-        safeData = {
-          ...currentData,
-          collectiveStrength: strength || currentData.collectiveStrength || 0
-        };
-      }
-
-      set({ 
-        userData: safeData, 
-        apiError: null, // 無損自癒：即使有臨時抖動也決不鎖死前台
-        isLoading: false 
-      });
-
-      // Synchronize UI components based on telemetry states (Reactive Feedback Loop)
-      if (safeData?.is_bursting) {
-        set({ showBurstMonitor: true });
-      }
-    } catch (e: any) {
-      console.warn("[VEDA_SYNC_SYSTEM] Extreme transient sync failure (self-healing recovery auto-engaged):", e);
-      set({ apiError: null, isLoading: false }); // 拒絕向用戶展示破碎的異常
+    if (activeFetchPromise) {
+      return activeFetchPromise;
     }
+
+    activeFetchPromise = (async () => {
+      try {
+        const [d, strength] = await Promise.all([
+          vedaService.getData().catch(err => {
+            console.warn("[VEDA_SYNC_SYSTEM] getData err (using background healing fallback):", err);
+            return null;
+          }),
+          knbService.getCollectiveStrength().catch(err => {
+            console.warn("[KNB] Strength check failed - ignoring for stability", err);
+            return 0;
+          })
+        ]);
+
+        const currentData = get().userData;
+        let safeData = null;
+
+        if (d) {
+          safeData = {
+            ...d,
+            collectiveStrength: strength,
+            innovation_manifold: d.innovation_manifold || {
+              innovationIndex: 0,
+              experienceSum: 0,
+              leapPotential: 0,
+              alignmentIndex: 0,
+              protocol: 'INITIALIZING',
+              uncertaintyVariance: 0
+            }
+          };
+        } else if (currentData) {
+          // 自癒：重用先前成功的內存狀態
+          safeData = {
+            ...currentData,
+            collectiveStrength: strength || currentData.collectiveStrength || 0
+          };
+        }
+
+        set({ 
+          userData: safeData, 
+          apiError: null, // 無損自癒：即使有臨時抖動也決不鎖死前台
+          isLoading: false 
+        });
+
+        // Synchronize UI components based on telemetry states (Reactive Feedback Loop)
+        if (safeData?.is_bursting) {
+          set({ showBurstMonitor: true });
+        }
+      } catch (e: any) {
+        console.warn("[VEDA_SYNC_SYSTEM] Extreme transient sync failure (self-healing recovery auto-engaged):", e);
+        set({ apiError: null, isLoading: false }); // 拒絕向用戶展示破碎的異常
+      } finally {
+        activeFetchPromise = null;
+      }
+    })();
+
+    return activeFetchPromise;
   },
 
   handleAction: async (action, params) => {
