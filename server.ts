@@ -74,13 +74,22 @@ if (fs.existsSync(firebaseConfigPath)) {
     let adminApp;
     if (admin.apps.length === 0) {
       try {
-        adminApp = admin.initializeApp();
-        console.log("[VEDA_ADMIN] Admin SDK initialized via Default Credentials.");
+        if (firebaseConfig.projectId) {
+          adminApp = admin.initializeApp({
+            projectId: firebaseConfig.projectId
+          });
+          console.log(`[VEDA_ADMIN] Admin SDK initialized with explicit projectId: ${firebaseConfig.projectId}`);
+        } else {
+          adminApp = admin.initializeApp();
+          console.log("[VEDA_ADMIN] Admin SDK initialized via Default Credentials.");
+        }
       } catch (e) {
-        console.warn("[VEDA_ADMIN_WARNING] Default initialization failed, using explicit projectId.");
-        adminApp = admin.initializeApp({
-          projectId: firebaseConfig.projectId
-        });
+        console.warn("[VEDA_ADMIN_WARNING] Explicit initialization failed, using default fallback:", e);
+        try {
+          adminApp = admin.initializeApp();
+        } catch (innerErr) {
+          console.error("[VEDA_ADMIN_FATAL] Admin SDK initialization failed completely:", innerErr);
+        }
       }
     } else {
       adminApp = admin.app();

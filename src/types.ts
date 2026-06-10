@@ -255,6 +255,13 @@ export interface BrainData extends BrainMetrics, BrainStatus {
   };
 
   // Misc
+  cognitive_efficacy?: {
+    comprehensionIndex: number;
+    reasoningIndex: number;
+    analyticalIndex: number;
+    executionIndex: number;
+    systemOverallEfficacy: number;
+  };
   innovation_manifold?: {
     innovationIndex: number;
     experienceSum: number;

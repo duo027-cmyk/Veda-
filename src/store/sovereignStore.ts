@@ -156,7 +156,7 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
 
     activeFetchPromise = (async () => {
       try {
-        const [d, strength] = await Promise.all([
+        const [d, strength, memories, graphData] = await Promise.all([
           vedaService.getData().catch(err => {
             console.warn("[VEDA_SYNC_SYSTEM] getData err (using background healing fallback):", err);
             return null;
@@ -164,15 +164,50 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
           knbService.getCollectiveStrength().catch(err => {
             console.warn("[KNB] Strength check failed - ignoring for stability", err);
             return 0;
+          }),
+          vedaService.getMemories().catch(err => {
+            console.warn("[VEDA_SYNC_SYSTEM] memories fetch err:", err);
+            return [];
+          }),
+          vedaService.getGraphData().catch(err => {
+            console.warn("[VEDA_SYNC_SYSTEM] graph fetch err:", err);
+            return { nodes: [], links: [] };
           })
         ]);
 
         const currentData = get().userData;
         let safeData = null;
 
+        // Generate deterministic 3D coordinates on Fibonacci sphere surface for elegant rendering in VedaCore3D
+        let formattedManifoldPoints: any[] = [];
+        if (graphData && Array.isArray(graphData.nodes)) {
+          const N = graphData.nodes.length;
+          formattedManifoldPoints = graphData.nodes.map((node: any, idx: number) => {
+            if (N < 2) {
+              return { ...node, x: 0, y: 0, z: 0 };
+            }
+            const offset = 2 / N;
+            const increment = Math.PI * (3 - Math.sqrt(5));
+            const y = ((idx * offset) - 1) + (offset / 2);
+            const r = Math.sqrt(Math.max(0, 1 - y * y));
+            const phi = idx * increment;
+            const x = Math.cos(phi) * r;
+            const z = Math.sin(phi) * r;
+            
+            return {
+              ...node,
+              x: x * 2.2,
+              y: y * 2.2,
+              z: z * 2.2
+            };
+          });
+        }
+
         if (d) {
           safeData = {
             ...d,
+            memories: memories || [],
+            manifold_points: formattedManifoldPoints,
             collectiveStrength: strength,
             innovation_manifold: d.innovation_manifold || {
               innovationIndex: 0,
@@ -187,6 +222,8 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
           // 自癒：重用先前成功的內存狀態
           safeData = {
             ...currentData,
+            memories: memories || currentData.memories || [],
+            manifold_points: formattedManifoldPoints.length > 0 ? formattedManifoldPoints : (currentData.manifold_points || []),
             collectiveStrength: strength || currentData.collectiveStrength || 0
           };
         }

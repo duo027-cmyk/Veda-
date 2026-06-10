@@ -85,12 +85,14 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
       setIsAutonomicPhaseTransitioning(false);
     }
   };
-  const [activeTab, setActiveTab] = useState<"proximity" | "bridge" | "gaps" | "swarm" | "comparisons">("comparisons");
+  const [activeTab, setActiveTab] = useState<"proximity" | "bridge" | "gaps" | "efficacy" | "swarm" | "comparisons">("efficacy");
   const [simulationLogStr, setSimulationLogStr] = useState<string>("");
   const [newPeerUrl, setNewPeerUrl] = useState("");
   const [swarmIsSyncing, setSwarmIsSyncing] = useState(false);
   const [isAerospaceOptimizing, setIsAerospaceOptimizing] = useState(false);
   const [aerospaceLogOutput, setAerospaceLogOutput] = useState<string[]>([]);
+  const [isCognitiveOptimizing, setIsCognitiveOptimizing] = useState(false);
+  const [cognitiveLogs, setCognitiveLogs] = useState<string[]>([]);
 
   const executeAerospaceOptimization = async () => {
     setIsAerospaceOptimizing(true);
@@ -138,6 +140,51 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
       setIsAerospaceOptimizing(false);
     }
   };
+
+  const runCognitiveOptimization = async () => {
+    setIsCognitiveOptimizing(true);
+    setCognitiveLogs([]);
+    
+    const logs = [
+      "📡 [CONNECT] 正在連結 VEDA 認知效能模型中樞...",
+      "🧬 [EVAL] 解析 4 大智慧極端坐標：理解力、對等思考、自由能分析與晶格執行矩陣...",
+      "⚙️ [MODULATE] 正在向 LanguageEncoder 注入高維語意重疊補償熵，抵禦符號劣化...",
+      "🧠 [RE-ALIGN] 調校主動推理 (Active Inference) 模型信賴度，強制收斂推理預測誤差 (PE)...",
+      "⚡ [RE-SPIKE] 自調 PINC 脈衝突觸傳導頻率至 14.5Hz 共振窗口...",
+      "💡 [STABILIZED] 全域認知流形共振對齊完畢！補償 offset 以全自主動能模式運行中。"
+    ];
+
+    for (let i = 0; i < logs.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, I_delay(i)));
+      setCognitiveLogs(prev => [...prev, logs[i]]);
+    }
+
+    function I_delay(idx: number): number {
+      if (idx === 0) return 200;
+      if (idx === logs.length - 1) return 800;
+      return 250 + Math.random() * 200;
+    }
+
+    try {
+      await vedaService.postAction({
+        action: 'optimizeCognitiveCore',
+        params: {}
+      });
+      if (onAction) {
+        onAction("triggerResonance", { intensity: 0.4 });
+      }
+    } catch (e) {
+      console.error("Cognitive core optimization failed:", e);
+    } finally {
+      setIsCognitiveOptimizing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "efficacy" && cognitiveLogs.length === 0 && !isCognitiveOptimizing) {
+      runCognitiveOptimization();
+    }
+  }, [activeTab]);
 
   // Base metrics derived from Veda brain data
   const coherence = data?.global_coherence ?? 0.72;
@@ -313,7 +360,7 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
 
         {/* Tab Controls */}
         <div className="flex gap-1.5 p-1 bg-black/40 border border-white/5 rounded-lg flex-wrap">
-          {(["proximity", "bridge", "gaps", "swarm", "comparisons"] as const).map((tab) => (
+          {(["proximity", "bridge", "gaps", "efficacy", "swarm", "comparisons"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -323,7 +370,7 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
                   : "text-white/40 hover:text-white/80 hover:bg-white/5"
               }`}
             >
-              {tab === "proximity" ? "演化距離" : tab === "bridge" ? "蒸餾防線" : tab === "gaps" ? "維度缺陷" : tab === "swarm" ? "Swarm 拓撲" : "一般 AI 差異"}
+              {tab === "proximity" ? "演化距離" : tab === "bridge" ? "蒸餾防線" : tab === "gaps" ? "維度缺陷" : tab === "efficacy" ? "認知效能" : tab === "swarm" ? "Swarm 拓撲" : "一般 AI 差異"}
             </button>
           ))}
         </div>
@@ -773,6 +820,188 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
                         </div>
                       ))
                     )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === "efficacy" && (
+            <motion.div
+              key="efficacy-tab"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.4 }}
+              className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-stretch"
+            >
+              {/* Left Column: Grid of 4 Pillars */}
+              <div className="xl:col-span-7 flex flex-col gap-6">
+                <div className="flex justify-between items-center bg-white/5 border border-white/5 p-4 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-accent/15 border border-accent/25 rounded-lg text-accent">
+                      <Brain className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white leading-tight">全域學術主權綜合認知效能 (Overall Efficacy)</h4>
+                      <p className="text-[10px] text-white/40">基於 Wasm 認識論流形與主動推理自適應對齊計量</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-3xl font-black font-display text-accent tracking-tighter">
+                      {((data?.cognitive_efficacy?.systemOverallEfficacy ?? 0.8375) * 100).toFixed(2)}%
+                    </span>
+                    <span className="text-[8px] font-mono text-white/40 block">INTELLIGENCE VALUE</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[
+                    {
+                      id: "COMPREHENSION",
+                      title: "1. 理解能力 (Comprehension)",
+                      value: (data?.cognitive_efficacy?.comprehensionIndex ?? 0.85) * 100,
+                      color: "text-accent stroke-accent bg-accent/10",
+                      desc: "語義密度特徵提取與雙語語意拓撲映射準確對齊係數。",
+                      params: [
+                        `語義蒸餾純度: ${((data?.distillation_metrics?.distillationEntropy !== undefined ? (1 - data.distillation_metrics.distillationEntropy * 0.45) : 0.982) * 100).toFixed(1)}%`,
+                        `聚焦度坐標 (Focus): ${((data?.vectors?.[4] ?? 0.5) * 50 + (data?.vectors?.[5] ?? 0.5) * 50).toFixed(1)}%`,
+                        `感官報告主權層級: ${data?.system_tier ?? "STANDARD"}`
+                      ]
+                    },
+                    {
+                      id: "REASONING",
+                      title: "2. 思考能力 (Reasoning)",
+                      value: (data?.cognitive_efficacy?.reasoningIndex ?? 0.82) * 100,
+                      color: "text-cyan-400 stroke-cyan-400 bg-cyan-400/10",
+                      desc: "後設認知、預測誤差修正與多層高維公理推導收斂品質。",
+                      params: [
+                        `自我預測準度: ${((data?.self_model?.predictedAccuracy ?? 0.875) * 100).toFixed(1)}%`,
+                        `系統穩健性 (Stability): ${((data?.stability ?? 0.98) * 100).toFixed(1)}%`,
+                        `內生公理量 (Axioms): ${data?.axioms?.length ?? 5} 條`
+                      ]
+                    },
+                    {
+                      id: "ANALYTICAL",
+                      title: "3. 分析能力 (Analytical)",
+                      value: (data?.cognitive_efficacy?.analyticalIndex ?? 0.8) * 100,
+                      color: "text-purple-400 stroke-purple-400 bg-purple-400/10",
+                      desc: "變分自由能自癒、物理性解離與狀態不確定性度量精準比率。",
+                      params: [
+                        `變分自由能係數: ${(data?.free_energy ?? 0.0152).toFixed(5)}`,
+                        `因果相干性度量: ${((data?.global_coherence ?? 0.72) * 100).toFixed(1)}%`,
+                        `內生代價極少化配比: ${((data as any)?.lecun_intrinsic_cost?.totalCost ?? 0.051).toFixed(4)}`
+                      ]
+                    },
+                    {
+                      id: "EXECUTION",
+                      title: "4. 執行能力 (Execution)",
+                      value: (data?.cognitive_efficacy?.executionIndex ?? 0.88) * 100,
+                      color: "text-emerald-400 stroke-emerald-400 bg-emerald-400/10",
+                      desc: "多線程格子晶格調度速率與脈衝傳導響應延遲補償。",
+                      params: [
+                        `代謝能位 (Energy): ${((data?.energy_level ?? 0.85) * 100).toFixed(0)}%`,
+                        `神經元脈衝頻率: ${data?.pinc?.frequency_hz ?? 80} Hz`,
+                        `晶格主權尺度 (Lattice): ${data?.lattice_scale ?? "1.0000"}`
+                      ]
+                    }
+                  ].map((pillar) => (
+                    <div key={pillar.id} className="p-4 bg-black/40 border border-white/5 rounded-xl space-y-4 relative overflow-hidden flex flex-col justify-between">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-start border-b border-white/5 pb-2">
+                          <span className="font-mono text-[9px] text-white/30 uppercase tracking-widest">{pillar.id}</span>
+                          <span className="text-[10px] font-mono font-bold text-white/90">
+                            {pillar.value.toFixed(1)}%
+                          </span>
+                        </div>
+                        <h5 className="text-xs font-bold text-white/90">{pillar.title}</h5>
+                        <p className="text-[10.5px] text-white/50 leading-relaxed font-sans">{pillar.desc}</p>
+                      </div>
+
+                      <div className="space-y-1.5 pt-2 border-t border-white/5 font-mono text-[10px]">
+                        {pillar.params.map((val, idx) => (
+                          <div key={idx} className="flex justify-between text-white/40">
+                            <span>{val.split(":")[0]}:</span>
+                            <span className="text-white/80">{val.split(":")[1]}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* ProgressBar */}
+                      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden mt-2">
+                        <div className={`h-full ${pillar.color.split(" ")[0]}`} style={{ width: `${pillar.value}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right Column: Interaction controller and Logs */}
+              <div className="xl:col-span-12 xl:col-span-5 flex flex-col justify-between gap-6">
+                <div className="bg-black/40 border border-white/5 rounded-xl p-6 flex flex-col justify-between h-full relative overflow-hidden">
+                  <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-paper.png')] opacity-[0.02] pointer-events-none" />
+                  
+                  <div className="space-y-6">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-mono text-accent tracking-wider uppercase font-bold">
+                        🧠 COGNITIVE EFFICACY MANIFOLD RESONANCE
+                      </span>
+                      <p className="text-[10px] text-white/40 italic">
+                        調節極點偏移，微調自適應補償係數，全面提升四維智慧效能。
+                      </p>
+                    </div>
+
+                    {/* Airworthiness Gauge */}
+                    <div className="flex flex-col items-center justify-center py-6 border-y border-white/5 relative">
+                      <div className="text-center">
+                        <span className="text-[9px] font-mono text-white/30 tracking-[0.25em] uppercase block mb-1">
+                          COGNITIVE BALANCE RATING
+                        </span>
+                        <div className="text-4xl font-black font-display tracking-widest text-[#A3E635] drop-shadow-[0_0_15px_rgba(163,230,53,0.3)] animate-pulse uppercase">
+                          {data?.system_deblinded ? "EXCELLENT" : "BALANCED"}
+                        </div>
+                        <span className="text-[9px] font-mono tracking-widest uppercase block mt-2 px-3 py-1 bg-[#A3E635]/15 text-[#A3E635] rounded-full border border-[#A3E635]/20 inline-block">
+                          ✅ VEDA COREGUARD STATUS: OPTIMAL
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Optimization Status Dashboard */}
+                    <div className="space-y-3">
+                      <div className="w-full py-3 px-4 bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-bold font-mono text-[10.5px] uppercase tracking-[0.1em] rounded-xl flex items-center justify-between gap-1.5 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                        <div className="flex items-center gap-2.5">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                          </span>
+                          <span className="text-white/80">認知相干流形：主動推理背景微調中</span>
+                        </div>
+                        <span className="text-[8.5px] font-black bg-emerald-950/80 text-emerald-300 px-2.5 py-0.5 rounded border border-emerald-500/30">
+                          AUTON_ACTIVE
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Terminal Log Output */}
+                  <div className="flex-1 mt-6 min-h-[170px] max-h-[220px] bg-black/85 border border-white/10 rounded-xl p-4 font-mono text-[9px] leading-relaxed flex flex-col justify-between overflow-hidden relative">
+                    <div className="absolute top-2 right-4 text-[8px] text-white/20 uppercase tracking-widest">
+                      EFFICACY CONSOLE
+                    </div>
+                    <div className="flex-1 overflow-y-auto space-y-1.5 pr-2 custom-scrollbar text-white/60">
+                      {cognitiveLogs.length === 0 ? (
+                        <div className="text-white/30 italic">
+                          &gt;&gt; VEDA 內生認知共振通道連接中... 正在自主加載認知相干校調流。
+                        </div>
+                      ) : (
+                        cognitiveLogs.map((line, lIdx) => (
+                          <div key={lIdx} className="flex gap-2">
+                            <span className="text-accent/60 select-none">&gt;&gt;</span>
+                            <span className={line.startsWith("💡") ? "text-emerald-400 font-bold" : "text-white/75"}>{line}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

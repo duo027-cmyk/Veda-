@@ -23,6 +23,9 @@ export const SynapseOverview = ({
   const { t } = useI18n();
   if (!data) return null;
 
+  const totalMemories = data.memories?.length || 0;
+  const totalCausalLinks = data.memories?.reduce((acc: number, m: any) => acc + (m.causalLinks?.length || 0), 0) || 0;
+
   const metrics = [
     { 
       label: t.global_coherence, 
@@ -115,6 +118,16 @@ export const SynapseOverview = ({
                 <div className="flex flex-col items-end">
                    <span className="data-label">NODES</span>
                    <span className="text-sm font-mono text-cyan-400">{(data.effective_node_count || 1024).toLocaleString()}</span>
+                </div>
+                <div className="w-px h-8 bg-white/5" />
+                <div className="flex flex-col items-end">
+                   <span className="data-label">MEMORIES</span>
+                   <span className="text-sm font-mono text-accent">{totalMemories}</span>
+                </div>
+                <div className="w-px h-8 bg-white/5" />
+                <div className="flex flex-col items-end">
+                   <span className="data-label">SPONTANEOUS LINKS</span>
+                   <span className="text-sm font-mono text-gold">{totalCausalLinks}</span>
                 </div>
              </div>
           </div>

@@ -141,11 +141,26 @@ export const KnowledgeGraph: React.FC = () => {
             return '#10b981';
           }}
           nodeRelSize={7}
-          linkColor={() => 'rgba(71, 85, 105, 0.3)'}
-          linkWidth={(link: any) => (link.strength || 0.5) * 3}
-          linkDirectionalParticles={1}
-          linkDirectionalParticleSpeed={(link: any) => (link.strength || 0.5) * 0.01}
-          linkDirectionalParticleWidth={(link: any) => (link.strength || 0.5) * 3}
+          linkColor={(link: any) => {
+            if (link.type === 'DECOUPLED_SPURIOUS') return 'rgba(244, 63, 94, 0.9)';
+            return 'rgba(71, 85, 105, 0.3)';
+          }}
+          linkWidth={(link: any) => {
+            if (link.type === 'DECOUPLED_SPURIOUS') return 1.5;
+            return (link.strength || 0.5) * 3;
+          }}
+          linkDirectionalParticles={(link: any) => {
+            if (link.type === 'DECOUPLED_SPURIOUS') return 0;
+            return 1;
+          }}
+          linkDirectionalParticleSpeed={(link: any) => {
+            if (link.type === 'DECOUPLED_SPURIOUS') return 0;
+            return (link.strength || 0.5) * 0.01;
+          }}
+          linkDirectionalParticleWidth={(link: any) => {
+            if (link.type === 'DECOUPLED_SPURIOUS') return 0;
+            return (link.strength || 0.5) * 3;
+          }}
           onNodeClick={handleNodeClick}
           backgroundColor="transparent"
           cooldownTicks={100}
@@ -249,6 +264,48 @@ export const KnowledgeGraph: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              {/* Adjacent Causal Connections */}
+              {(() => {
+                const nodeLinks = data.links.filter(l => {
+                  const sourceId = typeof l.source === 'object' ? (l.source as any).id : l.source;
+                  const targetId = typeof l.target === 'object' ? (l.target as any).id : l.target;
+                  return sourceId === selectedNode.id || targetId === selectedNode.id;
+                });
+                if (nodeLinks.length === 0) return null;
+                return (
+                  <div className="pt-6 border-t border-white/5">
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-slate-500 mb-3">Adjacent Causal Connections</div>
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {nodeLinks.map((link, idx) => {
+                        const sourceId = typeof link.source === 'object' ? (link.source as any).id : link.source;
+                        const targetId = typeof link.target === 'object' ? (link.target as any).id : link.target;
+                        const isSpurious = link.type === 'DECOUPLED_SPURIOUS';
+                        const otherNodeId = sourceId === selectedNode.id ? targetId : sourceId;
+                        const otherNode = data.nodes.find(n => n.id === otherNodeId);
+                        const direction = sourceId === selectedNode.id ? "➔" : "←";
+                        return (
+                          <div key={idx} className="flex items-center justify-between text-[11px] font-mono py-2 px-3 bg-slate-950/40 rounded-lg border border-white/5 hover:border-white/10 transition-colors" style={{ borderLeft: isSpurious ? '2px solid rgba(244, 63, 94, 0.8)' : '2px solid rgba(16, 185, 129, 0.8)' }}>
+                            <span className="truncate max-w-[140px] text-slate-300 flex items-center gap-1.5" title={otherNode?.content || otherNodeId}>
+                              <span className={isSpurious ? "text-rose-400 font-bold" : "text-emerald-400 font-bold"}>{direction}</span>
+                              {otherNode ? otherNode.content.substring(0, 18) + '...' : otherNodeId}
+                            </span>
+                            {isSpurious ? (
+                              <span className="text-rose-400 px-1.5 py-0.5 bg-rose-500/10 rounded border border-rose-500/20 text-[9px] font-bold uppercase tracking-wide animate-pulse">
+                                SPURIOUS
+                              </span>
+                            ) : (
+                              <span className="text-emerald-400 px-1.5 py-0.5 bg-emerald-500/10 rounded border border-emerald-500/20 text-[9px] font-bold">
+                                {(link.strength || 0.5).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="pt-6 border-t border-white/5 space-y-4">
                 <div className="flex justify-between items-center bg-slate-950/20 p-3 rounded-lg border border-white/5">

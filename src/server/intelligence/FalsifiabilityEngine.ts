@@ -78,4 +78,8 @@ export class FalsifiabilityEngine {
   public getActiveChains() {
     return Array.isArray(this.hypotheses) ? this.hypotheses.filter(h => h && h.status === "ACTIVE") : [];
   }
+
+  public getHypotheses() {
+    return Array.isArray(this.hypotheses) ? this.hypotheses : [];
+  }
 }

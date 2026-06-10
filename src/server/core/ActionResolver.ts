@@ -205,6 +205,15 @@ export class ActionResolver {
         result.data = await this.brain.igniteUltimateSovereignty();
         break;
 
+      case "optimizeCognitiveCore":
+        if (this.brain.optimizeCognitiveCore) {
+          result.data = await this.brain.optimizeCognitiveCore();
+        } else {
+          result.success = false;
+          result.error = "optimizeCognitiveCore not implemented";
+        }
+        break;
+
       default:
         // Aerospace-Grade Sandboxed Call Protection: prevent dynamic invocation of dangerous prototype methods or internal system properties
         const forbiddenActions = ["constructor", "toString", "valueOf", "toLocaleString", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable", "__proto__", "prototype"];

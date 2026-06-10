@@ -4,7 +4,7 @@ import { BurstMode } from './intelligence';
 export interface CausalLink {
   targetId: string;
   strength: number;
-  type: 'SEMANTIC' | 'TEMPORAL' | 'LOGICAL';
+  type: 'SEMANTIC' | 'TEMPORAL' | 'LOGICAL' | 'DECOUPLED_SPURIOUS';
 }
 
 export interface MemoryFragment {
@@ -176,6 +176,7 @@ export interface IVedaBrain {
   getFederationNodes(): any[];
   toggleSystemDeblinded(params?: { active?: boolean }): Promise<{ success: boolean; is_deblinded: boolean }>;
   igniteUltimateSovereignty(): Promise<{ success: boolean; tier: string; proximity: number }>;
+  optimizeCognitiveCore?(): Promise<any>;
   demystifyText(params: { text: string }): Promise<{ success: boolean; translation: string }>;
   setComputeMode?(params: { mode: 'throughput' | 'precision' }): Promise<any>;
   pauseLatticeJob?(id: string, isPaused: boolean): boolean;
