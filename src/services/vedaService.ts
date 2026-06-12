@@ -61,6 +61,13 @@ export interface SystemState {
   };
 }
 
+const getActiveWorkspaceId = () => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('veda-active-workspace-id') || 'default';
+  }
+  return 'default';
+};
+
 async function fetchWithRetry(url: string, options?: RequestInit, retries = 5, delay = 1000, timeout = 60000): Promise<Response> {
   let targetUrl = url;
   
@@ -97,7 +104,7 @@ async function fetchWithRetry(url: string, options?: RequestInit, retries = 5, d
         credentials: credentialsStrategy,
         headers: {
           'Accept': 'application/json',
-          'x-veda-uid': auth?.currentUser?.uid || "CORE_ARCHITECT",
+          'x-veda-uid': `${auth?.currentUser?.uid || "CORE_ARCHITECT"}::${getActiveWorkspaceId()}`,
           ...options?.headers,
         }
       });
@@ -197,6 +204,14 @@ export const vedaService = {
   connectionListeners: new Set<(state: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED') => void>(),
   isWaitingForPong: false,
 
+  switchWorkspace() {
+    console.log("[VEDA_SERVICE] Switching academic workspace. Flashing cache databases and socket pipeline...");
+    invalidateCache();
+    if (this.socket) {
+      this.socket.close();
+    }
+  },
+
   setConnectionState(state: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED') {
     this.connectionState = state;
     this.connectionListeners.forEach(listener => {
@@ -237,8 +252,8 @@ export const vedaService = {
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.host;
-      const uid = auth?.currentUser?.uid || "CORE_ARCHITECT";
-      const socket = new WebSocket(`${protocol}//${host}?uid=${uid}`);
+      const uid = `${auth?.currentUser?.uid || "CORE_ARCHITECT"}::${getActiveWorkspaceId()}`;
+      const socket = new WebSocket(`${protocol}//${host}?uid=${encodeURIComponent(uid)}`);
 
       socket.onopen = () => {
         console.log("[VEDA_SOCKET] Logic link established.");
@@ -366,6 +381,9 @@ export const vedaService = {
         sovereign_confidence: finalResult.confidence || state?.sovereign_confidence,
         reasoning_mode: finalResult.reasoning_mode || state?.reasoning_mode,
         actions: finalResult.actions || [],
+        sources: finalResult.sources || null,
+        demystifiedText: finalResult.demystifiedText || null,
+        showDemystified: finalResult.showDemystified ?? true,
         thought_trace: currentTrace,
         isDone: true 
       };

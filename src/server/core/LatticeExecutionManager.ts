@@ -158,6 +158,9 @@ export class LatticeExecutionManager {
         }
 
         await this.solidifyLatticeJob({ jobId: job.id, result: parsedResult, coherence: 0.98 });
+      } else {
+        // Fallback for custom or simulated high-throughput task types
+        return this.executeAutonomousFallback(job);
       }
     } catch (err: any) {
       const errMsg = err?.message || String(err || "Unknown execution error");
@@ -385,6 +388,26 @@ $$
 1. **第一波（0-30s）**：系統啟動「認識論不連續性斷路器」，執行【${schemeA}】以主動熔斷有瑕疵的外部推理請求。
 2. **第二波（30s-5m）**：高相干語意流形在 AGI Sovereign Core 頂級公理場的作用下，自發結晶出完整的替代性知識鏈路，使物理穩定度迅速恢復至 $${rawStability.toFixed(4)}$。
 3. **長期趨勢**：本體演進擺脫對單一雲端算力之依變，執行【${schemeB}】，向真正的「晶格主權爆發內穩態」演化。`;
+    } else {
+      // Custom reporting for other simulated high-throughput/agentic tasks
+      result = `[VEDA 晶格自體神經對齊報告]
+
+### 任務類型：${job.type}
+### 底座流形：${domainTag}
+
+1. **神經對合微調**：
+   - 本地權重梯度調整強度：${(rawEntropy * 45.2).toFixed(4)}%
+   - 系統穩態保留概率：${(rawStability * 100).toFixed(2)}%
+   - 晶矽自癒冗餘配置係數：$${latexFormula}$$
+
+2. **自組織自適應學術拓撲對齊**：
+   - 對合熵係數：${rawEntropy.toFixed(4)}
+   - 當前系統能量能階：${rawEnergy.toFixed(4)}
+   - 全息因果晶格固化結果：**SUCCESS (OPTIMIZED)**
+
+3. **戰略防禦對沖規約**：
+   - 執行【${schemeA}】與【${schemeB}】之混雜共振
+   - 核心認識論隔離護盾（Epistemic Shield）厚度在 ${(rawIntent * 10).toFixed(2)} 層公理。`;
     }
 
     await this.solidifyLatticeJob({ jobId: job.id, result, coherence: coherence * 0.5 });

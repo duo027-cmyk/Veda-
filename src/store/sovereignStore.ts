@@ -10,6 +10,7 @@ export interface SovereignState {
   user: User | null;
   authReady: boolean;
   isArchitect: boolean;
+  isSandboxExplorer: boolean;
   
   // UI state
   view: ViewMode;
@@ -29,6 +30,7 @@ export interface SovereignState {
   setUser: (user: User | null) => void;
   setAuthReady: (ready: boolean) => void;
   initializeAuth: () => () => void;
+  toggleSandboxExplorer: () => void;
 
   // UI Actions
   setView: (view: ViewMode) => void;
@@ -45,6 +47,13 @@ export interface SovereignState {
   setIsPulsing: (isPulsing) => void;
   fetchVedaData: () => Promise<void>;
   handleAction: (action: string, params?: any) => Promise<void>;
+
+  // Workspaces state
+  activeWorkspace: { id: string, name: string };
+  workspaces: Array<{ id: string, name: string }>;
+  setActiveWorkspace: (id: string) => void;
+  addWorkspace: (name: string) => void;
+  deleteWorkspace: (id: string) => void;
 }
 
 const getInitialTheme = (): 'DARK' | 'LIGHT' => {
@@ -63,14 +72,44 @@ const getInitialView = (): ViewMode => {
   return 'DIALOGUE';
 };
 
+const getInitialWorkspaces = (): Array<{ id: string, name: string }> => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('veda-workspaces');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {}
+    }
+  }
+  return [
+    { id: 'default', name: 'Global Matrix' },
+    { id: 'financial_analyst', name: 'Strategic Financial Workspace' },
+    { id: 'deep_research', name: 'Cognitive Research Core' }
+  ];
+};
+
+const getInitialActiveWorkspace = (workspaces: Array<{ id: string, name: string }>): { id: string, name: string } => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('veda-active-workspace-id');
+    const found = workspaces.find(w => w.id === saved);
+    if (found) return found;
+  }
+  return workspaces[0];
+};
+
 // Module-scoped promise to deduplicate simultaneous/parallel fetch Veda data calls
 let activeFetchPromise: Promise<void> | null = null;
 
 export const useSovereignStore = create<SovereignState>((set, get) => ({
+  // Workspaces state
+  activeWorkspace: getInitialActiveWorkspace(getInitialWorkspaces()),
+  workspaces: getInitialWorkspaces(),
+
   // Auth state
   user: null,
   authReady: false,
   isArchitect: false,
+  isSandboxExplorer: false,
 
   // UI state
   view: getInitialView(),
@@ -90,7 +129,7 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
   setUser: (user) => {
     set({ 
       user, 
-      isArchitect: user?.email === 'duo027@gmail.com' 
+      isArchitect: (user?.email === 'duo027@gmail.com') || get().isSandboxExplorer
     });
   },
   
@@ -101,7 +140,7 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
       set({ 
         user, 
         authReady: true,
-        isArchitect: user?.email === 'duo027@gmail.com'
+        isArchitect: (user?.email === 'duo027@gmail.com') || get().isSandboxExplorer
       });
       // Automatically pull state when Auth changes
       if (user) {
@@ -109,6 +148,15 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
       }
     });
     return unsub;
+  },
+
+  toggleSandboxExplorer: () => {
+    const nextVal = !get().isSandboxExplorer;
+    const isOwner = get().user?.email === 'duo027@gmail.com';
+    set({
+      isSandboxExplorer: nextVal,
+      isArchitect: isOwner || nextVal
+    });
   },
 
   // UI Actions
@@ -328,6 +376,35 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
     } catch (e) {
       console.error("Action execution fail:", e);
       set({ lastLog: "PROTOCOL_FAILURE: Connection disrupted" });
+    }
+  },
+
+  setActiveWorkspace: (id) => {
+    const ws = get().workspaces.find(w => w.id === id);
+    if (ws) {
+      localStorage.setItem('veda-active-workspace-id', id);
+      set({ activeWorkspace: ws, userData: null, isLoading: true });
+      vedaService.switchWorkspace();
+      get().fetchVedaData().catch(() => {});
+    }
+  },
+
+  addWorkspace: (name) => {
+    const id = `ws_${Math.random().toString(36).substring(2, 9)}`;
+    const newWs = { id, name };
+    const updated = [...get().workspaces, newWs];
+    localStorage.setItem('veda-workspaces', JSON.stringify(updated));
+    set({ workspaces: updated });
+    get().setActiveWorkspace(id);
+  },
+
+  deleteWorkspace: (id) => {
+    if (id === 'default') return;
+    const filtered = get().workspaces.filter(w => w.id !== id);
+    localStorage.setItem('veda-workspaces', JSON.stringify(filtered));
+    set({ workspaces: filtered });
+    if (get().activeWorkspace.id === id) {
+      get().setActiveWorkspace('default');
     }
   }
 }));

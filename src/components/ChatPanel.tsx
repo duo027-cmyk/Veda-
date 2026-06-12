@@ -42,6 +42,8 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { vedaService } from '../services/vedaService';
 import { speechService } from '../services/speechService';
+import { localGradientBuffer } from '../services/localGradientBuffer';
+import { selfCorrectionEngine, SelfCorrectionMetrics } from '../services/selfCorrectionEngine';
 import { Reminder, GroundingSource } from '../types';
 import { FFLabel } from './FFLabel';
 import { cn } from '../lib/utils';
@@ -54,6 +56,7 @@ interface Message {
   role: 'user' | 'veda' | 'thought';
   text: string;
   timestamp: string;
+  ts?: number;
   sources?: GroundingSource[];
   imageUrl?: string;
   videoUrl?: string;
@@ -169,6 +172,29 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
   const [messages, setMessages] = useState<Message[]>([]);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(isFirestoreQuotaExceeded());
   const [input, setInput] = useState('');
+
+  // Local Gradient Buffer: capture typing speed & decision latency pattern
+  const lastPressRef = useRef<number>(0);
+  const typingStartRef = useRef<number>(0);
+  const strokeCountRef = useRef<number>(0);
+
+  const handleInputChange = (val: string) => {
+    setInput(val);
+    const now = Date.now();
+    if (strokeCountRef.current === 0) {
+      typingStartRef.current = now;
+    }
+    strokeCountRef.current += 1;
+    lastPressRef.current = now;
+
+    if (strokeCountRef.current % 4 === 0) {
+      const elapsedMin = (now - typingStartRef.current) / 60000;
+      if (elapsedMin > 0.005) {
+        const cpm = strokeCountRef.current / elapsedMin;
+        localGradientBuffer.recordPattern("TYPING_SPEED", Math.min(600, Math.max(30, cpm)));
+      }
+    }
+  };
   const [frictionWarning, setFrictionWarning] = useState<string | null>(null);
   const [isFrictionBypassed, setIsFrictionBypassed] = useState(false);
   const [architectName, setArchitectName] = useState('');
@@ -201,6 +227,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
   const [reminderToDelete, setReminderToDelete] = useState<string | null>(null);
   const [reminderFilter, setReminderFilter] = useState<'ALL' | 'PENDING' | 'COMPLETED'>('ALL');
   const [reminderSort, setReminderSort] = useState<'DATE_ASC' | 'DATE_DESC'>('DATE_ASC');
+  
+  // SelfCorrection Closed-Loop state config
+  const [isSelfCorrEnabled, setIsSelfCorrEnabled] = useState(true);
+  const [corrMetrics, setCorrMetrics] = useState<SelfCorrectionMetrics | null>(null);
+  const [lastCorrTime, setLastCorrTime] = useState<string>("");
+  const [showMetricsHud, setShowMetricsHud] = useState(false);
 
   const suggestions = [
     t.suggestions_greeting + t.suggestions_what_can_you_do,
@@ -338,7 +370,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
               id: 'initial',
               role: 'veda', 
               text: "系統已就緒。全球知識庫與即時數據已同步。請輸入您的指令或問題。", 
-              timestamp: new Date().toLocaleTimeString() 
+              timestamp: new Date().toLocaleTimeString(),
+              ts: Date.now()
             }
           ]);
         }
@@ -421,6 +454,42 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
     }
   }, [messages, isTyping, isAutoScrolling]);
 
+  useEffect(() => {
+    if (!isSelfCorrEnabled) return;
+    
+    const triggerCorrection = async () => {
+      if (messages.length === 0) return;
+      
+      const chatInteractions = messages.map(m => ({
+        role: m.role === 'veda' ? 'assistant' as const : m.role === 'thought' ? 'system' as const : 'user' as const,
+        text: m.text,
+        timestamp: m.ts || Date.now()
+      }));
+
+      try {
+        const persistence = await vedaService.getPersistence();
+        const currentIntent = persistence.settings?.vector_intent || [0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
+        
+        const result = await selfCorrectionEngine.executeSelfCorrection(currentIntent, chatInteractions);
+        if (result.isUpdated || result.metrics.reason !== "NO_ACTIVE_TRANSMISSIONS") {
+          setCorrMetrics(result.metrics);
+          setLastCorrTime(new Date().toLocaleTimeString());
+          const event = new CustomEvent('veda_intent_self_corrected', { detail: { newIntent: result.newIntent } });
+          window.dispatchEvent(event);
+        }
+      } catch (err) {
+        console.warn("[SELF_CORRECTION] Failed closed-loop alignment cycle:", err);
+      }
+    };
+
+    const bootTimer = setTimeout(triggerCorrection, 4000);
+    const interval = setInterval(triggerCorrection, 25000);
+    return () => {
+      clearTimeout(bootTimer);
+      clearInterval(interval);
+    };
+  }, [messages, isSelfCorrEnabled]);
+
   // Listen for proactive reminders from App.tsx
   useEffect(() => {
     const handleProactive = (e: any) => {
@@ -482,6 +551,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
   };
 
   const handleSend = async (overrideText?: string) => {
+    // Record decision latency of writing/sending the signal
+    if (typingStartRef.current > 0) {
+      const latencyMs = Date.now() - typingStartRef.current;
+      localGradientBuffer.recordPattern("DECISION_LATENCY", Math.min(6000, latencyMs));
+      typingStartRef.current = 0;
+      strokeCountRef.current = 0;
+    }
+
     const textToSend = overrideText || input;
     if (((!textToSend || !textToSend.trim()) && !selectedImage) || isTyping || loading || isDreaming) return;
 
@@ -502,6 +579,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
       role: 'user',
       text: textToSend || (selectedImage ? "分析此圖片" : ""),
       timestamp: new Date().toLocaleTimeString(),
+      ts: Date.now(),
       userImage: selectedImage || null
     };
 
@@ -527,6 +605,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
         role: 'veda',
         text: "",
         timestamp: new Date().toLocaleTimeString(),
+        ts: Date.now(),
         isStreaming: true
       }]);
 
@@ -666,7 +745,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
         id: `error-${Date.now()}`,
         role: 'veda',
         text: "系統處理異常，請檢查日誌或重試。",
-        timestamp: new Date().toLocaleTimeString()
+        timestamp: new Date().toLocaleTimeString(),
+        ts: Date.now()
       }]);
     } finally {
       setIsTyping(false);
@@ -691,7 +771,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
         id: 'reset',
         role: 'veda', 
         text: t.system_crystallized || "認識論已重置。當前因果鏈已清零，系統回歸初始狀態。", 
-        timestamp: new Date().toLocaleTimeString() 
+        timestamp: new Date().toLocaleTimeString(),
+        ts: Date.now()
       }]);
       setShowClearConfirm(false);
       console.log("[VEDA_RESET] Causal chain purged successfully.");
@@ -1470,6 +1551,71 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
                 )}
               </AnimatePresence>
 
+              {/* Closed-Loop Self-Repair / SelfCorrectionEngine Status Bar */}
+              <div className="mb-4 p-2.5 bg-white/[0.02] border border-white/5 rounded-none flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BrainCircuit className={cn("w-3.5 h-3.5 text-cyan-400", isSelfCorrEnabled && "animate-pulse")} />
+                    <span className="text-[9px] font-black tracking-[0.25em] text-white/70 uppercase ff-font">
+                      自修復對齊引擎 / CLOSED-LOOP AUTO-CORRECTION
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-[8px] font-mono text-white/40">
+                      {isSelfCorrEnabled ? "ACTIVE (LOCAL_ONLY)" : "PAUSED"}
+                    </span>
+                    <button 
+                      onClick={() => {
+                        setIsSelfCorrEnabled(!isSelfCorrEnabled);
+                        selfCorrectionEngine.setEnabled(!isSelfCorrEnabled);
+                      }}
+                      className={cn(
+                        "text-[8px] font-bold px-2 py-0.5 border uppercase tracking-wider transition-all",
+                        isSelfCorrEnabled 
+                          ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/20" 
+                          : "bg-white/5 border-white/10 text-white/40 hover:text-white"
+                      )}
+                    >
+                      {isSelfCorrEnabled ? "DISABLE" : "ENABLE"}
+                    </button>
+                  </div>
+                </div>
+
+                {isSelfCorrEnabled && corrMetrics && (
+                  <div className="text-[8px] font-mono flex flex-col gap-1 text-white/60 pl-5 border-l border-cyan-500/20">
+                    <div className="flex justify-between items-center">
+                      <span className="text-white/40 font-bold">5M CADENCE PROFILE:</span>
+                      <span className="text-cyan-300 font-bold tracking-wider">{corrMetrics.reason}</span>
+                    </div>
+                    <div className="grid grid-cols-6 gap-1.5 mt-1 text-center">
+                      {[
+                        { label: "COH", val: corrMetrics.coherenceDelta },
+                        { label: "ENT", val: corrMetrics.entropyDelta },
+                        { label: "BIAS", val: corrMetrics.biasDelta },
+                        { label: "RES", val: corrMetrics.resonanceDelta },
+                        { label: "PHI", val: corrMetrics.phiDelta },
+                        { label: "FREQ", val: corrMetrics.frequencyDelta }
+                      ].map((m) => (
+                        <div key={m.label} className="bg-white/[0.03] p-1 border border-white/5 flex flex-col gap-0.5">
+                          <span className="opacity-40 text-[7px]">{m.label}</span>
+                          <span className={cn(
+                            "font-bold text-[7px]",
+                            m.val > 0 ? "text-cyan-400" : m.val < 0 ? "text-rose-400" : "opacity-30"
+                          )}>
+                            {m.val > 0 ? `+${m.val}` : m.val}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    {lastCorrTime && (
+                      <div className="text-[7px] text-white/30 text-right mt-1">
+                        LAST CALIBRATED CYCLE: {lastCorrTime}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Suggestions */}
               {showSuggestions && !selectedImage && input.length === 0 && (
                 <div className="mb-4">
@@ -1530,7 +1676,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = React.memo(({
                   <input
                     type="text"
                     value={input}
-                    onChange={(e) => setInput(e.target.value)}
+                    onChange={(e) => handleInputChange(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                     placeholder="注入神經查詢或上傳圖面..."
                     className="w-full bg-white/10 border border-white/20 rounded-none py-4 pl-12 pr-24 text-sm focus:outline-none focus:border-cyan-400/50 transition-colors placeholder:opacity-40 text-white ff-font"

@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { SovereignMatrixCore } from "../lib/matrixCore";
 
 export interface MemoryEntry {
   id: string;
@@ -31,11 +32,8 @@ export class MemoryManager {
   }
 
   private normalize(vec: number[]): number[] {
-    let norm = 0;
-    for (const v of vec) norm += v * v;
-    norm = Math.sqrt(norm);
-    if (norm === 0) return vec;
-    return vec.map(v => v / norm);
+    const float64 = SovereignMatrixCore.fastNormalize(vec);
+    return Array.from(float64);
   }
 
   private async getEmbedding(text: string): Promise<number[]> {
@@ -67,27 +65,7 @@ export class MemoryManager {
   }
 
   private cosineSimilarity(vecA: number[], vecB: number[]): number {
-    if (vecA.length !== vecB.length || vecA.length === 0) return 0;
-    
-    // Optimization: Pre-normalized dot product
-    // Since we now pre-normalize embeddings, this is just a dot product.
-    let dotProduct = 0;
-    const len = vecA.length;
-    
-    // Loop unrolling for SIMD-like performance (4-way)
-    let i = 0;
-    for (; i <= len - 4; i += 4) {
-      dotProduct += vecA[i] * vecB[i] +
-                   vecA[i+1] * vecB[i+1] +
-                   vecA[i+2] * vecB[i+2] +
-                   vecA[i+3] * vecB[i+3];
-    }
-    // Handle remaining elements
-    for (; i < len; i++) {
-      dotProduct += vecA[i] * vecB[i];
-    }
-    
-    return dotProduct;
+    return SovereignMatrixCore.fastCosineSimilarity(vecA, vecB);
   }
 
   private generateId(): string {

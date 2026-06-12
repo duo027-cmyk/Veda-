@@ -53,6 +53,7 @@ export class InferenceEngine {
   private logger: (type: string, msg: string) => void;
   private nativeEngine: NativeBackupReasoningEngine;
   private lastThoughtTrace: any[] = [];
+  private lastGroundingSources: any[] = [];
 
   constructor(geminiService: GeminiService, logger?: (type: string, msg: string) => void) {
     this.geminiService = geminiService;
@@ -62,6 +63,10 @@ export class InferenceEngine {
 
   public getLastThoughtTrace(): any[] {
     return this.lastThoughtTrace;
+  }
+
+  public getLastGroundingSources(): any[] {
+    return this.lastGroundingSources || [];
   }
 
   /**
@@ -288,27 +293,65 @@ ${inputText}
         topP: 0.95
       };
 
+      // Dynamic Google Search Grounding trigger based on input heuristics
+      const isSearchKeyword = cleanText.includes("搜尋") || 
+                              cleanText.includes("網上查") || 
+                              cleanText.includes("上網") || 
+                              cleanText.includes("查詢") || 
+                              cleanText.includes("最新") ||
+                              cleanText.includes("天氣") ||
+                              cleanText.includes("新聞") ||
+                              cleanText.includes("what") ||
+                              cleanText.includes("who") ||
+                              cleanText.includes("how") ||
+                              cleanText.includes("explain") ||
+                              cleanText.includes("什麼") ||
+                              cleanText.includes("哪裡") ||
+                              cleanText.includes("誰");
+
+      const isVEDASelfRef = cleanText.includes("你是誰") ||
+                            cleanText.includes("你的設計") ||
+                            cleanText.includes("veda") ||
+                            cleanText.includes("能級") ||
+                            cleanText.includes("律法") ||
+                            cleanText.includes("公理") ||
+                            cleanText.includes("憲法");
+
+      const enableGrounding = isSearchKeyword && !isVEDASelfRef;
+
+      if (enableGrounding) {
+        configObj.tools = [{ googleSearch: {} }];
+        this.logger("GROUNDING", "Adding Google Search Grounding tool for encyclopedic fact and news integrity.");
+      }
+
       if (payload.isDeepThinking) {
         configObj.thinkingConfig = {
           thinkingBudget: 4096
         };
       }
 
-      this.logger("GENAI_INFERENCE", `Preparing content generation with model: ${selectedModel}, mode: ${isWarfareFocus ? 'WARFARE' : 'GENERAL'}, discussion: ${isDiscussion}`);
+      this.logger("GENAI_INFERENCE", `Preparing content generation with model: ${selectedModel}, mode: ${isWarfareFocus ? 'WARFARE' : 'GENERAL'}, discussion: ${isDiscussion}, grounding: ${enableGrounding}`);
 
-      const response = await this.geminiService.generateContent({
+      this.lastGroundingSources = [];
+      const responseObj = await this.geminiService.generateContentWithGrounding({
         model: selectedModel,
         contents: userContent,
         config: configObj
       });
 
-      if (!response) {
+      if (!responseObj) {
         this.logger("AUTONOMY_OVERRIDE", "Gemini returned empty. Falling back.");
         return this.generateAutonomousLocalResponse(inputText, payload);
       }
 
-      return this.verifyAndOptimizeConsistency(response, payload);
+      if (responseObj.sources && responseObj.sources.length > 0) {
+        this.lastGroundingSources = responseObj.sources;
+        this.logger("GROUNDING_SOURCES", `Successfully extracted ${responseObj.sources.length} grounding citations from Google Search.`);
+      }
+
+      return this.verifyAndOptimizeConsistency(responseObj.text, payload);
     } catch (e) {
+      this.lastGroundingSources = [];
       this.logger("AUTONOMY_OVERRIDE", `Gemini inference failed: ${e instanceof Error ? e.message : String(e)}. Falling back.`);
       return this.generateAutonomousLocalResponse(inputText, payload);
     }

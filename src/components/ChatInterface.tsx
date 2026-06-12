@@ -13,7 +13,10 @@ import {
   Copy,
   Check,
   Code,
-  Sparkles
+  Sparkles,
+  Globe,
+  ExternalLink,
+  Volume2
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
@@ -23,6 +26,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useI18n } from '../i18n';
 import { vedaService } from '../services/vedaService';
+import { speechService } from '../services/speechService';
 import { VedaCrystalLogo } from './VedaCrystalLogo';
 import { ThoughtTrace } from './ThoughtTrace';
 import { exportReportToPDF } from '../lib/reportUtils';
@@ -96,6 +100,7 @@ interface Message {
   showDemystified?: boolean;
   demystifiedText?: string;
   isDemystifying?: boolean;
+  sources?: any[];
 }
 
 export const ChatInterface = () => {
@@ -109,7 +114,15 @@ export const ChatInterface = () => {
   const [showProfile, setShowProfile] = useState(false);
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(isFirestoreQuotaExceeded());
   const [userProfile, setUserProfile] = useState({ displayName: '', interests: '' });
+  const [playingMsgIndex, setPlayingMsgIndex] = useState<number | null>(null);
+  const [copiedMsgIndex, setCopiedMsgIndex] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    return () => {
+      speechService.stop();
+    };
+  }, []);
 
   useEffect(() => {
     return onQuotaChange((exceeded) => {
@@ -216,7 +229,8 @@ export const ChatInterface = () => {
                   trace: chunk.thought_trace || m.trace,
                   actions: chunk.actions || m.actions,
                   demystifiedText: chunk.demystifiedText !== undefined ? chunk.demystifiedText : m.demystifiedText,
-                  showDemystified: chunk.showDemystified !== undefined ? chunk.showDemystified : m.showDemystified
+                  showDemystified: chunk.showDemystified !== undefined ? chunk.showDemystified : m.showDemystified,
+                  sources: chunk.sources !== undefined ? chunk.sources : m.sources
                 };
               }
               return m;
@@ -317,9 +331,70 @@ export const ChatInterface = () => {
     }
   };
 
+  const handleToggleSpeak = (text: string, idx: number, msg: Message) => {
+    if (playingMsgIndex === idx) {
+      speechService.stop();
+      setPlayingMsgIndex(null);
+    } else {
+      speechService.stop();
+      const speakText = (msg.showDemystified && msg.demystifiedText) ? msg.demystifiedText : text;
+      // Clean markdown structures from speakText so it sounds highly professional
+      const cleanedText = speakText
+        .replace(/([#*`_\-\[\]\(\)\n])/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      speechService.speak(cleanedText);
+      setPlayingMsgIndex(idx);
+    }
+  };
+
+  const handleCopyText = (text: string, idx: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedMsgIndex(idx);
+    setTimeout(() => setCopiedMsgIndex(null), 2000);
+  };
+
+  const exportChatHistoryToMarkdown = () => {
+    if (messages.length === 0) return;
+    const dateStr = new Date().toISOString().split('T')[0];
+    let markdownContent = `# VEDA Sovereign Epistemic Dialogue History\n`;
+    markdownContent += `*Generated on: ${new Date().toLocaleString()}*\n\n---\n\n`;
+    
+    messages.forEach((msg, i) => {
+      const roleName = msg.role === 'user' ? 'USER' : 'VEDA AGENT';
+      const timeStr = msg.ts ? new Date(msg.ts).toLocaleTimeString() : '';
+      markdownContent += `### [${timeStr}] ${roleName}:\n`;
+      markdownContent += `${msg.text}\n\n`;
+      if (msg.demystifiedText) {
+        markdownContent += `> **Decoded Plain Text (白話譯文):**\n`;
+        markdownContent += `> ${msg.demystifiedText}\n\n`;
+      }
+      markdownContent += `---\n\n`;
+    });
+
+    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `veda_dialogue_${dateStr}.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="h-full flex flex-col pt-24 md:pt-32 pb-24 md:pb-8 px-4 md:px-6 lg:px-32 max-w-6xl mx-auto relative">
       <div className="absolute top-8 right-8 z-[1001] flex gap-2">
+         {messages.length > 0 && (
+           <button 
+             onClick={exportChatHistoryToMarkdown}
+             className="px-3 py-1 flex items-center gap-2 text-[9px] font-mono border border-border-subtle hover:border-cyan-500/30 hover:bg-cyan-500/5 text-cyan-400 hover:text-cyan-300 transition-all shadow-md"
+             title="EXPORT DIALOGUE AS MARKDOWN"
+           >
+             <Download size={12} />
+             <span className="hidden sm:inline">EXPORT MD</span>
+           </button>
+         )}
          {auth.currentUser && (
            <button 
              onClick={() => setShowProfile(!showProfile)}
@@ -543,9 +618,31 @@ export const ChatInterface = () => {
                       </div>
                    </motion.div>
                 )}
-               </div>
+                </div>
 
-               {msg.role === 'veda' && (
+                {msg.sources && msg.sources.length > 0 && (
+                  <div className="mt-2.5 px-6 py-2.5 bg-black/10 border border-white/5 rounded-none text-xs space-y-2 max-w-full">
+                    <div className="flex items-center gap-2 text-[10px] opacity-60 uppercase tracking-widest font-black text-white font-mono">
+                      <Globe className="w-3.5 h-3.5 text-cyan-400" /> {t.grounding_sources_label}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {msg.sources.map((source, idx) => (
+                        <a 
+                          key={`source-${idx}-${source.web?.uri || idx}`}
+                          href={source.web?.uri}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/10 text-[9px] hover:bg-white/15 hover:border-cyan-400/50 transition-all max-w-[200px] font-mono text-white/90"
+                        >
+                          <span className="truncate text-white/80">{source.web?.title || t.knowledge_nodes}</span>
+                          <ExternalLink className="w-2.5 h-2.5 opacity-50 flex-shrink-0 text-white" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {msg.role === 'veda' && (
                  <div className="px-6 flex items-center gap-6 mt-1.5 flex-wrap">
                     {msg.mode && (
                        <div className="flex items-center gap-2">
@@ -589,6 +686,45 @@ export const ChatInterface = () => {
                           ? "SHOW ACADEMIC" 
                           : "白話解碼"
                       }
+                    </button>
+
+                    {/* Copy message button */}
+                    <button
+                      onClick={() => handleCopyText(msg.text, idx)}
+                      className={cn(
+                        "flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono tracking-wider transition-all border active:scale-95",
+                        copiedMsgIndex === idx 
+                          ? "bg-green-500/10 text-green-400 border-green-500/30 shadow-[0_0_8px_rgba(34,197,94,0.2)]"
+                          : "text-ink/40 border-border-subtle hover:text-green-400 hover:border-green-500/30 hover:bg-green-500/5 hover:opacity-100"
+                      )}
+                      title="複製對話內容 / Copy content"
+                    >
+                      {copiedMsgIndex === idx ? (
+                        <>
+                          <Check size={10} className="text-green-400" />
+                          <span>已複製</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={10} />
+                          <span>複製</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Speech synthesis play button */}
+                    <button
+                      onClick={() => handleToggleSpeak(msg.text, idx, msg)}
+                      className={cn(
+                        "flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono tracking-wider transition-all border active:scale-95",
+                        playingMsgIndex === idx 
+                          ? "bg-cyan-500/10 text-cyan-300 border-cyan-500/30 shadow-[0_0_8px_rgba(6,182,212,0.2)] animate-pulse"
+                          : "text-ink/40 border-border-subtle hover:text-cyan-400 hover:border-cyan-500/30 hover:bg-cyan-500/5 hover:opacity-100"
+                      )}
+                      title="語音播報 / Vocalize Synthesizer"
+                    >
+                      <Volume2 size={10} className={cn("text-cyan-400", playingMsgIndex === idx && "animate-bounce")} />
+                      {playingMsgIndex === idx ? "靜音" : "朗讀"}
                     </button>
                  </div>
                )}

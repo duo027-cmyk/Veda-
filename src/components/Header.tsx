@@ -1,17 +1,22 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Zap, Sun, Moon, Sliders } from 'lucide-react';
+import { Zap, Sun, Moon, Sliders, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { VedaCrystalLogo } from './VedaCrystalLogo';
 import { useVedaStore } from '../store/vedaStore';
 import { useUIStore } from '../store/uiStore';
+import { useAuthStore } from '../store/authStore';
+import { WorkspaceSelector } from './WorkspaceSelector';
 
 export const Header = () => {
   const { userData } = useVedaStore();
   const { setShowBurstMonitor, showBurstMonitor, theme, toggleTheme, showControlPanel, setShowControlPanel } = useUIStore();
+  const { isSandboxExplorer, toggleSandboxExplorer } = useAuthStore();
 
   return (
     <header className="fixed top-0 left-0 md:left-24 right-0 h-24 md:h-40 flex items-center justify-between pointer-events-none z-[100] px-6 md:px-12 pt-4 md:pt-12">
-      <div className="flex-1" />
+      <div className="flex-1 select-none pointer-events-auto hidden md:block">
+        <WorkspaceSelector />
+      </div>
       <div className="relative group flex items-center gap-4 md:gap-8 translate-y-[0px] md:translate-y-[-10px] pointer-events-auto">
         <VedaCrystalLogo size={30} className="md:w-[50px] md:h-[50px]" />
         <div className="flex flex-col">
@@ -50,7 +55,23 @@ export const Header = () => {
         <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-10 scale-100 md:scale-150 blur-2xl md:blur-3xl w-48 md:w-64 h-48 md:h-64 bg-accent/10 rounded-full animate-float pointer-events-none" />
       </div>
 
-      <div className="flex-1 flex justify-end gap-3">
+      <div className="flex-1 flex justify-end items-center gap-3">
+        {/* Sandbox Explorer Mode Button for Demo Experience */}
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={toggleSandboxExplorer}
+          className={`pointer-events-auto px-3 py-1.5 rounded-full border shadow-xl flex items-center gap-1.5 transition-all text-[8px] font-mono font-bold tracking-wider ${
+            isSandboxExplorer 
+              ? 'border-green-500/50 text-green-400 bg-green-500/10 shadow-[0_0_12px_rgba(34,197,94,0.25)]' 
+              : 'border-border-subtle bg-panel text-ink/50 hover:text-green-400 hover:border-green-500/30'
+          }`}
+          title="Toggle Sandbox Explorer mode to access Sovereign configuration panels"
+        >
+          {isSandboxExplorer ? <ShieldCheck size={12} className="text-green-400 animate-pulse" /> : <ShieldAlert size={12} />}
+          <span>{isSandboxExplorer ? "EXPLORING_MODE: ACTIVE" : "EXPLORE CORE"}</span>
+        </motion.button>
+
         <motion.button
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}

@@ -199,11 +199,17 @@ export default function App() {
     document.addEventListener("visibilitychange", handleVisibilityOrFocus);
     window.addEventListener("focus", handleVisibilityOrFocus);
 
+    const handleSelfCorrected = () => {
+      fetchVedaData();
+    };
+    window.addEventListener('veda_intent_self_corrected', handleSelfCorrected);
+
     return () => {
       if (fallbackTimer) clearTimeout(fallbackTimer);
       unsubscribeConnection();
       document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
       window.removeEventListener("focus", handleVisibilityOrFocus);
+      window.removeEventListener('veda_intent_self_corrected', handleSelfCorrected);
     };
   }, [fetchVedaData, setUserData]);
 

@@ -413,4 +413,56 @@ export class GeminiService {
       throw err;
     }
   }
+
+  /**
+   * Expose safe access to the active patched GoogleGenAI client
+   */
+  public getAi(): GoogleGenAI | null {
+    this.syncClient();
+    return this.ai;
+  }
+
+  /**
+   * Safe generation that also extracts Google Search or Google Maps grounding sources and metadata
+   */
+  public async generateContentWithGrounding(params: {
+    model: string;
+    contents: string | any;
+    config?: any;
+  }): Promise<{ text: string; sources?: any[] } | null> {
+    this.syncClient();
+
+    if (this.getBlockedStatus() || !this.ai || this.currentKey === "DISABLED_KEY") {
+      this.logger("WARNING", "Inference with grounding bypassed: Client is offline.");
+      return null;
+    }
+
+    try {
+      const response = await this.ai.models.generateContent({
+        model: params.model,
+        contents: params.contents,
+        config: params.config,
+      });
+
+      const text = response.text || "";
+      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const sources: any[] = [];
+      for (const chunk of chunks) {
+        if (chunk.web) {
+          sources.push({
+            web: {
+              uri: chunk.web.uri || "",
+              web: chunk.web.uri || "",
+              title: chunk.web.title || "來源點"
+            }
+          });
+        }
+      }
+
+      return { text, sources };
+    } catch (err: any) {
+      this.handleError(err);
+      throw err;
+    }
+  }
 }

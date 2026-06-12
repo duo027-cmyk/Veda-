@@ -346,56 +346,64 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
           className="fixed lg:absolute bottom-0 right-0 top-auto lg:top-8 lg:bottom-8 w-full lg:w-96 z-[60] flex flex-col gap-0 pointer-events-auto ff-panel ff-panel-accent rounded-none p-0 max-h-[85vh] lg:max-h-none overflow-y-auto lg:overflow-visible shadow-[-20px_0_60px_rgba(0,0,0,0.8)]"
         >
           {/* Module Selector */}
-          <div className="px-6 py-5 border-b border-white/5 bg-white/5 flex items-center justify-between sticky top-0 z-10 backdrop-blur-md">
-            <div className="flex items-center gap-3">
-              <Settings className="w-4 h-4 text-purple-400/60" strokeWidth={1} />
-              <select 
-                value={activeModule} 
-                onChange={(e) => setActiveModule(e.target.value as any)}
-                className="bg-transparent text-[10px] uppercase tracking-[0.3em] font-black text-white/80 outline-none cursor-pointer ff-font-serif hover:text-white transition-colors"
-              >
-                <option value="ALL" className="bg-[#020005]">SOVEREIGN CORE</option>
-                <option value="FEDERATION" className="bg-[#020005]">SWARM ARRAY</option>
-                <option value="ANALYSIS" className="bg-[#020005]">ANALYSIS</option>
-                <option value="INTENT" className="bg-[#020005]">INTENT</option>
-                <option value="MEMORIES" className="bg-[#020005]">MEMORIES</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => {
-                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const link = document.createElement('a');
-                  link.href = url;
-                  link.download = `VEDA_SYSTEM_STATE_${Date.now()}.json`;
-                  link.click();
-                  URL.revokeObjectURL(url);
-                }}
-                className="p-1.5 text-white/20 hover:text-white/60 transition-colors"
-                title="DOWNLOAD SYSTEM STATE"
-              >
-                <Download className="w-3.5 h-3.5" />
-              </button>
-              <div className="w-px h-4 bg-white/10 mx-1" />
-              <button 
-                onClick={onClose}
-                className="p-1.5 text-white/20 hover:text-red-400 transition-colors"
-                title="CLOSE PANEL"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-              <div className="text-[8px] opacity-20 font-bold ff-font tracking-[0.4em] uppercase hidden sm:block">
-                VEDA_v24.4
+          <div className="px-6 py-4 border-b border-white/5 bg-slate-950/80 sticky top-0 z-10 backdrop-blur-md flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Settings className="w-3.5 h-3.5 text-accent animate-spin-slow" />
+                <span className="text-[10px] font-mono font-bold tracking-[0.2em] text-slate-300">SUBSYSTEM CONFIGURATION</span>
               </div>
-              {onClose && (
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => {
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `VEDA_SYSTEM_STATE_${Date.now()}.json`;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="p-1 text-slate-400 hover:text-accent transition-colors"
+                  title="DOWNLOAD SYSTEM STATE"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                </button>
+                <div className="w-px h-3 bg-white/10" />
                 <button 
                   onClick={onClose}
-                  className="lg:hidden p-1 hover:bg-white/10 transition-colors"
+                  className="p-1 text-slate-400 hover:text-rose-400 transition-colors"
+                  title="CLOSE PANEL"
                 >
-                  <ChevronDown className="w-4 h-4 text-white/40" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
-              )}
+              </div>
+            </div>
+            
+            {/* Segmented Sub-item Buttons Controls */}
+            <div className="flex gap-1 overflow-x-auto no-scrollbar pb-1">
+              {[
+                { id: 'ALL', label: 'CORE' },
+                { id: 'FEDERATION', label: 'SWARM' },
+                { id: 'ANALYSIS', label: 'ANALYSIS' },
+                { id: 'INTENT', label: 'INTENT' },
+                { id: 'MEMORIES', label: 'MEMORIES' }
+              ].map((subItem) => {
+                const isSelected = activeModule === subItem.id;
+                return (
+                  <button
+                    key={subItem.id}
+                    onClick={() => setActiveModule(subItem.id as any)}
+                    className={cn(
+                      "px-2.5 py-1 text-[9px] font-mono tracking-widest uppercase transition-all shrink-0 rounded border",
+                      isSelected 
+                        ? "bg-accent/15 border-accent/35 text-accent font-black shadow-[0_0_8px_rgba(255,244,191,0.08)]"
+                        : "border-transparent text-slate-400 hover:text-white hover:bg-white/[0.02]"
+                    )}
+                  >
+                    {subItem.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

@@ -526,7 +526,7 @@ export const PalantirAIPDashboard: React.FC<PalantirAIPDashboardProps> = ({
                     </div>
                     <div className="flex justify-between items-center text-xs mt-1">
                       <span>Uptime Integration:</span>
-                      <span className="text-ink-bright font-mono">{(process.uptime() || 120).toFixed(0)} seconds</span>
+                      <span className="text-ink-bright font-mono">{((performance.now() / 1000) || 120).toFixed(0)} seconds</span>
                     </div>
                   </div>
 

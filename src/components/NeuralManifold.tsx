@@ -1,9 +1,10 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { motion, AnimatePresence } from 'motion/react';
-import { Share2, Shield, Database, Trash2, Zap, X } from 'lucide-react';
+import { Share2, Shield, Database, Trash2, Zap, X, Activity } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { knbService, type KnowledgeFragment } from '../services/knbService';
+import { localGradientBuffer } from '../services/localGradientBuffer';
 
 interface ManifoldNode {
   id: string;
@@ -25,6 +26,42 @@ export const NeuralManifold = ({ onSync }: { onSync?: () => void }) => {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const fgRef = useRef<any>(null);
+  const [tick, setTick] = useState(0);
+
+  const [gradientStats, setGradientStats] = useState({
+    gradientNorm: 0.052,
+    alignedEntropy: 0.18,
+    intensity: 0.5,
+  });
+
+  // Smooth trig animation oscillation
+  useEffect(() => {
+    let animId = requestAnimationFrame(function anim() {
+      setTick(t => (t + 1) % 100000);
+      animId = requestAnimationFrame(anim);
+    });
+    return () => cancelAnimationFrame(animId);
+  }, []);
+
+  // Sync real-time weights and gradient parameters from localGradientBuffer
+  useEffect(() => {
+    const updateStats = async () => {
+      const stats = await localGradientBuffer.calculateOptimizationVector();
+      setGradientStats(stats);
+      
+      // Dynamic D3 physics adjustment based on live weight gradient tuning
+      if (fgRef.current) {
+        const fg = fgRef.current;
+        fg.d3Force('charge')?.strength(-35 - stats.intensity * 45);
+        fg.d3Force('link')?.distance(35 + stats.alignedEntropy * 55);
+        fg.d3ReheatSimulation();
+      }
+    };
+
+    updateStats();
+    const interval = setInterval(updateStats, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -106,6 +143,15 @@ export const NeuralManifold = ({ onSync }: { onSync?: () => void }) => {
           const textWidth = ctx.measureText(label).width;
           const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.4);
 
+          // Dynamic pulsing aura reflecting real-time weights/gradients adjustment
+          const pulseRadius = 5 + Math.sin(tick * 0.05 + parseFloat(node.id || '0')) * (gradientStats.intensity * 6);
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, pulseRadius, 0, 2 * Math.PI, false);
+          ctx.fillStyle = node.metadata?.source === 'COLLECTIVE' 
+            ? `rgba(242, 125, 38, ${0.05 + gradientStats.intensity * 0.12})` 
+            : `rgba(139, 92, 246, ${0.04 + gradientStats.intensity * 0.1})`; // standard accent purple or orange
+          ctx.fill();
+
           ctx.fillStyle = node.metadata?.source === 'COLLECTIVE' ? 'rgba(242, 125, 38, 0.1)' : 'rgba(255, 255, 255, 0.05)';
           ctx.fillRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] / 2, bckgDimensions[0], bckgDimensions[1]);
 
@@ -177,6 +223,94 @@ export const NeuralManifold = ({ onSync }: { onSync?: () => void }) => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Real-time Weight & Gradient HUD */}
+      <div className="absolute bottom-12 left-12 z-50 flex flex-col gap-4 max-w-sm pointer-events-auto">
+        <div className="ghibli-glass mano-border p-6 rounded-2xl flex flex-col gap-4 backdrop-blur-3xl shadow-lg border border-white/5 bg-panel/90 text-left">
+          <div className="flex items-center justify-between border-b border-white/5 pb-3">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-accent animate-pulse" />
+              <span className="text-[10px] tracking-[0.25em] font-mono uppercase text-ink font-bold">
+                Local Gradient Telemetry
+              </span>
+            </div>
+            <span className="text-[8px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-widest animate-pulse">
+              Active Align
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="flex flex-col">
+              <span className="text-[8px] font-mono text-white/40 uppercase tracking-wider mb-1">Gradient Norm</span>
+              <span className="text-xs font-mono text-white font-semibold">
+                {gradientStats.gradientNorm.toFixed(6)}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[8px] font-mono text-white/40 uppercase tracking-wider mb-1">Aligned Entropy</span>
+              <span className="text-xs font-mono text-accent font-semibold">
+                {gradientStats.alignedEntropy.toFixed(4)}
+              </span>
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[8px] font-mono text-white/40 uppercase tracking-wider mb-1">Backprop Force</span>
+              <span className="text-xs font-mono text-gold font-semibold">
+                {(gradientStats.intensity * 100).toFixed(1)}%
+              </span>
+            </div>
+          </div>
+
+          {/* Sparkline track bar */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-[8px] font-mono text-white/30 uppercase tracking-widest">
+              <span>Hyper-lattice tension</span>
+              <span>{(gradientStats.gradientNorm * 1000).toFixed(1)} N/rad</span>
+            </div>
+            <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+              <div 
+                className="bg-accent h-full shadow-[0_0_8px_rgba(139,92,246,0.6)] transition-all duration-300"
+                style={{ width: `${Math.min(100, (gradientStats.gradientNorm / 0.15) * 100)}%` }}
+              />
+            </div>
+          </div>
+
+          <p className="text-[9.5px] leading-relaxed font-sans text-white/40 mt-1">
+            Gradients calculated locally overlay browser cadence inputs (typing/delay vectors) directly onto standard d3 vector coordinates, achieving homeostatic self-correction.
+          </p>
+
+          <div className="flex gap-2.5 mt-1 pt-3 border-t border-white/5">
+            <button
+               onClick={async () => {
+                 // Trigger cognitive bursts to watch physical vibration
+                 await localGradientBuffer.recordPattern("TYPING_SPEED", Math.random() * 250 + 150);
+                 await localGradientBuffer.recordPattern("DECISION_LATENCY", Math.random() * 1100 + 400);
+                 const stats = await localGradientBuffer.calculateOptimizationVector();
+                 setGradientStats(stats);
+                 // Fire physical spike
+                 if (fgRef.current) {
+                   fgRef.current.d3Force('charge')?.strength(-120);
+                   fgRef.current.d3Force('link')?.distance(90);
+                   fgRef.current.d3ReheatSimulation();
+                 }
+               }}
+               className="flex-1 py-2 rounded-xl border border-accent/20 bg-accent-soft text-[9px] tracking-[0.2em] uppercase text-accent hover:bg-accent hover:text-white transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Zap size={11} className="animate-bounce" /> Stimulate
+            </button>
+            <button
+               onClick={async () => {
+                 await localGradientBuffer.purgeOldPatterns();
+                 const stats = await localGradientBuffer.calculateOptimizationVector();
+                 setGradientStats(stats);
+               }}
+               className="py-2 px-3 rounded-xl border border-white/5 bg-transparent text-[9px] tracking-[0.2em] uppercase text-white/30 hover:text-white/80 hover:border-white/20 transition-all flex items-center justify-center cursor-pointer font-mono"
+               title="Reset pattern memory buffer"
+            >
+              PURGE
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

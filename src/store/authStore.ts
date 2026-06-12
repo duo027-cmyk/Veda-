@@ -6,9 +6,11 @@ export interface AuthState {
   user: User | null;
   authReady: boolean;
   isArchitect: boolean;
+  isSandboxExplorer: boolean;
   setUser: (user: User | null) => void;
   setAuthReady: (ready: boolean) => void;
   initialize: () => () => void;
+  toggleSandboxExplorer: () => void;
 }
 
 export const useAuthStore = () => {
@@ -17,9 +19,11 @@ export const useAuthStore = () => {
       user: state.user,
       authReady: state.authReady,
       isArchitect: state.isArchitect,
+      isSandboxExplorer: state.isSandboxExplorer,
       setUser: state.setUser,
       setAuthReady: state.setAuthReady,
       initialize: state.initializeAuth,
+      toggleSandboxExplorer: state.toggleSandboxExplorer,
     }))
   );
 };
@@ -30,9 +34,11 @@ export const useAuthStore = () => {
     user: state.user,
     authReady: state.authReady,
     isArchitect: state.isArchitect,
+    isSandboxExplorer: state.isSandboxExplorer,
     setUser: state.setUser,
     setAuthReady: state.setAuthReady,
     initialize: state.initializeAuth,
+    toggleSandboxExplorer: state.toggleSandboxExplorer,
   };
 };
 

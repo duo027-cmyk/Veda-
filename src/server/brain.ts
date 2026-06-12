@@ -1346,8 +1346,13 @@ export class AGISovereignBrain implements IVedaBrain {
               this.neuralLog("PERSISTENCE", `Sovereign state successfully recovered from Firestore Admin for ${this.currentTenantId}.`);
               await this.persistenceSystem.saveState(data as any);
             }
-          } catch (adminErr) {
-            console.warn(`[VEDA_FS_RECOVER_WARN] Firestore Admin recovery failed for ${this.currentTenantId}:`, adminErr);
+          } catch (adminErr: any) {
+            const errStr = String(adminErr?.message || adminErr || "");
+            if (errStr.includes("PERMISSION_DENIED") || errStr.includes("permission-denied") || errStr.includes("insufficient permissions")) {
+              console.log(`[VEDA_FS_RECOVER] Firestore Admin cloud connection bypassed or unauthorized (operating in local-first state mode safely).`);
+            } else {
+              console.warn(`[VEDA_FS_RECOVER_WARN] Firestore Admin recovery failed for ${this.currentTenantId}:`, adminErr);
+            }
           }
         }
         
@@ -1361,8 +1366,13 @@ export class AGISovereignBrain implements IVedaBrain {
               this.neuralLog("PERSISTENCE", `Sovereign state successfully recovered from Firestore Client for ${this.currentTenantId}.`);
               await this.persistenceSystem.saveState(data as any);
             }
-          } catch (fsErr) {
-            console.warn(`[VEDA_FS_RECOVER_WARN] Firestore Client recovery failed for ${this.currentTenantId}:`, fsErr);
+          } catch (fsErr: any) {
+             const errStr = String(fsErr?.message || fsErr || "");
+             if (errStr.includes("PERMISSION_DENIED") || errStr.includes("permission-denied") || errStr.includes("insufficient permissions")) {
+               console.log(`[VEDA_FS_RECOVER] Firestore Client cloud connection bypassed or unauthenticated in server environment (operating in local-first state mode safely).`);
+             } else {
+               console.warn(`[VEDA_FS_RECOVER_WARN] Firestore Client recovery failed for ${this.currentTenantId}:`, fsErr);
+             }
           }
         }
       }
@@ -3203,11 +3213,14 @@ ${textToDemystify}
       // Update history with model response
       await this.handleChatMessage(responseText, 'model', { demystifiedText, showDemystified: true });
 
+      const groundingSources = this.inferenceEngine.getLastGroundingSources() || [];
+
       return {
         response: responseText,
         demystifiedText,
         showDemystified: true,
         confidence: 0.95,
+        sources: groundingSources,
         distilled_version: this.distilledChatContext.version
       };
 
