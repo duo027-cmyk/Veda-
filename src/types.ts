@@ -383,3 +383,23 @@ export interface ChatStreamResult {
   demystifiedText?: string;
   showDemystified?: boolean;
 }
+
+export interface Message {
+  id?: string;
+  ts?: number;
+  role: 'user' | 'veda';
+  text: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  audioUrl?: string;
+  mode?: 'LOCAL' | 'HYBRID' | 'EXTERNAL';
+  confidence?: number;
+  trace?: any[];
+  actions?: any[];
+  isStreaming?: boolean;
+  showDemystified?: boolean;
+  demystifiedText?: string;
+  isDemystifying?: boolean;
+  sources?: any[];
+}
+

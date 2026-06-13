@@ -37,6 +37,8 @@ import { useVedaStore } from '../store/vedaStore';
 import { useAuthStore } from '../store/authStore';
 import { useSovereignStore } from '../store/sovereignStore';
 import { cn } from '../lib/utils';
+import { Message } from '../types';
+import { mergeChatHistory } from '../utils/chatSync';
 
 const CodeBlock = ({ language, value }: { language: string; value: string }) => {
   const [copied, setCopied] = useState(false);
@@ -84,25 +86,6 @@ const CodeBlock = ({ language, value }: { language: string; value: string }) => 
     </div>
   );
 };
-
-interface Message {
-  id?: string;
-  ts?: number;
-  role: 'user' | 'veda';
-  text: string;
-  imageUrl?: string;
-  videoUrl?: string;
-  audioUrl?: string;
-  mode?: 'LOCAL' | 'HYBRID' | 'EXTERNAL';
-  confidence?: number;
-  trace?: any[];
-  actions?: any[];
-  isStreaming?: boolean;
-  showDemystified?: boolean;
-  demystifiedText?: string;
-  isDemystifying?: boolean;
-  sources?: any[];
-}
 
 export const ChatInterface = () => {
   const { t, lang, setLang } = useI18n();
@@ -309,31 +292,11 @@ export const ChatInterface = () => {
     if (!data?.chat_history) return;
 
     setMessages(prev => {
-      // If client has nothing, accept the server's history
-      if (prev.length === 0) {
-        try {
-          localStorage.setItem(`veda-chat-history-${workspaceId}`, JSON.stringify(data.chat_history));
-        } catch {}
-        return data.chat_history;
-      }
-
-      // If local messages representation is larger/longer, keep local to prevent transient loss
-      if (prev.length > data.chat_history.length) {
-        return prev;
-      }
-
-      // Read timestamps to assert chronological precedence
-      const lastPrev = prev[prev.length - 1];
-      const lastServer = data.chat_history[data.chat_history.length - 1];
-
-      if (lastPrev && lastServer && lastServer.ts > lastPrev.ts) {
-        try {
-          localStorage.setItem(`veda-chat-history-${workspaceId}`, JSON.stringify(data.chat_history));
-        } catch {}
-        return data.chat_history;
-      }
-
-      return prev;
+      const merged = mergeChatHistory(prev, data.chat_history);
+      try {
+        localStorage.setItem(`veda-chat-history-${workspaceId}`, JSON.stringify(merged));
+      } catch {}
+      return merged;
     });
   }, [data?.chat_history, workspaceId]);
 
