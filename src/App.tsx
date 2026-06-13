@@ -159,7 +159,13 @@ export default function App() {
     vedaService.setupWebSocket((realtimeData) => {
       setUserData((prev: any) => {
         // Deep merge logic for partial updates
-        if (!prev) return realtimeData;
+        if (!prev) {
+          // If we do not have a base state yet, only accept the payload if it is a full state configuration
+          if (realtimeData && Array.isArray(realtimeData.vectors) && Array.isArray(realtimeData.layers)) {
+            return realtimeData;
+          }
+          return null; // Ignore partial real-time ticks until base state completes fetching
+        }
         return { 
           ...prev, 
           ...realtimeData,

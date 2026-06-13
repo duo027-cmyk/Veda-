@@ -38,6 +38,11 @@ export class GeminiService {
     const originalGenerateContent = aiInstance.models.generateContent.bind(aiInstance.models);
 
     aiInstance.models.generateContent = async (params: any) => {
+      // If client is globally blocked, cooling down, or has no valid key configured, short-circuit immediately
+      if (this.getBlockedStatus() || this.currentKey === "DISABLED_KEY") {
+        throw new Error("VEDA_OFFLINE_OR_BLOCKED: API is currently deactivated or in offline block. Bypassing slow network timeouts.");
+      }
+
       // If we are cooling down under rate limit, wait or raise an error for retry loop
       if (Date.now() < this.rateLimitCooldownUntil) {
         const remaining = Math.max(0, this.rateLimitCooldownUntil - Date.now());
@@ -210,8 +215,9 @@ export class GeminiService {
 
       if (lastError) {
         this.handleError(lastError, true);
+        throw lastError;
       }
-      throw lastError;
+      throw new Error("COGNITIVE_RECOVERY_DEGRADED: All available Gemini inference nodes are currently flagged as degraded or cooling down. Diverting queries to local autonomous backup channels.");
     };
 
     (aiInstance as any).__patched = true;

@@ -134,6 +134,11 @@ export class LatticeExecutionManager {
             return this.executeAutonomousFallback(job);
           }
 
+          if (errMsg.includes("VEDA_OFFLINE_OR_BLOCKED")) {
+            this.callbacks.neuralLog('LATTICE_COMPUTE_FALLBACK_FAILED', `External inference bypassed because API is offline or deactivated: ${errMsg}. Engaging ultimate autonomous local fallback.`);
+            return this.executeAutonomousFallback(job);
+          }
+
           this.callbacks.neuralLog('LATTICE_COMPUTE_FALLBACK', `Premium model failed or restricted. Re-routing query payload to high-speed auxiliary core: gemini-3.5-flash`);
           try {
             result = await this.activeAi.models.generateContent({
@@ -141,7 +146,20 @@ export class LatticeExecutionManager {
               contents: prompt
             });
           } catch (auxErr: any) {
-            const auxErrMsg = auxErr?.message || String(auxErr || "Unknown auxiliary error");
+            let auxErrMsg = "Unknown auxiliary error";
+            if (auxErr) {
+              if (auxErr.message) {
+                auxErrMsg = auxErr.message;
+              } else if (typeof auxErr === "string") {
+                auxErrMsg = auxErr;
+              } else {
+                try {
+                  auxErrMsg = JSON.stringify(auxErr);
+                } catch {
+                  auxErrMsg = String(auxErr);
+                }
+              }
+            }
             this.callbacks.neuralLog('LATTICE_COMPUTE_FALLBACK_FAILED', `Auxiliary core also failed: ${auxErrMsg}. Activating ultimate autonomous local fallback to preserve core execution trajectory.`);
             if (this.callbacks.handleAiError) {
               this.callbacks.handleAiError(auxErr);

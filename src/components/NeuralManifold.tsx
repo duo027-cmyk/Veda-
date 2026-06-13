@@ -26,22 +26,12 @@ export const NeuralManifold = ({ onSync }: { onSync?: () => void }) => {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const fgRef = useRef<any>(null);
-  const [tick, setTick] = useState(0);
 
   const [gradientStats, setGradientStats] = useState({
     gradientNorm: 0.052,
     alignedEntropy: 0.18,
     intensity: 0.5,
   });
-
-  // Smooth trig animation oscillation
-  useEffect(() => {
-    let animId = requestAnimationFrame(function anim() {
-      setTick(t => (t + 1) % 100000);
-      animId = requestAnimationFrame(anim);
-    });
-    return () => cancelAnimationFrame(animId);
-  }, []);
 
   // Sync real-time weights and gradient parameters from localGradientBuffer
   useEffect(() => {
@@ -144,7 +134,8 @@ export const NeuralManifold = ({ onSync }: { onSync?: () => void }) => {
           const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.4);
 
           // Dynamic pulsing aura reflecting real-time weights/gradients adjustment
-          const pulseRadius = 5 + Math.sin(tick * 0.05 + parseFloat(node.id || '0')) * (gradientStats.intensity * 6);
+          const pulseTick = (Date.now() / 16.666) % 100000;
+          const pulseRadius = 5 + Math.sin(pulseTick * 0.05 + parseFloat(node.id || '0')) * (gradientStats.intensity * 6);
           ctx.beginPath();
           ctx.arc(node.x, node.y, pulseRadius, 0, 2 * Math.PI, false);
           ctx.fillStyle = node.metadata?.source === 'COLLECTIVE' 

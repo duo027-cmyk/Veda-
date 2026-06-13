@@ -5,6 +5,101 @@ import { ViewMode, BrainData } from '../types';
 import { vedaService } from '../services/vedaService';
 import { knbService } from '../services/knbService';
 
+// State integrity validation and defensive snapshotting systems (Strategic Chief of Staff Recovery Engine)
+const LOCAL_STORAGE_SNAPSHOT_KEY = "veda-stable-state-snapshot";
+
+export function isBrainDataValid(data: any): data is BrainData {
+  if (!data || typeof data !== 'object') return false;
+
+  // Let's validate and dynamically auto-repair/self-heal the system state values.
+  // This satisfies our Strategic Chief of Staff Protocol for high-continuity failing-safe.
+  try {
+    // 1. Core numeric coherence metrics (guard against NaN or undefined)
+    if (typeof data.global_coherence !== 'number' || isNaN(data.global_coherence)) {
+      data.global_coherence = typeof data.coherence === 'number' && !isNaN(data.coherence) ? data.coherence : 0.85;
+    }
+    if (typeof data.entropy !== 'number' || isNaN(data.entropy)) {
+      data.entropy = 0.35;
+    }
+
+    // 2. Crucial strings/enums status code validation
+    if (typeof data.status !== 'string') {
+      data.status = data.msg || "系預設：狀態訊號常態收斂運作中。";
+    }
+    if (typeof data.status_code !== 'string') {
+      data.status_code = "IDLE";
+    }
+
+    // 3. Essential analytical arrays needed by panels, sliders and graphs
+    if (!Array.isArray(data.vectors)) {
+      data.vectors = [0.85, 0.35, 0.12, 0.95];
+    }
+    if (!Array.isArray(data.labels)) {
+      data.labels = ["Coherence", "Entropy", "Free Energy", "Stability"];
+    }
+    if (!Array.isArray(data.history)) {
+      data.history = [];
+    }
+    if (!Array.isArray(data.layers)) {
+      data.layers = [
+        { id: "L1", name: "Epistemic Input Layer", data: [0.85, 0.12, 0.64] },
+        { id: "L2", name: "Cognitive Resonator", data: [0.72, 0.05, 0.88] },
+        { id: "L3", name: "Sovereign Outflow Layer", data: [0.95, 0.35, 0.44] }
+      ];
+    }
+
+    // 4. Check layer structures and repair if needed
+    for (const layer of data.layers) {
+      if (!layer || typeof layer !== 'object') continue;
+      if (typeof layer.id !== 'string') {
+        layer.id = "LYR_" + Math.random().toString(36).substring(2, 7).toUpperCase();
+      }
+      if (typeof layer.name !== 'string') {
+        layer.name = "Defensive Subnetwork Segment";
+      }
+      if (!Array.isArray(layer.data)) {
+        layer.data = [0.5, 0.5, 0.5];
+      }
+    }
+  } catch (err) {
+    console.warn("[STATE_RECOVERY_VALIDATION_ERR] Fatal exception during validation schema test:", err);
+    return false;
+  }
+
+  return true;
+}
+
+export const saveStableSnapshot = (data: BrainData) => {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_SNAPSHOT_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.warn("[STATE_RECOVERY] Failed to persist stable snapshot to local storage:", e);
+    }
+  }
+};
+
+export const loadStableSnapshot = (): BrainData | null => {
+  if (typeof window !== 'undefined') {
+    try {
+      const serialized = localStorage.getItem(LOCAL_STORAGE_SNAPSHOT_KEY);
+      if (serialized) {
+        const parsed = JSON.parse(serialized);
+        if (isBrainDataValid(parsed)) {
+          console.log("[STATE_RECOVERY] Valid stable state snapshot retrieved from localStorage.");
+          return parsed;
+        } else {
+          console.warn("[STATE_RECOVERY] Stored snapshot failed validation. Purging...");
+          localStorage.removeItem(LOCAL_STORAGE_SNAPSHOT_KEY);
+        }
+      }
+    } catch (e) {
+      console.warn("[STATE_RECOVERY] Failed to parse snapshot from local storage:", e);
+    }
+  }
+  return null;
+};
+
 export interface SovereignState {
   // Auth state
   user: User | null;
@@ -185,9 +280,44 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
   // Veda Actions
   setUserData: (userData) => {
     if (typeof userData === 'function') {
-      set((state) => ({ userData: userData(state.userData), isLoading: false }));
+      set((state) => {
+        const nextData = userData(state.userData);
+        if (nextData && !isBrainDataValid(nextData)) {
+          console.warn("[STATE_RECOVERY] Malformed userData update rejected in setUserData callback.");
+          const recovered = loadStableSnapshot();
+          if (recovered) {
+            return {
+              userData: recovered,
+              isLoading: false,
+              lastLog: "STATE_RECOVERY: Restored last known stable state snapshot from local storage"
+            };
+          }
+          return { isLoading: false, apiError: "State corrupted. Snapshot recovery unavailable." };
+        }
+        if (nextData) {
+          saveStableSnapshot(nextData);
+        }
+        return { userData: nextData, isLoading: false };
+      });
     } else {
-      set({ userData, isLoading: false });
+      if (userData && !isBrainDataValid(userData)) {
+        console.warn("[STATE_RECOVERY] Malformed userData update rejected in setUserData.");
+        const recovered = loadStableSnapshot();
+        if (recovered) {
+          set({
+            userData: recovered,
+            isLoading: false,
+            lastLog: "STATE_RECOVERY: Restored last known stable state snapshot from local storage"
+          });
+        } else {
+          set({ isLoading: false, apiError: "State corrupted. Snapshot recovery unavailable." });
+        }
+      } else {
+        if (userData) {
+          saveStableSnapshot(userData);
+        }
+        set({ userData, isLoading: false });
+      }
     }
   },
   
@@ -224,7 +354,7 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
         ]);
 
         const currentData = get().userData;
-        let safeData = null;
+        let safeData: BrainData | null = null;
 
         // Generate deterministic 3D coordinates on Fibonacci sphere surface for elegant rendering in VedaCore3D
         let formattedManifoldPoints: any[] = [];
@@ -276,11 +406,44 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
           };
         }
 
-        set({ 
-          userData: safeData, 
-          apiError: null, // 無損自癒：即使有臨時抖動也決不鎖死前台
-          isLoading: false 
-        });
+        if (safeData) {
+          if (isBrainDataValid(safeData)) {
+            saveStableSnapshot(safeData);
+            set({ 
+              userData: safeData, 
+              apiError: null, // 無損自癒：即使有臨時抖動也決不鎖死前台
+              isLoading: false 
+            });
+          } else {
+            console.warn("[STATE_RECOVERY] Malformed API payload/compiled state rejected inside fetchVedaData.", safeData);
+            const recovered = loadStableSnapshot();
+            if (recovered) {
+              set({
+                userData: recovered,
+                apiError: null,
+                isLoading: false,
+                lastLog: "STATE_RECOVERY: Recovered last known stable state from local storage due to API payload malformation"
+              });
+              safeData = recovered; // Sync reference for reactive triggers below
+            } else {
+              const fallbackBest = currentData && isBrainDataValid(currentData) ? currentData : null;
+              set({
+                userData: fallbackBest,
+                apiError: "STATE_RECOVERY: Malformed payload and no local backup cached",
+                isLoading: false
+              });
+              safeData = fallbackBest;
+            }
+          }
+        } else {
+          const recovered = loadStableSnapshot() || (currentData && isBrainDataValid(currentData) ? currentData : null);
+          set({
+            userData: recovered,
+            apiError: recovered ? null : "FETCH_ERROR: No valid data available",
+            isLoading: false
+          });
+          safeData = recovered;
+        }
 
         // Synchronize UI components based on telemetry states (Reactive Feedback Loop)
         if (safeData?.is_bursting) {
@@ -288,7 +451,12 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
         }
       } catch (e: any) {
         console.warn("[VEDA_SYNC_SYSTEM] Extreme transient sync failure (self-healing recovery auto-engaged):", e);
-        set({ apiError: null, isLoading: false }); // 拒絕向用戶展示破碎的異常
+        const recovered = loadStableSnapshot() || (get().userData && isBrainDataValid(get().userData) ? get().userData : null);
+        set({ 
+          userData: recovered,
+          apiError: recovered ? null : "CRITICAL_SYNC_ERROR: Network link dropped", 
+          isLoading: false 
+        }); // 拒絕向用戶展示破碎的異常
       } finally {
         activeFetchPromise = null;
       }

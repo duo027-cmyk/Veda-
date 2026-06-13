@@ -251,31 +251,6 @@ export function useEdgeLearning(enabled = true, intervalMs = 20000, strategicWei
     if (typeof Worker !== 'undefined' && isSupportedRef.current) {
       logEvent("[Worker Engine] Initiating background DeltaWeightSyncWorker for decentralized optimization...");
       
-      const syncWorker = new DeltaWeightSyncWorker(
-        (workerStats) => {
-          logEvent(`[DeltaWeightSyncWorker] ${workerStats.message}`);
-        },
-        (deltaWeights, count, averages) => {
-          logEvent(`[DeltaWeightSyncWorker] Reconciliation successful. Processed ${count} candidates.`);
-          if (deltaWeights && deltaWeights.some(v => v !== 0)) {
-            logEvent(`[DeltaWeightSyncWorker] Delta weights reconciled: [${deltaWeights.map(w => (w >= 0 ? '+' : '') + w.toFixed(6)).join(', ')}]`);
-          }
-          refreshStats();
-          setStats(prev => ({
-            ...prev,
-            lastTrainedTime: new Date().toLocaleTimeString(),
-            isBackgroundRunning: false
-          }));
-          syncWorker.terminate();
-        },
-        (errMsg) => {
-          logEvent(`[DeltaWeightSyncWorker Error] ${errMsg}`);
-          logEvent("Running fallback local SGD trajectory processor.");
-          processBatchFallback();
-          syncWorker.terminate();
-        }
-      );
-
       const processBatchFallback = async () => {
         try {
           const tx = dbRef.current!.transaction(storeName, "readonly");
@@ -291,6 +266,50 @@ export function useEdgeLearning(enabled = true, intervalMs = 20000, strategicWei
           setStats(prev => ({ ...prev, isBackgroundRunning: false }));
         }
       };
+
+      let isTerminated = false;
+      
+      // Watchdog failsafe timer - force terminates worker after 25 seconds if hanging in sandbox
+      const watchdogId = setTimeout(() => {
+        if (!isTerminated) {
+          isTerminated = true;
+          logEvent("[Worker Watchdog] Background Worker sync timed out after 25s. Terminated thread to reclaim browser memories.");
+          processBatchFallback();
+          syncWorker.terminate();
+        }
+      }, 25000);
+
+      const syncWorker = new DeltaWeightSyncWorker(
+        (workerStats) => {
+          if (isTerminated) return;
+          logEvent(`[DeltaWeightSyncWorker] ${workerStats.message}`);
+        },
+        (deltaWeights, count, averages) => {
+          if (isTerminated) return;
+          isTerminated = true;
+          clearTimeout(watchdogId);
+          logEvent(`[DeltaWeightSyncWorker] Reconciliation successful. Processed ${count} candidates.`);
+          if (deltaWeights && deltaWeights.some(v => v !== 0)) {
+            logEvent(`[DeltaWeightSyncWorker] Delta weights reconciled: [${deltaWeights.map(w => (w >= 0 ? '+' : '') + w.toFixed(6)).join(', ')}]`);
+          }
+          refreshStats();
+          setStats(prev => ({
+            ...prev,
+            lastTrainedTime: new Date().toLocaleTimeString(),
+            isBackgroundRunning: false
+          }));
+          syncWorker.terminate();
+        },
+        (errMsg) => {
+          if (isTerminated) return;
+          isTerminated = true;
+          clearTimeout(watchdogId);
+          logEvent(`[DeltaWeightSyncWorker Error] ${errMsg}`);
+          logEvent("Running fallback local SGD trajectory processor.");
+          processBatchFallback();
+          syncWorker.terminate();
+        }
+      );
 
       syncWorker.sync(activeWeights || [0.25, 0.25, 0.25, 0.25]);
       return;
@@ -316,6 +335,18 @@ export function useEdgeLearning(enabled = true, intervalMs = 20000, strategicWei
     }
   }, [logEvent, refreshStats, strategicWeights]);
 
+  // Maintain dynamic refs to avoid interval resetting due to arrays changing high-frequency
+  const executeLearningPassRef = useRef(executeLearningPass);
+  const strategicWeightsRef = useRef(strategicWeights);
+
+  useEffect(() => {
+    executeLearningPassRef.current = executeLearningPass;
+  }, [executeLearningPass]);
+
+  useEffect(() => {
+    strategicWeightsRef.current = strategicWeights;
+  }, [strategicWeights]);
+
   // Handle low-priority scheduling using requestIdleCallback with a robust setTimeout fallback
   useEffect(() => {
     if (!enabled) return;
@@ -323,11 +354,11 @@ export function useEdgeLearning(enabled = true, intervalMs = 20000, strategicWei
     const runIdleTask = () => {
       if (typeof window !== "undefined" && (window as any).requestIdleCallback) {
         (window as any).requestIdleCallback(() => {
-          executeLearningPass(strategicWeights);
+          executeLearningPassRef.current(strategicWeightsRef.current);
         }, { timeout: 3000 });
       } else {
         // Fallback for sandboxes without requestIdleCallback
-        setTimeout(() => executeLearningPass(strategicWeights), 50);
+        setTimeout(() => executeLearningPassRef.current(strategicWeightsRef.current), 50);
       }
     };
 
@@ -340,7 +371,7 @@ export function useEdgeLearning(enabled = true, intervalMs = 20000, strategicWei
       clearTimeout(startupId);
       clearInterval(intervalId);
     };
-  }, [enabled, intervalMs, executeLearningPass]);
+  }, [enabled, intervalMs]);
 
   // Purge all stored records in IDB/RAM
   const clearLearningDb = useCallback(async () => {
