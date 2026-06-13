@@ -92,12 +92,21 @@ export class GeminiService {
 
       let lastError: any = null;
 
+      // Determine if ALL eligible models are currently in cooling down
+      const eligibleModels = uniqueModels.filter(m => (this.degradedModels.get(m) || 0) < Date.now() + 3600000); // exclude 24h locked models
+      const allDegraded = eligibleModels.length > 0 && eligibleModels.every(m => (this.degradedModels.get(m) || 0) > Date.now());
+
       for (const model of uniqueModels) {
         // Safe check so we don't attempt models that are strictly registered as degraded/overloaded right now
         const modelCooldown = this.degradedModels.get(model) || 0;
         if (modelCooldown > Date.now()) {
-          this.logger("PROACTIVE_FAILOVER_SKIP", `Model ${model} is currently cooled down/degraded. Passing over for adjacent nodes.`);
-          continue;
+          // If all eligible models are degraded, we bypass the skip for eligible models to attempt dynamic recovery!
+          if (allDegraded && eligibleModels.includes(model)) {
+            this.logger("EMERGENCY_DYNAMIC_RECOVERY", `All eligible models are degraded. Overriding cooldown block to attempt backup query on: ${model}`);
+          } else {
+            this.logger("PROACTIVE_FAILOVER_SKIP", `Model ${model} is currently cooled down/degraded. Passing over for adjacent nodes.`);
+            continue;
+          }
         }
 
         let attempt = 0;
@@ -172,16 +181,22 @@ export class GeminiService {
 
             if (isModelOverloaded || isModelQuotaExceeded || isModelNotFoundOrInvalid) {
               let reason = "overloaded (503/UNAVAILABLE)";
-              let cooldownDuration = 120000; // 2 mins default
+              let cooldownDuration = 30000; // 30s default
               if (isModelQuotaExceeded) {
                 // If model has a limit of 0, it means it's strictly not supported under this free-tier API Key.
                 // We lock it for 24 hours to prevent slow, failing retry checks.
-                if (errMsg.includes("limit: 0") || errMsg.includes("FreeTier")) {
+                if (errMsg.includes("limit: 0") || errMsg.includes("limit:0")) {
                   reason = "zero-quota-free-tier (429/RESOURCE_EXHAUSTED - Locked for 24h)";
                   cooldownDuration = 86400000; // 24 hours
                 } else {
                   reason = "quota-exhausted (429/RESOURCE_EXHAUSTED)";
-                  cooldownDuration = 180000; // 3 mins for Quota limits to reset
+                  // Extract dynamic retry delay if available in raw error payload
+                  let delaySeconds = 15; // default 15s for standard limits (optimized for self-healing)
+                  const match = errMsg.match(/retryDelay(?:\D+)(\d+)/) || errMsg.match(/retry in\s+([\d\.]+)/i);
+                  if (match && match[1]) {
+                    delaySeconds = Math.ceil(parseFloat(match[1])) + 2; // pad by 2s for safety
+                  }
+                  cooldownDuration = delaySeconds * 1000;
                 }
               } else if (isModelNotFoundOrInvalid) {
                 reason = "not-found/invalid (400/INVALID_ARGUMENT)";
@@ -239,6 +254,7 @@ export class GeminiService {
     if (isValid) {
       if (!this.ai || this.currentKey !== rawKey) {
         this.logger("SECURITY", "Synthesizing new GoogleGenAI client mapping with self-healing core decorator.");
+        this.degradedModels.clear(); // Clear cached model degradations instantly when key changes
         const rawAi = new GoogleGenAI({
           apiKey: rawKey,
           httpOptions: {
@@ -285,6 +301,7 @@ export class GeminiService {
   public updateApiKey(key: string) {
     if (!key || key.length < 20) return;
     process.env.GEMINI_API_KEY = key.trim();
+    this.degradedModels.clear(); // Clear all localized degradations instantly when key is explicitly set
     this.syncClient();
   }
 

@@ -35,6 +35,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { ProfileManager } from './ProfileManager';
 import { useVedaStore } from '../store/vedaStore';
 import { useAuthStore } from '../store/authStore';
+import { useSovereignStore } from '../store/sovereignStore';
 import { cn } from '../lib/utils';
 
 const CodeBlock = ({ language, value }: { language: string; value: string }) => {
@@ -107,8 +108,34 @@ export const ChatInterface = () => {
   const { t, lang, setLang } = useI18n();
   const { userData: data, fetchVedaData: onUpdateData, handleAction: onAction } = useVedaStore();
   const { isArchitect } = useAuthStore();
+  const { activeWorkspace } = useSovereignStore();
+  const workspaceId = activeWorkspace?.id || 'default';
 
-  const [messages, setMessages] = useState<Message[]>(data?.chat_history || []);
+  // Defensive local cache load at initialization helper
+  const getInitialMessages = (): Message[] => {
+    try {
+      const wsId = useSovereignStore.getState().activeWorkspace?.id || 'default';
+      const stored = localStorage.getItem(`veda-chat-history-${wsId}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return data?.chat_history || [];
+  };
+
+  const [messages, setMessages] = useState<Message[]>(getInitialMessages());
+
+  // Save chat history to localStorage on any change (Strategic Chief of Staff Defensive Cache Protocol)
+  useEffect(() => {
+    if (messages && messages.length > 0) {
+      try {
+        localStorage.setItem(`veda-chat-history-${workspaceId}`, JSON.stringify(messages));
+      } catch (err) {
+        console.warn("[CHAT_CACHE] Failed to cache messages to localStorage:", err);
+      }
+    }
+  }, [messages, workspaceId]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -252,14 +279,69 @@ export const ChatInterface = () => {
     }
   };
 
+  // Load initial cached chat history on workspaceId change
   useEffect(() => {
-    if (data?.chat_history && messages.length === 0) {
-      setMessages(data.chat_history);
+    let loaded = false;
+    try {
+      const stored = localStorage.getItem(`veda-chat-history-${workspaceId}`);
+      if (stored) {
+        const parsed = JSON.parse(stored) as Message[];
+        if (parsed && parsed.length > 0) {
+          setMessages(parsed);
+          loaded = true;
+        }
+      }
+    } catch (e) {
+      console.warn("[CHAT_CACHE] Failed to load cached chat history on workspace change:", e);
     }
-  }, [data?.chat_history]);
+
+    if (!loaded) {
+      if (data?.chat_history) {
+        setMessages(data.chat_history);
+      } else {
+        setMessages([]);
+      }
+    }
+  }, [workspaceId]);
+
+  // Merge and prioritize local chat messages (Robust Sync / Anti-loss strategy)
+  useEffect(() => {
+    if (!data?.chat_history) return;
+
+    setMessages(prev => {
+      // If client has nothing, accept the server's history
+      if (prev.length === 0) {
+        try {
+          localStorage.setItem(`veda-chat-history-${workspaceId}`, JSON.stringify(data.chat_history));
+        } catch {}
+        return data.chat_history;
+      }
+
+      // If local messages representation is larger/longer, keep local to prevent transient loss
+      if (prev.length > data.chat_history.length) {
+        return prev;
+      }
+
+      // Read timestamps to assert chronological precedence
+      const lastPrev = prev[prev.length - 1];
+      const lastServer = data.chat_history[data.chat_history.length - 1];
+
+      if (lastPrev && lastServer && lastServer.ts > lastPrev.ts) {
+        try {
+          localStorage.setItem(`veda-chat-history-${workspaceId}`, JSON.stringify(data.chat_history));
+        } catch {}
+        return data.chat_history;
+      }
+
+      return prev;
+    });
+  }, [data?.chat_history, workspaceId]);
 
   const clearMessages = async () => {
     try {
+      try {
+        localStorage.removeItem(`veda-chat-history-${workspaceId}`);
+      } catch {}
       await vedaService.postAction({ action: 'clearChatHistory', params: {} });
       setMessages([]);
       await onUpdateData();

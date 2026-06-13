@@ -2501,7 +2501,7 @@ ${textToDemystify}
         translation: response ? response.trim() : textToDemystify
       };
     } catch (e: any) {
-      this.geminiService.handleError(e);
+      this.neuralLog("EPISTEMIC_DECODING_FAULT", `解碼連線限制（無損降階）：${e?.message || e}`);
       const fallback = textToDemystify
         .replace(/### 主權認知與語意流形 \(Sovereign Semantic Manifolds\)/gi, "### 🌟 核心認知與重點分析")
         .replace(/### 因果能態與熱力學穩態 \(Causal Energy & Thermodynamic Steady-State\)/gi, "### 🎯 當前系統狀態運作")
