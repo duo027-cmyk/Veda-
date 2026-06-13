@@ -37,6 +37,7 @@ import { useUIStore } from './store/uiStore';
 import { SovereignInitialization } from './components/SovereignInitialization';
 import { BurstMonitor } from './components/BurstMonitor';
 import { SovereignCircuitBreaker } from './components/SovereignCircuitBreaker';
+import { selfHealBrainData } from './store/sovereignStore';
 
 // --- Utils ---
 import { cn } from './lib/utils';
@@ -158,13 +159,9 @@ export default function App() {
     // 2. Establish Real-time Logic Link (WebSocket)
     vedaService.setupWebSocket((realtimeData) => {
       setUserData((prev: any) => {
-        // Deep merge logic for partial updates
+        // Deep merge logic for partial updates with robust self-healing
         if (!prev) {
-          // If we do not have a base state yet, only accept the payload if it is a full state configuration
-          if (realtimeData && Array.isArray(realtimeData.vectors) && Array.isArray(realtimeData.layers)) {
-            return realtimeData;
-          }
-          return null; // Ignore partial real-time ticks until base state completes fetching
+          return selfHealBrainData(realtimeData);
         }
         return { 
           ...prev, 
