@@ -45,6 +45,10 @@ import { cn } from './lib/utils';
 
 import { useI18n } from './i18n';
 
+// --- Static References to prevent high-frequency re-renders ---
+const DEFAULT_INTENT = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
+const EMPTY_ARRAY: any[] = [];
+
 export default function App() {
   const { t } = useI18n();
   
@@ -71,6 +75,93 @@ export default function App() {
     theme,
     isPulsing
   } = useUIStore();
+
+  // --- Memoized Default State References to prevent shallow equality failures ---
+  const stableIntent = React.useMemo(() => {
+    return userData?.settings?.vector_intent || DEFAULT_INTENT;
+  }, [userData?.settings?.vector_intent]);
+
+  const stableLogs = React.useMemo(() => {
+    return userData?.logs || EMPTY_ARRAY;
+  }, [userData?.logs]);
+
+  const stableMemories = React.useMemo(() => {
+    return userData?.memories || EMPTY_ARRAY;
+  }, [userData?.memories]);
+
+  const stableAxioms = React.useMemo(() => {
+    return userData?.axioms || EMPTY_ARRAY;
+  }, [userData?.axioms]);
+
+  // --- Optimized Stable Callback Hub ---
+  const handleSelectFragment = React.useCallback((id: string | null, type?: string, label?: string) => {
+    console.log("Point selected:", id);
+    if (id && type && label) {
+      setSelectedFragment({ id, type, label });
+    } else {
+      setSelectedFragment(null);
+    }
+  }, [setSelectedFragment]);
+
+  const handleRefreshData = React.useCallback(() => {
+    fetchVedaData();
+  }, [fetchVedaData]);
+
+  const handleUpgradeTier = React.useCallback((tier: any) => {
+    handleAction('setSystemTier', { tier });
+  }, [handleAction]);
+
+  const handleComputeModeChange = React.useCallback(async (mode: any) => {
+    await handleAction('setComputeMode', { mode });
+    await fetchVedaData();
+  }, [handleAction, fetchVedaData]);
+
+  const handleIntentChange = React.useCallback(async (idx: number, val: number) => {
+    const currentIntent = userDataRef.current?.settings?.vector_intent || DEFAULT_INTENT;
+    const newIntent = [...currentIntent];
+    newIntent[idx] = val;
+    await vedaService.updatePersistence({ settings: { vector_intent: newIntent } });
+    await fetchVedaData();
+  }, [fetchVedaData]);
+
+  const handleResetIntent = React.useCallback(async () => {
+    await vedaService.updatePersistence({ settings: { vector_intent: DEFAULT_INTENT } });
+    await fetchVedaData();
+  }, [fetchVedaData]);
+
+  const handleEvolve = React.useCallback(async () => {
+    await handleAction('evolve');
+    await fetchVedaData();
+  }, [handleAction, fetchVedaData]);
+
+  const handleSynthesize = React.useCallback(async () => {
+    await handleAction('synthesize');
+    await fetchVedaData();
+  }, [handleAction, fetchVedaData]);
+
+  const handleDistill = React.useCallback(async () => {
+    await handleAction('distill');
+    await fetchVedaData();
+  }, [handleAction, fetchVedaData]);
+
+  const handleDream = React.useCallback(async () => {
+    await handleAction('dream');
+    await fetchVedaData();
+  }, [handleAction, fetchVedaData]);
+
+  const handleToggleNetwork = React.useCallback(async () => {
+    await handleAction('toggleNetwork');
+    await fetchVedaData();
+  }, [handleAction, fetchVedaData]);
+
+  const handleToggleNetworkDisplay = React.useCallback(async () => {
+    await handleAction('toggleNetworkDisplay');
+    await fetchVedaData();
+  }, [handleAction, fetchVedaData]);
+
+  const handleCloseControlPanel = React.useCallback(() => {
+    setShowControlPanel(false);
+  }, [setShowControlPanel]);
 
   // --- Theme Management ---
   useEffect(() => {
@@ -445,14 +536,7 @@ export default function App() {
                   data={userData} 
                   onAction={handleAction} 
                   selectedFragment={selectedFragment}
-                  onSelectFragment={(id, type, label) => {
-                    console.log("Point selected:", id);
-                    if (id && type && label) {
-                      setSelectedFragment({ id, type, label });
-                    } else {
-                      setSelectedFragment(null);
-                    }
-                  }}
+                  onSelectFragment={handleSelectFragment}
                 />
               </ErrorBoundary>
             )}
@@ -468,7 +552,7 @@ export default function App() {
             )}
             {view === 'SYNTHESIS' && (
               <ErrorBoundary mode="inline" title="Strategic Workstation Failed">
-                <StrategicWorkstation data={userData} onRefresh={() => fetchVedaData()} />
+                <StrategicWorkstation data={userData} onRefresh={handleRefreshData} />
               </ErrorBoundary>
             )}
             {view === 'TASKS' && (
@@ -478,7 +562,7 @@ export default function App() {
             )}
             {view === 'PALANTIR_AIP' && (
               <ErrorBoundary mode="inline" title="Palantir AIP Shield Failed">
-                <PalantirAIPDashboard data={userData} onAction={handleAction} onRefresh={() => fetchVedaData()} />
+                <PalantirAIPDashboard data={userData} onAction={handleAction} onRefresh={handleRefreshData} />
               </ErrorBoundary>
             )}
             {view === 'SOVEREIGN' && (
@@ -490,7 +574,7 @@ export default function App() {
               <ErrorBoundary mode="inline" title="Cinema Manifold Failed">
                 <CinemaManifold 
                   data={userData} 
-                  onUpdate={() => fetchVedaData()} 
+                  onUpdate={handleRefreshData} 
                 />
               </ErrorBoundary>
             )}
@@ -501,12 +585,12 @@ export default function App() {
             )}
             {view === 'EFFICACY' && (
               <ErrorBoundary mode="inline" title="Efficacy Manifold Failed">
-                <EfficacyManifold data={userData} onUpgrade={(tier) => handleAction('setSystemTier', { tier })} />
+                <EfficacyManifold data={userData} onUpgrade={handleUpgradeTier} />
               </ErrorBoundary>
             )}
             {view === 'CORE' && (
               <ErrorBoundary mode="inline" title="Core Configurations Failed">
-                <CoreConfig data={userData} onUpdate={() => fetchVedaData()} />
+                <CoreConfig data={userData} onUpdate={handleRefreshData} />
               </ErrorBoundary>
             )}
           </motion.div>
@@ -534,53 +618,24 @@ export default function App() {
 
       <ControlPanel 
         data={userData}
-        intent={userData?.settings?.vector_intent || [0.5, 0.5, 0.5, 0.5, 0.5, 0.5]}
+        intent={stableIntent}
         loading={isPulsing}
-        logs={userData?.logs || []}
+        logs={stableLogs}
         showControls={showControlPanel}
-        memories={userData?.memories || []}
-        onComputeModeChange={async (mode) => {
-          await handleAction('setComputeMode', { mode });
-          await fetchVedaData();
-        }}
-        onIntentChange={async (idx, val) => {
-          const newIntent = [...(userData?.settings?.vector_intent || [0.5, 0.5, 0.5, 0.5, 0.5, 0.5])];
-          newIntent[idx] = val;
-          await vedaService.updatePersistence({ settings: { vector_intent: newIntent } });
-          await fetchVedaData();
-        }}
-        onResetIntent={async () => {
-          await vedaService.updatePersistence({ settings: { vector_intent: [0.5, 0.5, 0.5, 0.5, 0.5, 0.5] } });
-          await fetchVedaData();
-        }}
-        onEvolve={async () => {
-          await handleAction('evolve');
-          await fetchVedaData();
-        }}
-        onSynthesize={async () => {
-          await handleAction('synthesize');
-          await fetchVedaData();
-        }}
-        onDistill={async () => {
-          await handleAction('distill');
-          await fetchVedaData();
-        }}
-        onDream={async () => {
-          await handleAction('dream');
-          await fetchVedaData();
-        }}
+        memories={stableMemories}
+        onComputeModeChange={handleComputeModeChange}
+        onIntentChange={handleIntentChange}
+        onResetIntent={handleResetIntent}
+        onEvolve={handleEvolve}
+        onSynthesize={handleSynthesize}
+        onDistill={handleDistill}
+        onDream={handleDream}
         isDreaming={userData?.isDreaming}
-        onToggleNetwork={async () => {
-          await handleAction('toggleNetwork');
-          await fetchVedaData();
-        }}
-        onToggleNetworkDisplay={async () => {
-          await handleAction('toggleNetworkDisplay');
-          await fetchVedaData();
-        }}
+        onToggleNetwork={handleToggleNetwork}
+        onToggleNetworkDisplay={handleToggleNetworkDisplay}
         showNetworkDisplay={userData?.settings?.showNetworkDisplay}
-        onClose={() => setShowControlPanel(false)}
-        axioms={userData?.axioms || []}
+        onClose={handleCloseControlPanel}
+        axioms={stableAxioms}
       />
 
       {/* Persistent SVG Filters */}

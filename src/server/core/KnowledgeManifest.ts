@@ -42,6 +42,15 @@ export class KnowledgeManifest {
     if (this.causalLattice.nodes.length > 500) this.causalLattice.nodes.shift();
   }
 
+  public registerCausalEdge(edge: any) {
+    this.causalLattice.edges.push(edge);
+    if (this.causalLattice.edges.length > 800) this.causalLattice.edges.shift();
+  }
+
+  public getCausalEdges() {
+    return this.causalLattice.edges;
+  }
+
   public getTopologicalState() {
     return {
       nodeCount: this.causalLattice.nodes.length,

@@ -15,7 +15,7 @@ interface LatticeJob {
   timestamp: number;
 }
 
-export const LatticeCruncher: React.FC<{ brain: BrainData | null }> = ({ brain }) => {
+export const LatticeCruncher: React.FC<{ brain: BrainData | null }> = React.memo(({ brain }) => {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [strategicMetrics, setStrategicMetrics] = useState<any>(null);
   const [showVitals, setShowVitals] = useState(false);
@@ -555,4 +555,4 @@ export const LatticeCruncher: React.FC<{ brain: BrainData | null }> = ({ brain }
       </motion.div>
     </div>
   );
-};
+});

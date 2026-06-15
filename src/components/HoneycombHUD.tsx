@@ -19,7 +19,7 @@ interface HoneycombHUDProps {
   burstPhase?: string;
 }
 
-export const HoneycombHUD: React.FC<HoneycombHUDProps> = ({ 
+export const HoneycombHUD: React.FC<HoneycombHUDProps> = React.memo(({ 
   coherence, phi, energy, tension, entropy, memoryCount, lastResult, weather,
   isPlanckActive, isZPDPActive, threshold, federatedNodes = 0, federationMultiplier = 1.0,
   burstPhase
@@ -118,4 +118,4 @@ export const HoneycombHUD: React.FC<HoneycombHUDProps> = ({
       </div>
     </div>
   );
-};
+});
