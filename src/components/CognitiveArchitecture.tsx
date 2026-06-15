@@ -28,6 +28,8 @@ import { useI18n } from '../i18n';
 import { useVedaStore } from '../store/vedaStore';
 import { cn } from '../lib/utils';
 
+import { useUIStore } from '../store/uiStore';
+
 interface SubsystemDetail {
   id: string;
   title: string;
@@ -41,7 +43,8 @@ interface SubsystemDetail {
 
 export const CognitiveArchitecture: React.FC = () => {
   const { t } = useI18n();
-  const { userData, handleAction, isPulsing } = useVedaStore();
+  const { userData, handleAction } = useVedaStore();
+  const { isPulsing } = useUIStore();
   const [selectedModule, setSelectedModule] = useState<SubsystemDetail | null>(null);
   const [currentLoopStep, setCurrentLoopStep] = useState<number>(-1);
   const [isLoopRunning, setIsLoopRunning] = useState<boolean>(false);

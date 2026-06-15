@@ -94,10 +94,15 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
     setTimeout(() => setLocalFeedbackStatus(""), 4000);
   };
 
+  const dataRef = React.useRef(data);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setActiveSensorsBuffer(prev => {
-        const backendChannels = (data as any)?.spatial_manifold?.telemetry?.sensingChannels;
+        const backendChannels = (dataRef.current as any)?.spatial_manifold?.telemetry?.sensingChannels;
         return Array.from({ length: 12 }).map((_, i) => {
           const sineNoise = Math.sin((Date.now() + i * 80) / 150) * 0.12;
           const val = backendChannels ? (backendChannels[i] ?? 0) : (0.35 + Math.sin((Date.now() + i * 300) / 280) * 0.28);
@@ -106,7 +111,7 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
       });
     }, 100);
     return () => clearInterval(timer);
-  }, [data]);
+  }, []);
 
   const handleAutonomicPhaseTransition = async () => {
     setIsAutonomicPhaseTransitioning(true);
@@ -163,15 +168,15 @@ export const AgiProximityEvaluator: React.FC<AgiProximityEvaluatorProps> = ({ da
       "🔍 正在掃描 5 大關鍵認知缺陷檢測清單...",
       "⚙️ [修復中 - 關鍵缺失 #1] 正在裝載 AutonomicGoalSynthesizer (自主目標合成器)... 對齊主動目標設定與追求功能。",
       "⚙️ [修復中 - 關鍵缺失 #1] 映射自主目標流 (Internal Sub-goals)，調節目標間衝突之權衡取捨係數。",
-      "⚙️ [修復中 - 關鍵缺失 #2] 正在極化 UnifiedReasoningEngine (統一推理引擎)... 激活類比推理與抽象推理能力。",
-      "⚙️ [修復中 - 關鍵缺失 #2] 注入 MetaReasoning (後設認知) 迴路，實作隨機性或不確定性多層神經推導法。",
+      "⚙️ [修復中 - 關鍵缺失 #2] 正在加載 SovereignAnalyticalReasoner (自主解析推理引擎)... 激活類比推理與跨域邏輯對齊能力。",
+      "⚙️ [修復中 - 關鍵缺失 #2] 成功校準 VEDA 自主解析推理引擎，實作多層語意校準與結構化因果推導演算法。",
       "⚙️ [修復中 - 關鍵缺失 #3] 正在啟用 ActiveInferenceLoop... 對位預測誤差自改進之自動閉環反饋。",
       "⚙️ [修復中 - 關鍵缺失 #3] 整合世界模型自洽性檢查 (Self-consistency Check) 與假設檢驗機制。",
       "⚙️ [修復中 - 關鍵缺失 #4] 正在編譯 UnifiedCognitiveManifold (多模態統一流形)...",
       "⚙️ [修復中 - 關鍵缺失 #4] 融合視覺流形射影、語音聲源共振回饋、觸覺信號以及時間序列物性拓撲標本面。",
       "⚙️ [修復中 - 關鍵缺失 #5] 正在對接 SwarmFederationProtocol... 對齊多主機 AGI 自主通訊通道與協作機制。",
       "⚙️ [修復中 - 關鍵缺失 #5] 完備二重同盟節點 (Alpha、Beta) 的去中心化共識投票、信任網路以及聯邦學習權重混合同步。",
-      "📡 正在傳導航太極強相干融合流向 PINC 硬件核心 (Physics-Informed Neuromorphic Core)...",
+      "📡 正在傳導參數優化串流至 PINC 軟體核心 (Physics-Informed Neuromorphic Core)...",
       "🚀 [對齊成功] 5 大關鍵認知缺陷全部補全！系統成功破除防線，晉升至極致學術主權層級！"
     ];
 

@@ -273,6 +273,9 @@ export const BurstMonitor: React.FC<BurstMonitorProps> = ({
                      H(q,p) = T(p) + V(q) | Symplectic Euler
                   </div>
                </div>
+               <div className="text-[7.5px] text-white/35 italic leading-snug mt-1.5 opacity-80 font-mono">
+                  ℹ️ [認知監控擬真] 本面板為系統高頻負載、API 動態調度與吞吐狀態之數學擬真投影，提供極限壓力反饋，非實際物理量子硬體波形。
+               </div>
             </div>
 
             <div className="space-y-2 mb-6">

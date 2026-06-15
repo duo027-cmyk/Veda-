@@ -2,13 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Cpu, Zap, Activity, Info, ShieldAlert } from 'lucide-react';
 import { cn } from '../lib/utils';
-
-interface LogEntry {
-  id: string;
-  type: 'PEC_WARNING' | 'SYSTEM_STAGNATION' | 'EVOLUTION' | 'RESONANCE' | 'AUDIT' | 'INFO';
-  message: string;
-  timestamp: number;
-}
+import { LogEntry } from '../types';
 
 interface EpistemicLogProps {
   logs: LogEntry[];
@@ -66,18 +60,21 @@ export const EpistemicLog: React.FC<EpistemicLogProps> = ({ logs }) => {
               className="group flex gap-3 items-start py-1.5 px-2 hover:bg-white/5 transition-colors rounded-lg border-l border-transparent hover:border-white/10"
             >
               <span className="font-mono text-[9px] text-white/20 whitespace-nowrap mt-1 leading-none">
-                {new Date(log.timestamp).toLocaleTimeString([], { hour12: false, fractionalSecondDigits: 2 })}
+                {log.timestamp 
+                  ? new Date(log.timestamp).toLocaleTimeString([], { hour12: false, fractionalSecondDigits: 2 })
+                  : log.time || "N/A"
+                }
               </span>
               
               <div className={cn(
                 "px-2 py-0.5 rounded border text-[8px] font-mono font-bold tracking-widest uppercase flex-shrink-0 mt-0.5",
-                getLabelColor(log.type)
+                getLabelColor(log.type || 'INFO')
               )}>
-                {log.type.replace('_', ' ')}
+                {(log.type || 'INFO').replace('_', ' ')}
               </div>
               
               <span className="font-mono text-[10px] text-white/80 leading-relaxed tracking-tight group-hover:text-white transition-colors">
-                {log.message}
+                {log.message || log.msg || ""}
               </span>
             </motion.div>
           ))}

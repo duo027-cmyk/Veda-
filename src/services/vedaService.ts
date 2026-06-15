@@ -500,7 +500,6 @@ export const vedaService = {
         // PRESEEDED HARD baseline: Never crash the UI
         console.warn("[VEDA_SERVICE] No stale state available. Generating preseeded base calibration state.");
         const fallbackLocalState: BrainData = {
-          rejectionCount: 0,
           isFocusMode: false,
           isLocked: false,
           global_coherence: 0.88,

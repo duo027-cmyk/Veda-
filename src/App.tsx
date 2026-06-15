@@ -38,6 +38,7 @@ import { SovereignInitialization } from './components/SovereignInitialization';
 import { BurstMonitor } from './components/BurstMonitor';
 import { SovereignCircuitBreaker } from './components/SovereignCircuitBreaker';
 import { selfHealBrainData } from './store/sovereignStore';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // --- Utils ---
 import { cn } from './lib/utils';
@@ -53,7 +54,6 @@ export default function App() {
     userData, 
     apiError, 
     lastLog, 
-    isPulsing, 
     fetchVedaData, 
     handleAction, 
     setApiError,
@@ -68,7 +68,8 @@ export default function App() {
     setShowBurstMonitor,
     showControlPanel,
     setShowControlPanel,
-    theme
+    theme,
+    isPulsing
   } = useUIStore();
 
   // --- Theme Management ---
@@ -433,40 +434,80 @@ export default function App() {
             transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
             className="h-full"
           >
-            {view === 'DIALOGUE' && <ChatInterface />}
+            {view === 'DIALOGUE' && (
+              <ErrorBoundary mode="inline" title="Dialogue Hub Failed">
+                <ChatInterface />
+              </ErrorBoundary>
+            )}
             {view === 'SYNAPSE' && (
-              <SynapseOverview 
-                data={userData} 
-                onAction={handleAction} 
-                selectedFragment={selectedFragment}
-                onSelectFragment={(id, type, label) => {
-                  console.log("Point selected:", id);
-                  if (id && type && label) {
-                    setSelectedFragment({ id, type, label });
-                  } else {
-                    setSelectedFragment(null);
-                  }
-                }}
-              />
+              <ErrorBoundary mode="inline" title="Synapse Overview Failed">
+                <SynapseOverview 
+                  data={userData} 
+                  onAction={handleAction} 
+                  selectedFragment={selectedFragment}
+                  onSelectFragment={(id, type, label) => {
+                    console.log("Point selected:", id);
+                    if (id && type && label) {
+                      setSelectedFragment({ id, type, label });
+                    } else {
+                      setSelectedFragment(null);
+                    }
+                  }}
+                />
+              </ErrorBoundary>
             )}
             {view === 'DREAM' && (
-              <DreamscapeView userData={userData} t={t} />
+              <ErrorBoundary mode="inline" title="Dreamscape Matrix Failed">
+                <DreamscapeView userData={userData} t={t} />
+              </ErrorBoundary>
             )}
-            {view === 'KNOWLEDGE' && <KnowledgeVault data={userData} />}
-            {view === 'SYNTHESIS' && <StrategicWorkstation data={userData} onRefresh={() => fetchVedaData()} />}
-            {view === 'TASKS' && <TaskManager />}
-            {view === 'PALANTIR_AIP' && <PalantirAIPDashboard data={userData} onAction={handleAction} onRefresh={() => fetchVedaData()} />}
-          {view === 'SOVEREIGN' && <SovereignManagement data={userData} onAction={handleAction} />}
+            {view === 'KNOWLEDGE' && (
+              <ErrorBoundary mode="inline" title="Knowledge Vault Failed">
+                <KnowledgeVault data={userData} />
+              </ErrorBoundary>
+            )}
+            {view === 'SYNTHESIS' && (
+              <ErrorBoundary mode="inline" title="Strategic Workstation Failed">
+                <StrategicWorkstation data={userData} onRefresh={() => fetchVedaData()} />
+              </ErrorBoundary>
+            )}
+            {view === 'TASKS' && (
+              <ErrorBoundary mode="inline" title="Task Manager Failed">
+                <TaskManager />
+              </ErrorBoundary>
+            )}
+            {view === 'PALANTIR_AIP' && (
+              <ErrorBoundary mode="inline" title="Palantir AIP Shield Failed">
+                <PalantirAIPDashboard data={userData} onAction={handleAction} onRefresh={() => fetchVedaData()} />
+              </ErrorBoundary>
+            )}
+            {view === 'SOVEREIGN' && (
+              <ErrorBoundary mode="inline" title="Sovereign Control Failed">
+                <SovereignManagement data={userData} onAction={handleAction} />
+              </ErrorBoundary>
+            )}
             {view === 'CINEMA' && userData && (
-              <CinemaManifold 
-                data={userData} 
-                onUpdate={() => fetchVedaData()} 
-              />
+              <ErrorBoundary mode="inline" title="Cinema Manifold Failed">
+                <CinemaManifold 
+                  data={userData} 
+                  onUpdate={() => fetchVedaData()} 
+                />
+              </ErrorBoundary>
             )}
-            {view === 'ARCHITECTURE' && <CognitiveArchitecture />}
-            {view === 'EFFICACY' && <EfficacyManifold data={userData} onUpgrade={(tier) => handleAction('setSystemTier', { tier })} />}
+            {view === 'ARCHITECTURE' && (
+              <ErrorBoundary mode="inline" title="Cognitive Architecture Failed">
+                <CognitiveArchitecture />
+              </ErrorBoundary>
+            )}
+            {view === 'EFFICACY' && (
+              <ErrorBoundary mode="inline" title="Efficacy Manifold Failed">
+                <EfficacyManifold data={userData} onUpgrade={(tier) => handleAction('setSystemTier', { tier })} />
+              </ErrorBoundary>
+            )}
             {view === 'CORE' && (
-               <CoreConfig data={userData} onUpdate={() => fetchVedaData()} />
+              <ErrorBoundary mode="inline" title="Core Configurations Failed">
+                <CoreConfig data={userData} onUpdate={() => fetchVedaData()} />
+              </ErrorBoundary>
             )}
           </motion.div>
           )}

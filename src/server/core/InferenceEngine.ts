@@ -30,6 +30,7 @@ import {
   extractSubject 
 } from "./InferenceTemplateMatrix";
 import { NativeBackupReasoningEngine } from "./NativeBackupReasoningEngine";
+import { SyntergicReasoningEngine } from "./SyntergicReasoningEngine";
 
 export interface SystemContextPayload {
   worldModelSnapshot: any;
@@ -52,6 +53,7 @@ export class InferenceEngine {
   private geminiService: GeminiService;
   private logger: (type: string, msg: string) => void;
   private nativeEngine: NativeBackupReasoningEngine;
+  private syntergicEngine: SyntergicReasoningEngine;
   private lastThoughtTrace: any[] = [];
   private lastGroundingSources: any[] = [];
 
@@ -59,6 +61,7 @@ export class InferenceEngine {
     this.geminiService = geminiService;
     this.logger = logger || ((type, msg) => console.log(`[INFERENCE_ENGINE][${type}] ${msg}`));
     this.nativeEngine = new NativeBackupReasoningEngine((t, m) => this.logger(`NATIVE_${t}`, m));
+    this.syntergicEngine = new SyntergicReasoningEngine((t, m) => this.logger(`SYNTERGIC_${t}`, m));
   }
 
   public getLastThoughtTrace(): any[] {
@@ -417,6 +420,20 @@ ${inputText}
    * Helper to execute the async Native backup reasoning in a synchronous way for signature compatibility
    */
   private runNativeReasoningSync(inputText: string, payload: any): any {
+    const cleanLower = inputText.toLowerCase();
+    const useSyntergic = cleanLower.includes("格林柏格") || 
+                         cleanLower.includes("雅各布") || 
+                         cleanLower.includes("grinberg") || 
+                         cleanLower.includes("syntergic") || 
+                         cleanLower.includes("全像") || 
+                         cleanLower.includes("晶格") || 
+                         cleanLower.includes("推理引擎") ||
+                         cleanLower.includes("優化");
+                         
+    if (useSyntergic) {
+      this.logger("SYNTERGIC_ROUTE", "Routing query through VEDA Custom Syntergic Reasoning Engine.");
+      return this.syntergicEngine.generateReasoning(inputText, payload);
+    }
     return this.nativeEngine.generateReasoning(inputText, payload);
   }
 

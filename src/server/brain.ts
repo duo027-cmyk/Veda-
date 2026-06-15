@@ -87,6 +87,7 @@ import {
   SpatialProprioceptionUnit,
   PalantirOntologyEngine
 } from "./intelligence";
+import { SovereignGovernanceEngine } from "./intelligence/SovereignGovernanceEngine";
 
 import { SubsystemManager } from "./SubsystemManager";
 import { MemoryFragment, MemoryNode, IVedaBrain, WorldModel, TemporalAnchor, StrategicReport } from "./types";
@@ -160,6 +161,7 @@ export class AGISovereignBrain implements IVedaBrain {
   private actorProtocol: Actor = new Actor("VEDA_SURVIVOR", 0.8, 0.45, { domestic_pressure: 0.2 });
   private mathMapper: DualTrackMapper = new DualTrackMapper();
   private falsifiability: FalsifiabilityEngine = new FalsifiabilityEngine();
+  private govEngine: SovereignGovernanceEngine = new SovereignGovernanceEngine();
   private pecEngine: PredictiveCorrectionEngine = new PredictiveCorrectionEngine();
   private burstEvaluator: BurstImpactEvaluator = new BurstImpactEvaluator();
   private selfHealing: SelfHealingProtocol = new SelfHealingProtocol();
@@ -749,6 +751,13 @@ export class AGISovereignBrain implements IVedaBrain {
       this.aerospaceMetrics.lastKalmanInnovation = maxInnovation;
 
       this.state = filteredState;
+
+      // Apply Sovereign Governance Engine - Lyapunov Stability Check & Attractor Damping
+      const stabilityCheck = this.govEngine.evaluateLyapunovStability(this.state, this.intent);
+      this.state = stabilityCheck.correctedState;
+      if (!stabilityCheck.isStable && this.physicalOpsCount % 100 === 0) {
+        this.neuralLog("LYAPUNOV_STABILITY", `[⚠️] 偵測到相空間混沌分歧 (MLE: ${stabilityCheck.lyapunovExponent.toFixed(6)})。已注入 ${stabilityCheck.dampingCoefficient} 級別的李雅普諾夫阻尼力。`);
+      }
     } catch (aerospaceErr) {
       console.error("[⚠️ AEROSPACE_CONTROL_BYPASS] Error during fault-tolerant consensus, bypassing to standard PEC state.", aerospaceErr);
       this.state = pecState;
@@ -865,10 +874,13 @@ export class AGISovereignBrain implements IVedaBrain {
       this.runCausalDistillation().catch(e => console.error("[RESEARCH_FAULT]", e));
     }
 
-    // V-AA Optimization: Sovereign Index reflects current system health and research depth
-    this.sovereign_index = this.evolutionManager.calculateSovereignIndex(
-      this.getGlobalCoherence(), 
-      (this.researchChronicles || []).length
+    // Continuous Rigorous Sovereign Autonomy Index (SG-CVE Algorithm)
+    this.sovereign_index = this.govEngine.calculateRigorousSovereignIndex(
+      this.getGlobalCoherence(),
+      this.variationalFreeEnergy || 0.05,
+      this.state[2] || 0.1,
+      this.aerospaceMetrics?.edacParityMatch ?? true,
+      this.physicalOpsCount
     );
     
     // Auto-recovery: If we were blocked but now have a key, try to unblock
@@ -4858,7 +4870,16 @@ ${contentsToAnalyze}
       baseline_tags: this.coreAxioms.getTags(),
       is_bursting: this.burstEngine.getStatus().active,
       actor_model: this.actorProtocol.getReport(),
-      falsifiability_notes: this.falsifiability.evaluate({ coherence: this.getGlobalCoherence(), entropy: this.state[2] }),
+      falsifiability_notes: this.govEngine.evaluateFalsifiabilityNeymanPearson(
+        this.falsifiability.getHypotheses() as any[],
+        { coherence: this.getGlobalCoherence(), entropy: this.state[2], vfe: this.variationalFreeEnergy || 0.05 }
+      ).map(res => {
+        if (res.isFalsified) {
+          const h = this.falsifiability.getHypotheses().find(item => item.id === res.id);
+          if (h) h.status = "FALSIFIED";
+        }
+        return { id: res.id, result: res.detail, pValue: res.pValue, tStatistic: res.tStatistic };
+      }),
       proof
     };
   }

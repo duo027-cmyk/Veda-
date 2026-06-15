@@ -2,24 +2,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Cpu, Zap, Activity, ShieldAlert, Award, Play } from 'lucide-react';
-import { BrainData } from '../types';
+import { BrainData, PINCNeuron, PINCSynapse } from '../types';
 import { vedaService } from '../services/vedaService';
-
-interface PINCNeuron {
-  id: string;
-  name: string;
-  potential: number;
-  spikeCount: number;
-  refractory: boolean;
-  strengthIndex: number;
-}
-
-interface PINCSynapse {
-  preId: string;
-  postId: string;
-  weight: number;
-  delta: number;
-}
 
 export const PhysicsInformedNeuromorphicDashboard: React.FC<{ data: BrainData | null }> = ({ data }) => {
   const [pulsingNeuron, setPulsingNeuron] = useState<string | null>(null);

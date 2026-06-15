@@ -6,13 +6,11 @@ export interface VedaState {
   userData: BrainData | null;
   apiError: string | null;
   lastLog: string | null;
-  isPulsing: boolean;
   isLoading: boolean;
   
   setUserData: (userData: BrainData | null | ((prev: BrainData | null) => BrainData | null)) => void;
   setApiError: (error: string | null) => void;
   setLastLog: (log: string | null) => void;
-  setIsPulsing: (pulsing: boolean) => void;
   fetchVedaData: () => Promise<void>;
   handleAction: (action: string, params?: any) => Promise<void>;
 }
@@ -23,12 +21,10 @@ export const useVedaStore = () => {
       userData: state.userData,
       apiError: state.apiError,
       lastLog: state.lastLog,
-      isPulsing: state.isPulsing,
       isLoading: state.isLoading,
       setUserData: state.setUserData,
       setApiError: state.setApiError,
       setLastLog: state.setLastLog,
-      setIsPulsing: state.setIsPulsing,
       fetchVedaData: state.fetchVedaData,
       handleAction: state.handleAction,
     }))
@@ -41,12 +37,10 @@ export const useVedaStore = () => {
     userData: state.userData,
     apiError: state.apiError,
     lastLog: state.lastLog,
-    isPulsing: state.isPulsing,
     isLoading: state.isLoading,
     setUserData: state.setUserData,
     setApiError: state.setApiError,
     setLastLog: state.setLastLog,
-    setIsPulsing: state.setIsPulsing,
     fetchVedaData: state.fetchVedaData,
     handleAction: state.handleAction,
   };

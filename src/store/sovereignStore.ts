@@ -4,6 +4,7 @@ import { auth } from '../firebase';
 import { ViewMode, BrainData, EvolutionStatus, MemoryFragment } from '../types';
 import { vedaService } from '../services/vedaService';
 import { knbService } from '../services/knbService';
+import { useUIStateStore } from './uiStore';
 
 // State integrity validation and defensive snapshotting systems (Strategic Chief of Staff Recovery Engine)
 const LOCAL_STORAGE_SNAPSHOT_KEY = "veda-stable-state-snapshot";
@@ -174,19 +175,11 @@ export interface SovereignState {
   authReady: boolean;
   isArchitect: boolean;
   isSandboxExplorer: boolean;
-  
-  // UI state
-  view: ViewMode;
-  selectedFragment: { id: string, type: string, label: string } | null;
-  showBurstMonitor: boolean;
-  showControlPanel: boolean;
-  theme: 'DARK' | 'LIGHT';
 
   // Veda state
   userData: BrainData | null;
   apiError: string | null;
   lastLog: string | null;
-  isPulsing: boolean;
   isLoading: boolean;
   
   // Auth Actions
@@ -195,19 +188,10 @@ export interface SovereignState {
   initializeAuth: () => () => void;
   toggleSandboxExplorer: () => void;
 
-  // UI Actions
-  setView: (view: ViewMode) => void;
-  setSelectedFragment: (fragment: { id: string, type: string, label: string } | null) => void;
-  setShowBurstMonitor: (show: boolean) => void;
-  setShowControlPanel: (show: boolean) => void;
-  setTheme: (theme: 'DARK' | 'LIGHT') => void;
-  toggleTheme: () => void;
-
   // Veda Actions
   setUserData: (userData: BrainData | null | ((prev: BrainData | null) => BrainData | null)) => void;
   setApiError: (error: string | null) => void;
   setLastLog: (log: string | null) => void;
-  setIsPulsing: (isPulsing) => void;
   fetchVedaData: () => Promise<void>;
   handleAction: (action: string, params?: any) => Promise<void>;
 
@@ -274,18 +258,10 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
   isArchitect: false,
   isSandboxExplorer: false,
 
-  // UI state
-  view: getInitialView(),
-  selectedFragment: null,
-  showBurstMonitor: false,
-  showControlPanel: false,
-  theme: getInitialTheme(),
-
   // Veda state
   userData: null,
   apiError: null,
   lastLog: null,
-  isPulsing: false,
   isLoading: true,
 
   // Auth Actions
@@ -322,29 +298,6 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
     });
   },
 
-  // UI Actions
-  setView: (view) => {
-    localStorage.setItem('veda-view', view);
-    set({ view });
-  },
-  
-  setSelectedFragment: (selectedFragment) => set({ selectedFragment }),
-  
-  setShowBurstMonitor: (showBurstMonitor) => set({ showBurstMonitor }),
-  
-  setShowControlPanel: (showControlPanel) => set({ showControlPanel }),
-  
-  setTheme: (theme) => {
-    localStorage.setItem('veda-theme', theme);
-    set({ theme });
-  },
-  
-  toggleTheme: () => set((state) => {
-    const nextTheme = state.theme === 'DARK' ? 'LIGHT' : 'DARK';
-    localStorage.setItem('veda-theme', nextTheme);
-    return { theme: nextTheme };
-  }),
-
   // Veda Actions
   setUserData: (userData) => {
     if (typeof userData === 'function') {
@@ -367,9 +320,7 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
   
   setApiError: (apiError) => set({ apiError }),
   
-  setLastLog: (lastLog) => set({ lastLog }),
-  
-  setIsPulsing: (isPulsing) => set({ isPulsing }),
+  setLastLog: (setLastLog) => set({ lastLog: setLastLog }),
 
   fetchVedaData: async () => {
     if (activeFetchPromise) {
@@ -471,7 +422,7 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
 
         // Synchronize UI components based on telemetry states (Reactive Feedback Loop)
         if (safeData?.is_bursting) {
-          set({ showBurstMonitor: true });
+          useUIStateStore.setState({ showBurstMonitor: true });
         }
       } catch (e: any) {
         console.warn("[VEDA_SYNC_SYSTEM] Extreme transient sync failure (self-healing recovery auto-engaged):", e);
@@ -490,8 +441,8 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
   },
 
   handleAction: async (action, params) => {
-    set({ isPulsing: true });
-    setTimeout(() => set({ isPulsing: false }), 800);
+    useUIStateStore.setState({ isPulsing: true });
+    setTimeout(() => useUIStateStore.setState({ isPulsing: false }), 800);
     
     try {
       let resultMsg = null;
@@ -507,12 +458,12 @@ export const useSovereignStore = create<SovereignState>((set, get) => ({
             params?.manualApproval || false,
             params?.mode || "DEFENSIVE_COUNTER"
           );
-          set({ showBurstMonitor: true });
+          useUIStateStore.setState({ showBurstMonitor: true });
           break;
         case 'approveBurst': await vedaService.approveBurst(); break;
         case 'deactivateBurst': 
           await vedaService.deactivateBurst(params?.reason || "MANUAL"); 
-          set({ showBurstMonitor: false });
+          useUIStateStore.setState({ showBurstMonitor: false });
           break;
         case 'toggleSteadyState': await vedaService.toggleSteadyState(params?.active || false); break;
         case 'toggleNanosecondSync': await vedaService.toggleNanosecondSync(params?.active || false); break;
