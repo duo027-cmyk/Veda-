@@ -315,7 +315,7 @@ export const LatticeCruncher: React.FC<{ brain: BrainData | null }> = React.memo
                     </div>
                     <div className="flex justify-between mb-1 truncate">
                       <span className="text-slate-500">自我中心:</span>
-                      <span>({brain.spatial_manifold.ego_center.map(v => v.toFixed(2)).join(',')})</span>
+                      <span>({(brain.spatial_manifold.ego_center || []).map(v => typeof v === 'number' ? v.toFixed(2) : String(v)).join(',')})</span>
                     </div>
                   </div>
                 </div>
@@ -472,7 +472,7 @@ export const LatticeCruncher: React.FC<{ brain: BrainData | null }> = React.memo
                 <div className="grid grid-cols-2 gap-1">
                   <button
                     onClick={() => {
-                      if (strategicMetrics?.weights && localGradStats) {
+                      if (strategicMetrics && Array.isArray(strategicMetrics.weights) && localGradStats) {
                         const perturbed = strategicMetrics.weights.map((w: number) => {
                           const noise = (Math.random() - 0.5) * 0.08 + (localGradStats.gradientNorm * 0.02);
                           return Math.max(0.01, Math.min(1.0, w + noise));

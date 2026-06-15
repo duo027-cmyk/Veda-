@@ -23,6 +23,7 @@ import {
 import { BrainData, MemoryFragment } from '../types';
 import { vedaService } from '../services/vedaService';
 import { knbService, KnowledgeFragment } from '../services/knbService';
+import { causalCorrelationService } from '../services/causalCorrelationService';
 
 interface CausalSimulatorProps {
   data: BrainData | null;
@@ -121,7 +122,11 @@ export const CausalSimulator: React.FC<CausalSimulatorProps> = ({ data }) => {
 
       if (response && response.success && response.data) {
         setTerminalLogs(prev => [...prev, `[0.85s] ✨ 因果解碼晶格建立成功！正在渲染替代假說對比圖幅...`]);
-        setAnalysisResult(response.data);
+        const alternatives = causalCorrelationService.queryAlternatives(textToAnalyze, 3);
+        setAnalysisResult({
+          ...response.data,
+          toolAlternatives: alternatives
+        });
       } else {
         throw new Error("Invalid response schema from core");
       }
@@ -156,6 +161,7 @@ export const CausalSimulator: React.FC<CausalSimulatorProps> = ({ data }) => {
         optimizedStrategy = "在感測層引進 Rényi 差分隱私噪聲動態平滑算法，自動削平超臨界突波，確保局部損壞不向全域神經網絡層級擴散。";
       }
 
+      const alternatives = causalCorrelationService.queryAlternatives(textToAnalyze, 3);
       setAnalysisResult({
         originalChain: [
           { step: 1, label: "引起原因 (Antecedent)", desc: trigger },
@@ -165,7 +171,8 @@ export const CausalSimulator: React.FC<CausalSimulatorProps> = ({ data }) => {
         counterfactualIf,
         alternativeOutcome,
         metricsShift: { vfe: -0.42, coherence: 0.30, stability: 0.22 },
-        optimizedStrategy
+        optimizedStrategy,
+        toolAlternatives: alternatives
       });
     } finally {
       setIsAnalyzing(false);
@@ -812,6 +819,64 @@ export const CausalSimulator: React.FC<CausalSimulatorProps> = ({ data }) => {
                       </div>
                     </div>
                   </div>
+
+                  {/* Part D: Cognitive Isomorphism & Non-Obvious Tool Alternatives */}
+                  {analysisResult.toolAlternatives && analysisResult.toolAlternatives.length > 0 && (
+                    <div className="clean-card p-5 bg-zinc-900/30 border border-teal-500/10 flex flex-col gap-3">
+                      <div className="flex items-center gap-2">
+                        <Cpu size={12} className="text-teal-400" />
+                        <span className="text-[10px] font-mono font-bold text-white/95 uppercase tracking-wider">
+                          D. 跨域同構映射與「非直覺」工具替代方案 (Dual-Domain Affordances)
+                        </span>
+                      </div>
+                      <p className="text-[9.5px] text-zinc-400 font-sans leading-relaxed">
+                        利用加權圖關係與向量嵌入距離 (Embedding Distance)，引擎在數字、物理與邏輯基質之間進行結構射影，挖掘非直覺的『最優替代物』。
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-1">
+                        {analysisResult.toolAlternatives.map((alt: any, aIdx: number) => (
+                          <div 
+                            key={aIdx} 
+                            className={`p-3 rounded border flex flex-col justify-between gap-2.5 transition-all duration-250 ${
+                              alt.isObvious 
+                                ? 'bg-white/[0.01] border-white/5' 
+                                : 'bg-teal-500/[0.02] border-teal-500/20 shadow-[0_0_12px_rgba(20,184,166,0.02)] hover:border-teal-400/40'
+                            }`}
+                          >
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex justify-between items-start gap-2">
+                                <span className={`text-[9.5px] font-mono font-bold ${alt.isObvious ? 'text-zinc-300' : 'text-teal-400'}`}>
+                                  {alt.node.label}
+                                </span>
+                                <span className={`text-[7.5px] font-mono px-1 py-0.5 rounded uppercase shrink-0 ${
+                                  alt.isObvious 
+                                    ? 'text-zinc-500 bg-zinc-500/10' 
+                                    : 'text-teal-400 bg-teal-400/10 font-bold border border-teal-500/20'
+                                }`}>
+                                  {alt.isObvious ? '常規工具' : '非直覺替代'}
+                                </span>
+                              </div>
+                              <span className="text-[7.5px] font-mono text-zinc-500 uppercase">
+                                {alt.node.type.replace('_', ' ')}
+                              </span>
+                              <p className="text-[10px] text-zinc-300 font-sans leading-relaxed">
+                                {alt.mechanism}
+                              </p>
+                            </div>
+
+                            <div className="border-t border-white/5 pt-2 flex flex-col gap-1">
+                              <div className="flex justify-between items-center text-[7.5px] font-mono">
+                                <span className="text-zinc-500">拓撲相干對焦</span>
+                                <span className="text-accent font-bold">{(alt.coherenceScore * 100).toFixed(1)}%</span>
+                              </div>
+                              <div className="text-[7px] font-mono text-zinc-500 truncate leading-tight mt-0.5">
+                                路徑: {alt.pathway.join(' ➔ ')}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </div>

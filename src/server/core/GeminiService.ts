@@ -52,11 +52,37 @@ export class GeminiService {
 
       // Helper function to map/normalize models to prevent 404/400 errors
       const getNormalizedModel = (m: string): string => {
-        if (m === "gemini-3.5-flash") return "gemini-3.1-flash-lite";
-        if (m === "gemini-2.5-flash") return "gemini-3.5-flash";
-        if (m === "gemini-3.1-flash-lite") return "gemini-flash-latest";
-        if (m === "gemini-3.1-pro-preview" || m === "gemini-3.1-pro" || m === "gemini-2.5-pro") return "gemini-3.5-flash";
-        return m;
+        const lower = m.toLowerCase();
+        if (
+          lower.includes("veo") || 
+          lower.includes("lyria") || 
+          lower.includes("generatevideos") || 
+          lower.includes("generateaudio") ||
+          lower.includes("tts") ||
+          lower.includes("live") ||
+          lower.includes("translate")
+        ) {
+          return m; // Preserve specialized system models
+        }
+        if (lower.includes("gemini-3.5-flash")) {
+          return "gemini-3.5-flash";
+        }
+        if (lower.includes("gemini-3.1-pro-preview") || lower.includes("gemini-3.1-pro")) {
+          return "gemini-3.1-pro-preview";
+        }
+        if (lower.includes("pro")) {
+          return "gemini-3.1-pro-preview";
+        }
+        if (lower.includes("embedding")) {
+          return "gemini-embedding-2-preview";
+        }
+        if (lower.includes("image")) {
+          if (lower.includes("3.1") || lower.includes("3.1-flash")) {
+            return "gemini-3.1-flash-image";
+          }
+          return "gemini-2.5-flash-image";
+        }
+        return "gemini-3.5-flash";
       };
 
       // Build fallback list starting with the requested model
@@ -72,15 +98,12 @@ export class GeminiService {
 
       if (!isSpecializedAudioVideoImage) {
         // Sequentially fall back across multiple solid production-grade nodes based on capability guidelines
-        modelsToTry.push("gemini-3.5-flash");
         modelsToTry.push("gemini-3.1-pro-preview");
-        modelsToTry.push("gemini-3.1-flash-lite");
-        modelsToTry.push("gemini-flash-latest");
-        modelsToTry.push("gemini-2.5-flash");
+        modelsToTry.push("gemini-3.5-flash");
       }
 
-      // Deduplicate fallback chain and prioritize non-degraded models first
-      const uniqueModels = Array.from(new Set(modelsToTry)).sort((a, b) => {
+      // Deduplicate fallback chain, map each to valid real-world endpoints, and prioritize non-degraded models first
+      const uniqueModels = Array.from(new Set(modelsToTry.map(getNormalizedModel))).sort((a, b) => {
         const aCooldown = this.degradedModels.get(a) || 0;
         const bCooldown = this.degradedModels.get(b) || 0;
         const aIsDegraded = aCooldown > Date.now();

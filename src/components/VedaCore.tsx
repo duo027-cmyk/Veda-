@@ -58,7 +58,7 @@ export const VedaCore: React.FC<VedaCoreProps> = ({
     if (!canvasRef.current) return;
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(75, (window.innerWidth || 400) / (window.innerHeight || 300), 0.1, 1000);
     camera.position.z = 6;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -66,9 +66,11 @@ export const VedaCore: React.FC<VedaCoreProps> = ({
     canvasRef.current.appendChild(renderer.domElement);
 
     const updateSize = (width: number, height: number) => {
-      camera.aspect = width / height;
+      const w = width || 400;
+      const h = height || 300;
+      camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(width, height);
+      renderer.setSize(w, h);
     };
 
     const resizeObserver = new ResizeObserver((entries) => {

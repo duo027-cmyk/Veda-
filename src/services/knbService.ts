@@ -25,13 +25,21 @@ export interface KnowledgeFragment {
   causalLinks?: string[];
 }
 
+export interface ServerCacheEntry {
+  key: string;
+  value: any;
+  timestamp: number;
+}
+
 export class KnowledgeDatabase extends Dexie {
   fragments!: Table<KnowledgeFragment>;
+  serverCache!: Table<ServerCacheEntry>;
 
   constructor() {
     super('VEDA_KNOWLEDGE_BASE');
-    this.version(1).stores({
-      fragments: '++id, content, timestamp'
+    this.version(2).stores({
+      fragments: '++id, content, timestamp',
+      serverCache: 'key, timestamp'
     });
   }
 }
@@ -284,17 +292,56 @@ class KNBService {
   async syncCollectiveManifold(): Promise<number> {
     if (!auth.currentUser) return 0;
 
-    try {
-      const q = query(
-        collection(db, 'shared_knowledge'), 
-        orderBy('timestamp', 'desc'), 
-        limit(20)
-      );
-      const snapshot = await getDocs(q);
-      let newCount = 0;
+    const cacheKey = `collective_manifold_${auth.currentUser.uid}`;
+    const now = Date.now();
+    const cacheTtl = 5 * 60 * 1000; // 5 minutes cache TTL
 
-      for (const d of snapshot.docs) {
-        const data = d.data();
+    try {
+      let documentsData: any[] = [];
+      try {
+        const cached = await this.db.serverCache.get(cacheKey);
+        if (cached && now - cached.timestamp < cacheTtl) {
+          console.log("[KNB] IndexedDB Memory Cache Hit - serving from local cache manifold.");
+          documentsData = cached.value;
+        }
+      } catch (cacheErr) {
+        console.warn("[KNB] Cache database read failure:", cacheErr);
+      }
+
+      if (documentsData.length === 0) {
+        console.log("[KNB] Network fetch required. Establishing direct connection...");
+        const q = query(
+          collection(db, 'shared_knowledge'), 
+          orderBy('timestamp', 'desc'), 
+          limit(20)
+        );
+        const snapshot = await getDocs(q);
+        
+        documentsData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            content: data.content,
+            embedding: data.embedding,
+            type: data.type,
+            contributorId: data.contributorId,
+            timestamp: data.timestamp?.toMillis ? data.timestamp.toMillis() : Date.now()
+          };
+        });
+
+        try {
+          await this.db.serverCache.put({
+            key: cacheKey,
+            value: documentsData,
+            timestamp: now
+          });
+        } catch (cacheErr) {
+          console.warn("[KNB] Cache storage persistence error:", cacheErr);
+        }
+      }
+
+      let newCount = 0;
+      for (const data of documentsData) {
         if (data.contributorId === auth.currentUser.uid) continue;
 
         const exists = await this.db.fragments.where('content').equals(data.content).first();
@@ -321,9 +368,23 @@ class KNBService {
 
   async getCollectiveStrength(): Promise<number> {
      const now = Date.now();
-     // Cache for 60 seconds to avoid heavy Firestore reads on every heartbeat
+     const cacheKey = "collective_strength";
+
+     // Memory cache first
      if (this.lastStrength > 0 && now - this.lastStrengthCheck < 60000) {
        return this.lastStrength;
+     }
+
+     // Persistent IndexedDB cache check
+     try {
+       const cached = await this.db.serverCache.get(cacheKey);
+       if (cached && now - cached.timestamp < 300000) { // 5 minutes TTL
+         this.lastStrength = cached.value;
+         this.lastStrengthCheck = cached.timestamp;
+         return cached.value;
+       }
+     } catch (cacheErr) {
+       console.warn("[KNB] Strength cache read failure:", cacheErr);
      }
 
      try {
@@ -337,6 +398,15 @@ class KNBService {
        // If we can't count efficiently, just return a token value if not empty
        this.lastStrength = snapshot.empty ? 0 : 42; // Placeholder for non-empty
        this.lastStrengthCheck = now;
+       try {
+         await this.db.serverCache.put({
+           key: cacheKey,
+           value: this.lastStrength,
+           timestamp: now
+         });
+       } catch (dbErr) {
+         console.warn("[KNB] Strength cache storage failed:", dbErr);
+       }
        return this.lastStrength;
      } catch (e) {
        console.warn("[KNB] Strength check failed or timed out (using local stabilizer fallback):", e);

@@ -203,12 +203,17 @@ export const vedaService = {
   connectionState: 'DISCONNECTED' as 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED',
   connectionListeners: new Set<(state: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED') => void>(),
   isWaitingForPong: false,
+  heartbeatInterval: null as any,
 
   switchWorkspace() {
     console.log("[VEDA_SERVICE] Switching academic workspace. Flashing cache databases and socket pipeline...");
     invalidateCache();
     if (this.socket) {
       this.socket.close();
+    }
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
     }
   },
 
@@ -248,6 +253,12 @@ export const vedaService = {
       return;
     }
     
+    // Clear any loose previous interval
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    
     this.setConnectionState('CONNECTING');
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -280,36 +291,54 @@ export const vedaService = {
         this.socket = null;
         this.isWaitingForPong = false;
         this.setConnectionState('DISCONNECTED');
+        if (this.heartbeatInterval) {
+          clearInterval(this.heartbeatInterval);
+          this.heartbeatInterval = null;
+        }
         setTimeout(() => this.setupWebSocket(onUpdate), 5000);
       };
 
       socket.onerror = (err) => {
         console.error("[VEDA_SOCKET_ERR] Transmission fault:", err);
         this.setConnectionState('DISCONNECTED');
+        if (this.heartbeatInterval) {
+          clearInterval(this.heartbeatInterval);
+          this.heartbeatInterval = null;
+        }
       };
 
       this.socket = socket;
 
       // Heartbeat with Proactive Pong Monitoring (Aerospace-grade half-open socket detection)
       this.isWaitingForPong = false;
-      const heartbeat = setInterval(() => {
+      this.heartbeatInterval = setInterval(() => {
         if (this.socket?.readyState === 1) {
           if (this.isWaitingForPong) {
             console.warn("[VEDA_SOCKET] Pong missed. Closing half-open socket to trigger corrective healing...");
-            clearInterval(heartbeat);
+            if (this.heartbeatInterval) {
+              clearInterval(this.heartbeatInterval);
+              this.heartbeatInterval = null;
+            }
             this.socket.close();
             return;
           }
           this.isWaitingForPong = true;
           this.socket.send(JSON.stringify({ type: 'PING' }));
         } else {
-          clearInterval(heartbeat);
+          if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+          }
         }
       }, 15000);
 
     } catch (e) {
       console.error("[VEDA_SOCKET_BOOT_ERR] Failed to initiate logic link:", e);
       this.setConnectionState('DISCONNECTED');
+      if (this.heartbeatInterval) {
+        clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = null;
+      }
     }
   },
 

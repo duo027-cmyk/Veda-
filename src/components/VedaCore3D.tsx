@@ -31,6 +31,43 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
   const mouse = useRef(new THREE.Vector2());
   const raycaster = useRef(new THREE.Raycaster());
 
+  // Use a synchronized ref to store ALL fast-moving or dynamic props to avoid React stale closures in continuous animate RAF loops
+  const liveProps = useRef({
+    rejectionCount,
+    globalCoherence,
+    isAgentActive,
+    isDreaming,
+    isPlanckActive,
+    resonance,
+    memories,
+    manifold_points,
+    onPointSelect
+  });
+
+  useEffect(() => {
+    liveProps.current = {
+      rejectionCount,
+      globalCoherence,
+      isAgentActive,
+      isDreaming,
+      isPlanckActive,
+      resonance,
+      memories,
+      manifold_points,
+      onPointSelect
+    };
+  }, [
+    rejectionCount,
+    globalCoherence,
+    isAgentActive,
+    isDreaming,
+    isPlanckActive,
+    resonance,
+    memories,
+    manifold_points,
+    onPointSelect
+  ]);
+
   const sceneRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -54,8 +91,8 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
     if (!containerRef.current) return;
 
     // 1. Setup
-    const width = containerRef.current.clientWidth;
-    const height = containerRef.current.clientHeight;
+    const width = containerRef.current.clientWidth || 400;
+    const height = containerRef.current.clientHeight || 300;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
@@ -86,9 +123,10 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
       if (intersects.length > 0) {
         const obj = intersects[0].object as THREE.Mesh;
         const data = obj.userData;
-        if (onPointSelect) {
+        const handler = liveProps.current.onPointSelect;
+        if (handler) {
           const type = (obj.material as THREE.MeshBasicMaterial).color.getHex() === 0xffffff ? 'AXIOM' : 'MEMORY';
-          onPointSelect(data.id, type, data.label);
+          handler(data.id, type, data.label);
         }
       }
     };
@@ -222,14 +260,15 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
       if (sceneRef.current) {
         const { core, body, leftEar, rightEar, glow, renderer, scene, camera, particles, particleData, memoryCrystals, manifold } = sceneRef.current;
 
-        // Dynamic parameters based on system state
-        const coherenceFactor = globalCoherence; // 0 to 1
-        const rejectionFactor = Math.min(rejectionCount / 10, 1); // 0 to 1
+        // Dynamic parameters based on synchronized live props
+        const coherenceFactor = liveProps.current.globalCoherence; // 0 to 1
+        const rejectionFactor = Math.min(liveProps.current.rejectionCount / 10, 1); // 0 to 1
 
         // Update Manifold Points (Holographic Memory)
-        if (manifold_points && manifold_points.length > 0) {
+        const currentManifoldPoints = liveProps.current.manifold_points || [];
+        if (currentManifoldPoints.length > 0) {
           // Subtle update: sync manifold children with data
-          if (manifold.children.length !== manifold_points.length) {
+          if (manifold.children.length !== currentManifoldPoints.length) {
             while(manifold.children.length > 0) {
               const child = manifold.children[0] as THREE.Mesh;
               child.geometry.dispose();
@@ -237,7 +276,7 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
               manifold.remove(child);
             }
             
-            manifold_points.forEach(p => {
+            currentManifoldPoints.forEach(p => {
               const geom = new THREE.SphereGeometry(0.04, 8, 8);
               const mat = new THREE.MeshBasicMaterial({
                 color: p.type === 'AXIOM' ? 0xffffff : 0xb088ff,
@@ -271,7 +310,8 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
         }
 
         // Update Memory Crystals
-        if (memories.length !== memoryCrystals.children.length) {
+        const currentMemories = liveProps.current.memories || [];
+        if (currentMemories.length !== memoryCrystals.children.length) {
           // Rebuild crystals
           while(memoryCrystals.children.length > 0) {
             const child = memoryCrystals.children[0] as THREE.Mesh;
@@ -280,7 +320,7 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
             memoryCrystals.remove(child);
           }
           
-          memories.forEach((m, i) => {
+          currentMemories.forEach((m, i) => {
             const geom = new THREE.TetrahedronGeometry(0.15 + m.resonance * 0.2, 0);
             const mat = new THREE.MeshPhongMaterial({
               color: m.type === 'CORE' ? 0xffd700 : 0x00d2ff,
@@ -293,8 +333,8 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
             const crystal = new THREE.Mesh(geom, mat);
             
             // Random position in a sphere
-            const phi = Math.acos(-1 + (2 * i) / memories.length);
-            const theta = Math.sqrt(memories.length * Math.PI) * phi;
+            const phi = Math.acos(-1 + (2 * i) / currentMemories.length);
+            const theta = Math.sqrt(currentMemories.length * Math.PI) * phi;
             const radius = 2.5 + Math.random() * 0.5;
             
             crystal.position.setFromSphericalCoords(radius, phi, theta);
@@ -315,7 +355,7 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
           crystal.rotation.y += 0.01;
           
           // Dreaming effect: crystals pulse and move towards core
-          if (isDreaming) {
+          if (liveProps.current.isDreaming) {
             crystal.scale.setScalar(1 + Math.sin(time * 10) * 0.2);
             crystal.position.lerp(new THREE.Vector3(0,0,0), 0.01);
           } else {
@@ -325,15 +365,15 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
         });
 
         // 1. Breathing Effect
-        const agentPulse = isAgentActive ? Math.sin(time * 15) * 0.2 : 0;
-        const dreamPulse = isDreaming ? Math.sin(time * 20) * 0.3 : 0;
+        const agentPulse = liveProps.current.isAgentActive ? Math.sin(time * 15) * 0.2 : 0;
+        const dreamPulse = liveProps.current.isDreaming ? Math.sin(time * 20) * 0.3 : 0;
         const breathingScale = 1 + Math.sin(time * 2) * 0.05 + agentPulse + dreamPulse;
         body.scale.setScalar(breathingScale);
 
         // 2. Ear Flapping
-        const agentFlap = isAgentActive ? 10 : 0;
-        const dreamFlap = isDreaming ? 20 : 0;
-        const resonanceFlap = resonance * 50;
+        const agentFlap = liveProps.current.isAgentActive ? 10 : 0;
+        const dreamFlap = liveProps.current.isDreaming ? 20 : 0;
+        const resonanceFlap = liveProps.current.resonance * 50;
         const flapSpeed = 2 + coherenceFactor * 8 + agentFlap + dreamFlap + resonanceFlap;
         const flapAngle = Math.sin(time * flapSpeed) * 0.3;
         leftEar.rotation.z = flapAngle;
@@ -346,20 +386,20 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
         const resonanceColor = new THREE.Color(0xffffff); // White flash
         
         let currentColor = baseColor.clone().lerp(alertColor, rejectionFactor);
-        if (isDreaming) {
+        if (liveProps.current.isDreaming) {
           currentColor = currentColor.lerp(dreamColor, 0.8);
         }
-        if (resonance > 0.1) {
-          currentColor = currentColor.lerp(resonanceColor, resonance);
+        if (liveProps.current.resonance > 0.1) {
+          currentColor = currentColor.lerp(resonanceColor, liveProps.current.resonance);
         }
 
         (body.material as THREE.MeshPhongMaterial).color.copy(currentColor);
         (body.material as THREE.MeshPhongMaterial).emissive.copy(currentColor);
         
         // Shake effect on resonance
-        if (resonance > 0.1) {
-          core.position.x = (Math.random() - 0.5) * resonance * 0.5;
-          core.position.y = (Math.random() - 0.5) * resonance * 0.5;
+        if (liveProps.current.resonance > 0.1) {
+          core.position.x = (Math.random() - 0.5) * liveProps.current.resonance * 0.5;
+          core.position.y = (Math.random() - 0.5) * liveProps.current.resonance * 0.5;
         } else {
           core.position.set(0,0,0);
         }
@@ -371,7 +411,7 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
         // 4. Particle Animation (Optimized Instancing)
         const dummy = new THREE.Object3D();
         const baseSwarmSpeed = 0.5 + coherenceFactor * 2;
-        const swarmSpeed = isPlanckActive ? baseSwarmSpeed * 0.1 : baseSwarmSpeed;
+        const swarmSpeed = liveProps.current.isPlanckActive ? baseSwarmSpeed * 0.1 : baseSwarmSpeed;
         
         for (let i = 0; i < PARTICLE_COUNT; i++) {
           const pos = particleData.positions[i];
@@ -379,22 +419,22 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
           const phase = particleData.phases[i];
 
           // Swarm behavior: move towards center slightly
-          const toCenter = pos.clone().negate().normalize().multiplyScalar(0.002 * (isPlanckActive ? 0.2 : swarmSpeed));
+          const toCenter = pos.clone().negate().normalize().multiplyScalar(0.002 * (liveProps.current.isPlanckActive ? 0.2 : swarmSpeed));
           vel.add(toCenter);
           
           // Add some noise/oscillation
-          const noiseFactor = isPlanckActive ? 0.05 : 1;
+          const noiseFactor = liveProps.current.isPlanckActive ? 0.05 : 1;
           vel.x += Math.sin(time + phase) * 0.0005 * noiseFactor;
           vel.y += Math.cos(time + phase) * 0.0005 * noiseFactor;
           
           // Limit velocity
-          vel.clampLength(0, isPlanckActive ? 0.005 : 0.05);
+          vel.clampLength(0, liveProps.current.isPlanckActive ? 0.005 : 0.05);
           
           pos.add(vel);
 
           // Boundary check
-          if (pos.length() > (isPlanckActive ? 4 : 8)) {
-            pos.setLength(isPlanckActive ? 4 : 8);
+          if (pos.length() > (liveProps.current.isPlanckActive ? 4 : 8)) {
+            pos.setLength(liveProps.current.isPlanckActive ? 4 : 8);
             vel.reflect(pos.clone().normalize().negate());
           }
 
@@ -402,7 +442,7 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
           // Billboard effect: make particles face camera
           dummy.lookAt(camera.position);
           
-          if (isPlanckActive) {
+          if (liveProps.current.isPlanckActive) {
             dummy.scale.setScalar(1.5 + Math.sin(time * 5 + phase) * 0.5);
           } else {
             dummy.scale.setScalar(1);
@@ -414,7 +454,7 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
         particles.instanceMatrix.needsUpdate = true;
 
         // Planck Camera Effect
-        if (isPlanckActive) {
+        if (liveProps.current.isPlanckActive) {
           camera.position.z = THREE.MathUtils.lerp(camera.position.z, 4, 0.05);
           glow.intensity = 4 + Math.sin(time * 10) * 2;
         } else {
@@ -423,7 +463,7 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
         }
 
         // Rotation
-        core.rotation.y += isPlanckActive ? 0.001 : (0.005 + coherenceFactor * 0.02);
+        core.rotation.y += liveProps.current.isPlanckActive ? 0.001 : (0.005 + coherenceFactor * 0.02);
         core.rotation.x = Math.sin(time * 0.5) * 0.1;
 
         renderer.render(scene, camera);
@@ -437,8 +477,8 @@ export const VedaCore3D: React.FC<VedaCore3DProps> = ({
     // Handle Resize
     const handleResize = () => {
       if (!containerRef.current || !sceneRef.current) return;
-      const w = containerRef.current.clientWidth;
-      const h = containerRef.current.clientHeight;
+      const w = containerRef.current.clientWidth || 400;
+      const h = containerRef.current.clientHeight || 300;
       sceneRef.current.renderer.setSize(w, h);
       sceneRef.current.camera.aspect = w / h;
       sceneRef.current.camera.updateProjectionMatrix();

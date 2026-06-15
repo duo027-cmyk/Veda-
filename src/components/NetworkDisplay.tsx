@@ -73,7 +73,7 @@ export const NetworkDisplay: React.FC<NetworkDisplayProps> = ({ layers, onClose,
         for (let j = 0; j < size; j++) {
           const x = i * horizontalSpacing + (j % 2 === 0 ? 0 : width / 2) + width / 2;
           const y = j * verticalSpacing + height / 2;
-          nodes.push({ x, y, val: grid[i][j], i, j });
+          nodes.push({ x, y, val: grid[i]?.[j] ?? 0, i, j });
         }
       }
 
@@ -259,7 +259,7 @@ export const NetworkDisplay: React.FC<NetworkDisplayProps> = ({ layers, onClose,
     }
 
     if (closestNode) {
-      const val = grid[closestNode.i][closestNode.j];
+      const val = grid[closestNode.i]?.[closestNode.j] ?? 0;
       setSelectedNode({ i: closestNode.i, j: closestNode.j, x: closestNode.x, y: closestNode.y });
       setTooltip({
         x: e.clientX,
