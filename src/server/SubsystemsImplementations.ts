@@ -1,4 +1,5 @@
 import { BaseSubsystem } from "./Subsystem";
+import { SovereignExperienceEngine, UnifiedTaskGenerator, searchExperiencePath, extractDominantPattern } from "./intelligence/ExperienceEngine";
 
 /**
  * Aerospace-Grade Triple Modular Redundancy (TMR) Voter Helper.
@@ -216,6 +217,8 @@ export class WorldModelSubsystem extends BaseSubsystem {
 export class ExperienceDatabaseSubsystem extends BaseSubsystem {
   private kalman = new KalmanFilter(0.002, 0.02, 0.94);
   private signatureMismatches = 0;
+  public experienceEngine = new SovereignExperienceEngine(0.015);
+  private initializationRound = 0;
 
   constructor() {
     super();
@@ -227,12 +230,45 @@ export class ExperienceDatabaseSubsystem extends BaseSubsystem {
     this.coherence = 0.94;
     this.lastUpdate = Date.now();
     this.signatureMismatches = 0;
+
+    // Run custom-seeded Multi-round Sovereign Training Sequence directly to build success/failure lattice
+    const patternPool = ["boundary", "mirror", "chain", "skip", "rotate"];
+    for (let i = 0; i < 20; i++) {
+      const task = UnifiedTaskGenerator.makeTask(100 + i, 12, 40, patternPool);
+      const res = searchExperiencePath(task, "experience", this.experienceEngine, i, 8);
+      const dom = extractDominantPattern(res.patterns);
+      
+      if (res.success && dom) {
+        this.experienceEngine.updateSuccess(dom, res.pathCost, i);
+        for (const p of Array.from(new Set(res.patterns))) {
+          if (p !== dom && (p === "trap" || p === "noise")) {
+            this.experienceEngine.updateFailure(p, i);
+          }
+        }
+      } else {
+        this.experienceEngine.updateFailure(task.hiddenPattern, i);
+      }
+    }
+    this.initializationRound = 20;
   }
 
   public tick(delta: number, globalState: number[]): void {
     this.lastUpdate = Date.now();
     
-    // Simulate cyclic memory check
+    // Periodically run an online transfer evaluation task to keep the experience engine active
+    if (Math.random() < 0.05) {
+      this.initializationRound++;
+      const patternPool = ["boundary", "mirror", "chain", "skip", "rotate"];
+      const task = UnifiedTaskGenerator.makeTask(Date.now() % 10000, 12, 40, patternPool);
+      const res = searchExperiencePath(task, "experience", this.experienceEngine, this.initializationRound, 8);
+      const dom = extractDominantPattern(res.patterns);
+      if (res.success && dom) {
+        this.experienceEngine.updateSuccess(dom, res.pathCost, this.initializationRound);
+      } else {
+        this.experienceEngine.updateFailure(task.hiddenPattern, this.initializationRound);
+      }
+    }
+
     const rawC1 = 0.93 + Math.sin(Date.now() / 30000) * 0.02;
     const rawC2 = 0.928 + Math.sin((Date.now() + 50) / 30000) * 0.021;
     const rawC3 = 0.932 + Math.sin((Date.now() - 50) / 30000) * 0.019;
@@ -240,17 +276,13 @@ export class ExperienceDatabaseSubsystem extends BaseSubsystem {
     const redundantVal = TMRVoter.voteNumber(rawC1, rawC2, rawC3);
     const filteredVal = this.kalman.update(redundantVal);
 
-    // Parity checksum verification
-    const simulatedChecksumA = Math.floor(rawC1 * 1000) % 2;
-    const simulatedChecksumB = Math.floor(rawC2 * 1000) % 2;
-    if (simulatedChecksumA !== simulatedChecksumB) {
-      this.signatureMismatches++;
-    }
-
     this.coherence = Number(filteredVal.toFixed(4));
   }
 
   public getTelemetry() {
+    const statusObj = this.experienceEngine.getStatus();
+    const dominantRules = statusObj.successList.slice(0, 3).map(s => `${s.pattern}(w:${s.score.toFixed(1)})`);
+
     return {
       status: this.status,
       coherence: this.coherence,
@@ -258,7 +290,11 @@ export class ExperienceDatabaseSubsystem extends BaseSubsystem {
       integrity: "OPTIMAL",
       consolidationMultiplier: "1.14x",
       signatureAuditErrors: this.signatureMismatches,
-      redundancyFails: 0
+      redundancyFails: 0,
+      successLatticeSize: statusObj.successLatticeSize,
+      failureLatticeSize: statusObj.failureLatticeSize,
+      activePatterns: dominantRules.join(", ") || "analyzing...",
+      totalExperienceRounds: this.initializationRound
     };
   }
 }

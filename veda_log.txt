@@ -14087,4 +14087,4 @@
 [2026-06-11T07:08:36.760Z] TOP_LEVEL_BEGIN: GET /node_modules/.vite/deps/chunk-WQPW4OF4.js?v=0b80dd83 (Headers: Accept=*/*, Origin=https://ais-dev-5fmdh6gc5g7lrzb7ogzot3-298319408804.asia-east1.run.app)
 [2026-06-11T07:08:36.761Z] TOP_LEVEL_END: GET /node_modules/.vite/deps/chunk-WQPW4OF4.js?v=0b80dd83 -> 200 (ContentType: text/javascript)
 [2026-06-11T07:08:36.762Z] TOP_LEVEL_BEGIN: GET /node_modules/.vite/deps/chunk-GH2WN3GZ.js?v=0b80dd83 (Headers: Accept=*/*, Origin=https://ais-dev-5fmdh6gc5g7lrzb7ogzot3-298319408804.asia-east1.run.app)
-[2026-06-11T07:08:36.762Z] TOP_LEVEL_END: GET /node_modules/.vite/deps/chunk-GH2WN3GZ.js?v=0b80dd83 -> 200 (ContentType
+[2026-06-11T07:08:36.762Z] TOP_LEVEL_END: GET /node_modules/.vite/deps/chunk-GH2WN3GZ.js?v=0b80dd83 -> 200 (ContentType[202

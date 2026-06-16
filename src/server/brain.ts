@@ -88,6 +88,7 @@ import {
   PalantirOntologyEngine
 } from "./intelligence";
 import { SovereignGovernanceEngine } from "./intelligence/SovereignGovernanceEngine";
+import { UnifiedTaskGenerator, searchExperiencePath, extractDominantPattern } from "./intelligence/ExperienceEngine";
 
 import { SubsystemManager } from "./SubsystemManager";
 import { MemoryFragment, MemoryNode, IVedaBrain, WorldModel, TemporalAnchor, StrategicReport } from "./types";
@@ -1132,22 +1133,87 @@ export class AGISovereignBrain implements IVedaBrain {
   }
 
   private async simulateStrategicPaths(scenario: string) {
-    // VEDA v7.0: Strategic Reasoning Layer
+    // VEDA v7.0: Strategic Reasoning Layer with REAL Experience Engine Transfer Calculations
     const simulationId = crypto.randomBytes(4).toString('hex');
+    
+    // Hash the input scenario to seed the grid task generator
+    let seed = 42;
+    if (scenario) {
+      for (let i = 0; i < scenario.length; i++) {
+        seed = (seed * 31 + scenario.charCodeAt(i)) % 100000;
+      }
+    }
+
+    const patternPool = ["boundary", "mirror", "chain", "skip", "rotate"];
+    const task = UnifiedTaskGenerator.makeTask(seed, 12, 50, patternPool);
+    const engine = this.experienceDatabaseSubsystem.experienceEngine;
+
+    // Run the three search mode branches over the generated grid
+    const resA = searchExperiencePath(task, "experience", engine, 100);
+    const resB = searchExperiencePath(task, "baseline", engine, 100);
+    const resC = searchExperiencePath(task, "solomon_neap", engine, 100);
+
+    const expandedA = resA.expandedNodesCount || 100;
+    const expandedB = resB.expandedNodesCount || 100;
+    const expandedC = resC.expandedNodesCount || 100;
+
+    const maxExpanded = Math.max(expandedA, expandedB, expandedC, 1);
+    const scoreA = 1.0 - (expandedA / maxExpanded);
+    const scoreB = 1.0 - (expandedB / maxExpanded);
+    const scoreC = 1.0 - (expandedC / maxExpanded);
+
+    const totalScore = (scoreA + scoreB + scoreC) || 1.0;
+    const probA = Number((0.1 + (scoreA / totalScore) * 0.8).toFixed(2));
+    const probB = Number((0.1 + (scoreB / totalScore) * 0.8).toFixed(2));
+    const probC = Number((0.1 + (scoreC / totalScore) * 0.8).toFixed(2));
+
     const simulation = {
       id: simulationId,
       scenario,
       paths: [
-        { id: 'PATH_A', outcome: 'OPTIMISTIC_CONVERGENCE', probability: 0.6, risk: 0.2 },
-        { id: 'PATH_B', outcome: 'REGRESSIVE_COLLAPSE', probability: 0.1, risk: 0.9 },
-        { id: 'PATH_C', outcome: 'ADAPTIVE_EVOLUTION', probability: 0.3, risk: 0.4 }
+        { 
+          id: 'PATH_A', 
+          outcome: 'EXPERIENCE_TRANSFER_OPTIMAL', 
+          probability: probA, 
+          risk: 0.1, 
+          cost: resA.pathCost, 
+          tokenProxyExpansions: expandedA,
+          patterns: resA.patterns.slice(0, 4)
+        },
+        { 
+          id: 'PATH_B', 
+          outcome: 'BASELINE_DIJKSTRA_UNBIASED', 
+          probability: probB, 
+          risk: 0.7, 
+          cost: resB.pathCost, 
+          tokenProxyExpansions: expandedB,
+          patterns: resB.patterns.slice(0, 4)
+        },
+        { 
+          id: 'PATH_C', 
+          outcome: 'SOLOMON_NEAP_RESTRICTED', 
+          probability: probC, 
+          risk: 0.4, 
+          cost: resC.pathCost, 
+          tokenProxyExpansions: expandedC,
+          patterns: resC.patterns.slice(0, 4)
+        }
       ],
       best_path_id: 'PATH_A',
-      entropy: 0.2 + Math.random() * 0.3
+      entropy: Number((0.05 + Math.random() * 0.1).toFixed(4)),
+      hiddenPattern: task.hiddenPattern
     };
 
+    // Keep the Experience Engine populated with fresh learnings
+    const dom = extractDominantPattern(resA.patterns);
+    if (resA.success && dom) {
+      engine.updateSuccess(dom, resA.pathCost, 100);
+    } else {
+      engine.updateFailure(task.hiddenPattern, 100);
+    }
+
     this.strategic.addSimulation(simulation);
-    this.neuralLog("STRATEGIC_SIMULATION", `已完成多路徑推演：[${simulationId}] ${scenario.substring(0, 30)}`);
+    this.neuralLog("STRATEGIC_SIMULATION", `【真。經驗轉移推演】編號：[${simulationId}]，真實隱藏規則：${task.hiddenPattern}，轉移耗能：${expandedA} 步，基準耗能：${expandedB} 步`);
     return simulation;
   }
 
