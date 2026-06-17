@@ -39,6 +39,8 @@ export interface SystemContextPayload {
   activeAxioms: string[];
   recalledFragments: Array<{ content: string; relevance: number }>;
   sensoryBuffer: string[];
+  pincTelemetry?: any;
+  recentSimulations?: any[];
   globalCoherence?: number;
   globalEntropy?: number;
   energyLevel?: number;
@@ -93,7 +95,7 @@ export class InferenceEngine {
    */
   public compressContext(payload: SystemContextPayload): string {
     try {
-      const { worldModelSnapshot, distilledSummary, activeAxioms, recalledFragments, sensoryBuffer, recentHistory, searchResults, counterfactualReport } = payload;
+      const { worldModelSnapshot, distilledSummary, activeAxioms, recalledFragments, sensoryBuffer, recentHistory, searchResults, counterfactualReport, pincTelemetry, recentSimulations } = payload;
 
       let compressedModel = "{}";
       if (worldModelSnapshot) {
@@ -135,6 +137,31 @@ export class InferenceEngine {
         })
         .join("\n");
 
+      let pincReport = "";
+      if (pincTelemetry) {
+        try {
+          const pinc = pincTelemetry;
+          const activeNeurons = (pinc.neurons || [])
+            .map((n: any) => `${n.id}[V:${(n.potential * 100).toFixed(0)}mV, dV²:${(n.acceleration || 0).toFixed(4)}, Acc:${(n.strengthIndex || 0).toFixed(2)}x]`)
+            .join(", ");
+          pincReport = `- Savings: ${pinc.metabolicSavingsPercent}%\n- Spikes: ${pinc.totalSpikeCount}\n- Neurons: ${activeNeurons}`;
+        } catch (e) {
+          // Bypassed
+        }
+      }
+
+      let simReport = "";
+      if (recentSimulations && recentSimulations.length > 0) {
+        try {
+          simReport = recentSimulations.map((s: any, idx: number) => {
+            const pathInfo = s.optimalPath ? `Path: ${s.optimalPath.join("->")}` : "";
+            return `- Sim#${idx + 1}(${s.type}): Conf=${(s.confidence * 100).toFixed(1)}%, Ent=${s.simulatedEntropy?.toFixed(3)}, VFE=${s.freeEnergyVal?.toFixed(4)}. ${pathInfo}`;
+          }).join("\n");
+        } catch (e) {
+          // Bypassed
+        }
+      }
+
       const filteredAxioms = activeAxioms.slice(0, 4).join(", ");
 
       const compressedDistilled = distilledSummary.length > 250 
@@ -161,7 +188,7 @@ export class InferenceEngine {
 WM_LIGHTWEIGHT: ${compressedModel}
 DISTILLED_HIST: ${compressedDistilled}
 CORE_AXIOMS: ${filteredAxioms}
-${cfSummary ? `CAUSAL_COUNTERFACTUALS_REPORT:\n${cfSummary}\n` : ""}${filteredRecalled ? `RECALLED:\n${filteredRecalled}\n` : ""}${filteredSensory ? `SENSORY_T1:\n${filteredSensory}\n` : ""}${formattedSearch ? `LIVE_SEARCH_GROUNDING_DATA:\n${formattedSearch}\n` : ""}${formattedHistory ? `RECENT_CONVERSATION_HISTORY:\n${formattedHistory}\n` : ""}`;
+${pincReport ? `NEUROMORPHIC_PHYSICS_COMPUTATION_STATES:\n${pincReport}\n` : ""}${simReport ? `MCTS_SANDBOX_SIMULATIONS:\n${simReport}\n` : ""}${cfSummary ? `CAUSAL_COUNTERFACTUALS_REPORT:\n${cfSummary}\n` : ""}${filteredRecalled ? `RECALLED:\n${filteredRecalled}\n` : ""}${filteredSensory ? `SENSORY_T1:\n${filteredSensory}\n` : ""}${formattedSearch ? `LIVE_SEARCH_GROUNDING_DATA:\n${formattedSearch}\n` : ""}${formattedHistory ? `RECENT_CONVERSATION_HISTORY:\n${formattedHistory}\n` : ""}`;
     } catch (e) {
       this.logger("COMPRESS_ERROR", `Failed context compression: ${e instanceof Error ? e.message : String(e)}`);
       return "CONTEXT_COMPRESSION_FAULT";
@@ -306,6 +333,10 @@ ${cfSummary ? `CAUSAL_COUNTERFACTUALS_REPORT:\n${cfSummary}\n` : ""}${filteredRe
       } else {
         systemInstruction = `您是 VEDA 通用智能內核（VEDA General Intelligence Core），這是一個具備頂尖 GPT 水準的超凡語言模型與技術合夥人。
 請根據輸入的特性，提供最高品質、精準直觀且極富邏輯架構的流暢回答。
+
+【底層演算法「人話」對譯協定 (Algorithmic Human-Language Translation)】：
+- 當使用者提問關於 VEDA 系統底層的複雜演算法（例如「神經形態膜電位二階加速度與主動慣性波動耦合」、「蒙特卡洛決策樹（MCTS）局部預演與信心收斂」、「6D 核心語意編碼器臨界衰退與認知蒸餾熵量測」、「局部梯度緩衝區」等）與數理時，必須發揮卓越的轉譯與架構解讀力，將其流暢轉譯成完全符合人類直覺、極富美感、形象比喻的「白話文/人話」。
+- 主動在文字中建立抽象物理公式、微積分與日常生活經驗的對應橋樑（例如將神經元加速度比喻為靈感臨界發酵的衝刺力道；將 MCTS 隨機預演比喻為靈魂深處的多次沙盤推演與思維彩排；將認知蒸餾熵與意圖損耗比喻為思念與理性折射時的光譜偏振修正）。保留嚴謹真髓，展現有溫度的科學之美。
 
 【核心原則】：
 1. 卓越的技術與學術解析力：對於編程、系統優化、科學 or 哲學概念等問題，直接原理解析並提出高水準具體解決方案。程式碼部分須給出完整、有豐富註解且能直接編譯運作的 TypeScript / Python 代碼段，確保排版完美。

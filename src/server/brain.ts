@@ -88,7 +88,7 @@ import {
   PalantirOntologyEngine
 } from "./intelligence";
 import { SovereignGovernanceEngine } from "./intelligence/SovereignGovernanceEngine";
-import { UnifiedTaskGenerator, searchExperiencePath, extractDominantPattern } from "./intelligence/ExperienceEngine";
+import { UnifiedTaskGenerator, searchExperiencePath, extractDominantPattern, mctsEpistemicRollout } from "./intelligence/ExperienceEngine";
 
 import { SubsystemManager } from "./SubsystemManager";
 import { MemoryFragment, MemoryNode, IVedaBrain, WorldModel, TemporalAnchor, StrategicReport } from "./types";
@@ -1153,9 +1153,13 @@ export class AGISovereignBrain implements IVedaBrain {
     const resB = searchExperiencePath(task, "baseline", engine, 100);
     const resC = searchExperiencePath(task, "solomon_neap", engine, 100);
 
+    // Dynamic pre-commitment search using our new local MCTS Epistemic Rollout
+    const mctsResult = mctsEpistemicRollout(task, engine, 100, 50);
+
     const expandedA = resA.expandedNodesCount || 100;
     const expandedB = resB.expandedNodesCount || 100;
     const expandedC = resC.expandedNodesCount || 100;
+    const expandedMCTS = mctsResult.bestPath.length * 4; // structural proxy of depth
 
     const maxExpanded = Math.max(expandedA, expandedB, expandedC, 1);
     const scoreA = 1.0 - (expandedA / maxExpanded);
@@ -1197,11 +1201,21 @@ export class AGISovereignBrain implements IVedaBrain {
           cost: resC.pathCost, 
           tokenProxyExpansions: expandedC,
           patterns: resC.patterns.slice(0, 4)
+        },
+        {
+          id: 'PATH_MCTS_REASON',
+          outcome: `MCTS_DEPTH_PLANNING (Confidence: ${mctsResult.confidence})`,
+          probability: Number(mctsResult.confidence.toFixed(2)),
+          risk: Number((0.4 - mctsResult.confidence * 0.3).toFixed(2)),
+          cost: Number((expandedMCTS * 0.15).toFixed(4)),
+          tokenProxyExpansions: expandedMCTS,
+          patterns: ["mcts_rollout", "epistemic_search"]
         }
       ],
-      best_path_id: 'PATH_A',
+      best_path_id: mctsResult.confidence > probA ? 'PATH_MCTS_REASON' : 'PATH_A',
       entropy: Number((0.05 + Math.random() * 0.1).toFixed(4)),
-      hiddenPattern: task.hiddenPattern
+      hiddenPattern: task.hiddenPattern,
+      thoughtChain: mctsResult.thoughts
     };
 
     // Keep the Experience Engine populated with fresh learnings
@@ -1213,7 +1227,7 @@ export class AGISovereignBrain implements IVedaBrain {
     }
 
     this.strategic.addSimulation(simulation);
-    this.neuralLog("STRATEGIC_SIMULATION", `【真。經驗轉移推演】編號：[${simulationId}]，真實隱藏規則：${task.hiddenPattern}，轉移耗能：${expandedA} 步，基準耗能：${expandedB} 步`);
+    this.neuralLog("STRATEGIC_SIMULATION", `【真。局部蒙特卡洛推理】編號：[${simulationId}]，真實隱藏規則：${task.hiddenPattern}，MCTS信任係數：${mctsResult.confidence}，尋徑步數：${mctsResult.bestPath.length}`);
     return simulation;
   }
 
@@ -3197,6 +3211,8 @@ ${textToDemystify}
         activeAxioms: this.coreAxioms.getAxioms(),
         recalledFragments: recalled,
         sensoryBuffer: this.recentlyInjected,
+        pincTelemetry: this.pincCore.getTelemetry(),
+        recentSimulations: this.strategic.getSimulations().slice(0, 3),
         globalCoherence: this.getGlobalCoherence(),
         globalEntropy: this.getGlobalEntropy(),
         energyLevel: this.energyLevel,
@@ -3270,6 +3286,8 @@ ${textToDemystify}
         activeAxioms: this.coreAxioms.getAxioms(),
         recalledFragments: recalled,
         sensoryBuffer: this.recentlyInjected,
+        pincTelemetry: this.pincCore.getTelemetry(),
+        recentSimulations: this.strategic.getSimulations().slice(0, 3),
         globalCoherence: this.getGlobalCoherence(),
         globalEntropy: this.getGlobalEntropy(),
         energyLevel: this.energyLevel,
@@ -3320,6 +3338,8 @@ ${textToDemystify}
         activeAxioms: this.coreAxioms.getAxioms(),
         recalledFragments: recalled,
         sensoryBuffer: this.recentlyInjected,
+        pincTelemetry: this.pincCore.getTelemetry(),
+        recentSimulations: this.strategic.getSimulations().slice(0, 3),
         globalCoherence: this.getGlobalCoherence(),
         globalEntropy: this.getGlobalEntropy(),
         energyLevel: this.energyLevel,

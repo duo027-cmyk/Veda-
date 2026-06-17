@@ -84,6 +84,9 @@ const INDEX_TO_NEURON_LABEL = [
 export class PhysicsInformedNeuromorphicCore {
   // Underlying C-packed Memory Buffers representing the flat state struct
   private neuronBufferPotential = new Float64Array(PINC_NEURON_COUNT);
+  private neuronBufferPrevPotential = new Float64Array(PINC_NEURON_COUNT);
+  private neuronBufferPrevPrevPotential = new Float64Array(PINC_NEURON_COUNT);
+  private neuronBufferAcceleration = new Float64Array(PINC_NEURON_COUNT);
   private neuronBufferThreshold = new Float64Array(PINC_NEURON_COUNT);
   private neuronBufferRestPotential = new Float64Array(PINC_NEURON_COUNT);
   private neuronBufferResetPotential = new Float64Array(PINC_NEURON_COUNT);
@@ -125,6 +128,9 @@ export class PhysicsInformedNeuromorphicCore {
     // Fill neuron default boundaries
     for (let i = 0; i < PINC_NEURON_COUNT; i++) {
       this.neuronBufferPotential[i] = 0.0;
+      this.neuronBufferPrevPotential[i] = 0.0;
+      this.neuronBufferPrevPrevPotential[i] = 0.0;
+      this.neuronBufferAcceleration[i] = 0.0;
       this.neuronBufferThreshold[i] = 1.0;
       this.neuronBufferRestPotential[i] = 0.0;
       this.neuronBufferResetPotential[i] = 0.0;
@@ -286,6 +292,12 @@ export class PhysicsInformedNeuromorphicCore {
         continue;
       }
 
+      // Record high-resolution potential history for second-order derivative tracking
+      const prev_v = this.neuronBufferPotential[i];
+      const prev_prev_v = this.neuronBufferPrevPotential[i];
+      this.neuronBufferPrevPrevPotential[i] = prev_prev_v;
+      this.neuronBufferPrevPotential[i] = prev_v;
+
       this.neuronBufferMembraneTau[i] = 10.0 * modulatorFactor;
 
       this.neuronBufferPotential[i] = this.wasmCore.integrateLeak(
@@ -303,6 +315,21 @@ export class PhysicsInformedNeuromorphicCore {
         this.neuronBufferPotential[i] = Math.max(
           this.neuronBufferRestPotential[i], 
           Math.min(this.neuronBufferThreshold[i], this.neuronBufferPotential[i] + noiseSumOffset)
+        );
+      }
+
+      // Second-order derivative approximation: d2V = V_t - 2*V_{t-1} + V_{t-2}
+      const accel = this.neuronBufferPotential[i] - 2 * prev_v + prev_prev_v;
+      this.neuronBufferAcceleration[i] = accel;
+
+      // PHYSICS-INFORMED ACTIVE INERTIAL WAVE COUPLING:
+      // High upward acceleration indicates high active resonant alignment (incoming wave coherence).
+      // We apply positive momentum coupling, decreasing the virtual barrier to fire.
+      if (accel > 0.01) {
+        const energyBoost = accel * 0.18 * modulatorFactor;
+        this.neuronBufferPotential[i] = Math.min(
+          this.neuronBufferThreshold[i],
+          this.neuronBufferPotential[i] + energyBoost
         );
       }
     }
@@ -352,6 +379,7 @@ export class PhysicsInformedNeuromorphicCore {
       spikeCount: number;
       refractory: boolean;
       strengthIndex: number;
+      acceleration: number;
     }>;
     synapses: Array<{
       preId: string;
@@ -367,6 +395,7 @@ export class PhysicsInformedNeuromorphicCore {
     for (let i = 0; i < PINC_NEURON_COUNT; i++) {
       const v = this.neuronBufferPotential[i];
       const spikes = this.neuronBufferSpikeCount[i];
+      const acc = this.neuronBufferAcceleration[i];
 
       sumPotential += v;
       sumSpikes += spikes;
@@ -377,7 +406,8 @@ export class PhysicsInformedNeuromorphicCore {
         potential: Number(v.toFixed(4)),
         spikeCount: spikes,
         refractory: this.neuronBufferRefractoryTicksLeft[i] > 0,
-        strengthIndex: Number((Math.max(0.1, 1 - (v * 0.2)) * (spikes > 0 ? 1.1 : 1.0)).toFixed(3))
+        strengthIndex: Number((Math.max(0.1, 1 - (v * 0.2)) * (spikes > 0 ? 1.1 : 1.0)).toFixed(3)),
+        acceleration: Number(acc.toFixed(5))
       });
     }
 
