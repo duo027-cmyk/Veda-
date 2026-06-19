@@ -23,22 +23,29 @@ import { create, insert, search, save, load, type Orama } from "@orama/orama";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, doc, getDocFromServer, setLogLevel, initializeFirestore } from "firebase/firestore";
 import admin from "firebase-admin";
-import { getFirestore as getAdminFirestore } from "firebase-admin/firestore";
+import { getFirestore as getAdminFirestore, type Firestore as AdminFirestore } from "firebase-admin/firestore";
+import type { Firestore as ClientFirestore } from "firebase/firestore";
 
 import { AGISovereignBrain } from "./src/server/brain";
 import { IVedaBrain } from "./src/server/types";
 import { ActionResolver } from "./src/server/core/ActionResolver";
 import { GoogleGenAI } from "@google/genai";
+import {
+  DEFAULT_TENANT_ID,
+  getTenantPersistencePath,
+  resolveTenantIdFromHeaders,
+  resolveTenantIdFromSocketUrl,
+} from "./src/server/runtime/tenantRuntime";
 
 // Load Firebase Config
 const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
-let db: any = null;
-let adminDb: any = null;
+let db: ClientFirestore | null = null;
+let adminDb: AdminFirestore | null = null;
 
 // Initialize Sovereign Brain Map
 const brains = new Map<string, IVedaBrain>();
 
-function getBrainForTenant(tenantId: string = "CORE_ARCHITECT"): IVedaBrain {
+function getBrainForTenant(tenantId: string = DEFAULT_TENANT_ID): IVedaBrain {
   if (!brains.has(tenantId)) {
     console.log(`[SYS_ARCH] Creating new isolated AGISovereignBrain instance for tenant [${tenantId}]`);
     const newBrain = new AGISovereignBrain(tenantId);
@@ -54,14 +61,14 @@ function getBrainForTenant(tenantId: string = "CORE_ARCHITECT"): IVedaBrain {
 }
 
 const getTenantContext = (req: express.Request) => {
-  const tenantId = (req.headers["x-veda-uid"] as string) || "CORE_ARCHITECT";
+  const tenantId = resolveTenantIdFromHeaders(req.headers);
   const tenantBrain = getBrainForTenant(tenantId);
   const tenantActionResolver = new ActionResolver(tenantBrain);
   return { tenantId, brain: tenantBrain, actionResolver: tenantActionResolver };
 };
 
 // Keep defaults for compatibility
-const brain: IVedaBrain = getBrainForTenant("CORE_ARCHITECT");
+const brain: IVedaBrain = getBrainForTenant(DEFAULT_TENANT_ID);
 const actionResolver = new ActionResolver(brain);
 
 // Initialize Firebase SDK
@@ -127,7 +134,7 @@ if (fs.existsSync(firebaseConfigPath)) {
       'cancelled'
     ];
 
-    console.error = (...args: any[]) => {
+    console.error = (...args: unknown[]) => {
       const msg = args.join(' ').toLowerCase();
       // Only suppress truly benign, repetitive SDK internal timeout logs
       const noiseSignatures = [
@@ -139,7 +146,7 @@ if (fs.existsSync(firebaseConfigPath)) {
       originalError.apply(console, args);
     };
 
-    console.warn = (...args: any[]) => {
+    console.warn = (...args: unknown[]) => {
       const msg = args.join(' ').toLowerCase();
       const isNoise = noiseSignatures.some(sig => msg.includes(sig)) && msg.includes('firebase');
       if (isNoise) return;
@@ -153,9 +160,15 @@ if (fs.existsSync(firebaseConfigPath)) {
     try {
       // Try initializing with settings
       db = initializeFirestore(app, firestoreSettings, dbId);
-    } catch (e: any) {
+    } catch (e: unknown) {
       // If already initialized (common in dev/HMR), use getFirestore
-      if (e.code === 'failed-precondition' || e.message?.includes('already been called')) {
+      if (
+        typeof e === "object" &&
+        e &&
+        "code" in e &&
+        (e.code === "failed-precondition" ||
+          ("message" in e && typeof e.message === "string" && e.message.includes("already been called")))
+      ) {
         db = getFirestore(app, dbId);
       } else {
         throw e;
@@ -189,8 +202,8 @@ if (fs.existsSync(firebaseConfigPath)) {
               await getDocFromServer(doc(db, 'test', 'connection'));
               console.log("[FIREBASE] Connection verified successfully.");
               return;
-            } catch (err: any) {
-              if (err?.code === 'permission-denied') {
+            } catch (err: unknown) {
+              if (typeof err === "object" && err && "code" in err && err.code === "permission-denied") {
                 console.log("[FIREBASE] Connection verified (Auth required but network is alive).");
                 return;
               }
@@ -377,9 +390,10 @@ async function startServer() {
         } else {
           return res.status(500).json({ error: "Empty model inlineData waveform buffer payload" });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("[VEDA_TTS_ERROR] Server speech proxy exception caught:", err);
-        return res.status(500).json({ error: err.message || "Synthesis session crash" });
+        const errMessage = err instanceof Error ? err.message : "Synthesis session crash";
+        return res.status(500).json({ error: errMessage });
       }
     });
 
@@ -456,7 +470,7 @@ async function startServer() {
         const { actionResolver } = getTenantContext(req);
         const result = await actionResolver.executeAction(action, params);
         res.json(result);
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error(`[API_FAULT] Decoupled resolution of ${req.body?.action} failed:`, e);
         const errMessage = e instanceof Error ? e.message : String(e);
         const isUnknown = errMessage.includes("UNKNOWN_DIRECTIVE");
@@ -517,8 +531,7 @@ async function startServer() {
     api.get("/persistence", async (req, res) => {
       try {
         const { tenantId } = getTenantContext(req);
-        const safeTenantId = tenantId.replace(/[^a-zA-Z0-9_\-]/g, "_");
-        const PERSISTENCE_PATH = path.join(process.cwd(), `veda_persistence_${safeTenantId}.json`);
+        const PERSISTENCE_PATH = getTenantPersistencePath(tenantId);
         if (fs.existsSync(PERSISTENCE_PATH)) {
           const data = await fsPromises.readFile(PERSISTENCE_PATH, "utf-8");
           res.json(JSON.parse(data));
@@ -533,8 +546,7 @@ async function startServer() {
     api.post("/persistence", async (req, res) => {
       try {
         const { tenantId } = getTenantContext(req);
-        const safeTenantId = tenantId.replace(/[^a-zA-Z0-9_\-]/g, "_");
-        const PERSISTENCE_PATH = path.join(process.cwd(), `veda_persistence_${safeTenantId}.json`);
+        const PERSISTENCE_PATH = getTenantPersistencePath(tenantId);
         const data = req.body;
         let existing = {};
         if (fs.existsSync(PERSISTENCE_PATH)) {
@@ -666,8 +678,8 @@ async function startServer() {
           return res.json({ success, id, isPaused: !!isPaused });
         }
         res.status(500).json({ error: "Lattice manager not operational" });
-      } catch (e: any) {
-        res.status(500).json({ error: "LATTICE_PAUSE_ERROR", message: e.message || String(e) });
+      } catch (e: unknown) {
+        res.status(500).json({ error: "LATTICE_PAUSE_ERROR", message: e instanceof Error ? e.message : String(e) });
       }
     });
 
@@ -683,8 +695,8 @@ async function startServer() {
           return res.json({ success, id, direction });
         }
         res.status(500).json({ error: "Lattice manager not operational" });
-      } catch (e: any) {
-        res.status(500).json({ error: "LATTICE_REORDER_ERROR", message: e.message || String(e) });
+      } catch (e: unknown) {
+        res.status(500).json({ error: "LATTICE_REORDER_ERROR", message: e instanceof Error ? e.message : String(e) });
       }
     });
 
@@ -697,9 +709,9 @@ async function startServer() {
         }
         const result = await brain.joinFederationNode(nodeId, nodeUrl, Number(coherence || 0.9));
         res.json(result);
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error("[FEDERATION_JOIN_FAULT]", e);
-        res.status(500).json({ error: "FEDERATION_JOIN_ERROR", message: e.message || String(e) });
+        res.status(500).json({ error: "FEDERATION_JOIN_ERROR", message: e instanceof Error ? e.message : String(e) });
       }
     });
 
@@ -720,8 +732,9 @@ async function startServer() {
           const stateBuffer = tenantBrain.getTelemetryBuffer();
           if (stateBuffer && wss.clients.size > 0) {
             const s = JSON.parse(stateBuffer);
-            wss.clients.forEach((c: any) => {
-              if (c.readyState === WebSocket.OPEN && c.tenantId === tenantId) {
+            wss.clients.forEach((c) => {
+              const tenantSocket = c as WebSocket & { tenantId?: string };
+              if (tenantSocket.readyState === WebSocket.OPEN && tenantSocket.tenantId === tenantId) {
                 c.send(JSON.stringify({
                   type: "VEDA_STATE_PARTIAL",
                   data: {
@@ -771,9 +784,10 @@ async function startServer() {
               message: result.log,
               adjustment: result.adjustment
             });
-            wss.clients.forEach((c: any) => {
-              if (c.readyState === WebSocket.OPEN && c.tenantId === tenantId) {
-                c.send(payload);
+            wss.clients.forEach((c) => {
+              const tenantSocket = c as WebSocket & { tenantId?: string };
+              if (tenantSocket.readyState === WebSocket.OPEN && tenantSocket.tenantId === tenantId) {
+                tenantSocket.send(payload);
               }
             });
           }
@@ -812,7 +826,7 @@ async function startServer() {
     }
 
     // --- WebSocket Handlers ---
-    const broadcast = (data: any) => {
+    const broadcast = (data: unknown) => {
       const payload = JSON.stringify(data);
       wss.clients.forEach(c => {
         if (c.readyState === WebSocket.OPEN) {
@@ -822,9 +836,9 @@ async function startServer() {
     };
 
     wss.on("connection", (ws, req) => {
-      const urlParams = new URL(req?.url || "", `http://${req?.headers.host || "localhost"}`).searchParams;
-      const tenantId = urlParams.get("uid") || "CORE_ARCHITECT";
-      (ws as any).tenantId = tenantId;
+      const tenantId = resolveTenantIdFromSocketUrl(req?.url, req?.headers.host);
+      const tenantSocket = ws as WebSocket & { tenantId?: string };
+      tenantSocket.tenantId = tenantId;
       
       const tenantBrain = getBrainForTenant(tenantId);
       const tenantActionResolver = new ActionResolver(tenantBrain);
@@ -866,7 +880,7 @@ async function startServer() {
     });
 
     // Start listening
-    server.on("error", (err: any) => {
+    server.on("error", (err: NodeJS.ErrnoException) => {
       console.error("[CRITICAL_SERVER_ERROR] Server event listener caught error:", err);
       if (err.code === "EADDRINUSE") {
         console.error(`[CRITICAL_SERVER_ERROR] Port ${PORT} is already in use by another process. Exiting to allow supervisor container recovery.`);
